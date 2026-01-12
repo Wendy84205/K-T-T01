@@ -9,32 +9,18 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.DatabaseModule = void 0;
 const common_1 = require("@nestjs/common");
 const typeorm_1 = require("@nestjs/typeorm");
-const config_1 = require("@nestjs/config");
-const user_entity_1 = require("../users/entities/user.entity");
+const user_entity_1 = require("./entities/core/user.entity");
+const user_repository_1 = require("./repositories/user.repository");
 let DatabaseModule = class DatabaseModule {
 };
-exports.DatabaseModule = DatabaseModule;
-exports.DatabaseModule = DatabaseModule = __decorate([
+DatabaseModule = __decorate([
     (0, common_1.Module)({
         imports: [
-            typeorm_1.TypeOrmModule.forRootAsync({
-                imports: [config_1.ConfigModule],
-                useFactory: (configService) => ({
-                    type: 'mysql',
-                    host: configService.get('DB_HOST'),
-                    port: configService.get('DB_PORT'),
-                    username: configService.get('DB_USERNAME'),
-                    password: configService.get('DB_PASSWORD'),
-                    database: configService.get('DB_DATABASE'),
-                    entities: [user_entity_1.User],
-                    synchronize: configService.get('NODE_ENV') === 'development',
-                    logging: configService.get('NODE_ENV') === 'development',
-                    retryAttempts: 5,
-                    retryDelay: 3000,
-                }),
-                inject: [config_1.ConfigService],
-            }),
+            typeorm_1.TypeOrmModule.forFeature([user_entity_1.User, user_repository_1.UserRepository]),
         ],
+        providers: [user_repository_1.UserRepository],
+        exports: [typeorm_1.TypeOrmModule, user_repository_1.UserRepository],
     })
 ], DatabaseModule);
+exports.DatabaseModule = DatabaseModule;
 //# sourceMappingURL=database.module.js.map
