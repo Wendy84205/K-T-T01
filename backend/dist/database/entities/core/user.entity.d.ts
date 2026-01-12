@@ -1,0 +1,33 @@
+import { Team } from '../team-collaboration/team.entity';
+export declare class User {
+    id: string;
+    username: string;
+    email: string;
+    passwordHash: string;
+    firstName: string;
+    lastName: string;
+    phone: string;
+    avatarUrl: string;
+    employeeId: string;
+    jobTitle: string;
+    department: string;
+    hireDate: Date;
+    mfaRequired: boolean;
+    lastPasswordChange: Date;
+    accountLockedUntil: Date;
+    lockReason: string;
+    securityClearanceLevel: number;
+    isActive: boolean;
+    isEmailVerified: boolean;
+    isLocked: boolean;
+    lastLoginAt: Date;
+    failedLoginAttempts: number;
+    lastFailedLogin: Date;
+    deletedAt: Date;
+    createdAt: Date;
+    updatedAt: Date;
+    managerId: string;
+    primaryTeamId: string;
+    manager: User;
+    primaryTeam: Team;
+}
