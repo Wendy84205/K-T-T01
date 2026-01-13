@@ -73,6 +73,12 @@ __decorate([
 ], RegisterDto.prototype, "jobTitle", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)({ message: 'Employee ID must be a string' }),
+    (0, class_validator_1.MaxLength)(50, { message: 'Employee ID must be less than 50 characters' }),
+    __metadata("design:type", String)
+], RegisterDto.prototype, "employeeId", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)({ message: 'Department must be a string' }),
     (0, class_validator_1.IsIn)(['IT', 'SECURITY', 'HR', 'FINANCE', 'OPERATIONS', 'SALES', 'MARKETING', 'DEVELOPMENT'], {
         message: 'Department must be one of: IT, SECURITY, HR, FINANCE, OPERATIONS, SALES, MARKETING, DEVELOPMENT'

@@ -1,4 +1,4 @@
-import { User } from '../core/user.entity';
+import { User } from './user.entity';
 export declare class ManagerProfile {
     id: string;
     userId: string;

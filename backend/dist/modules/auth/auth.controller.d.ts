@@ -3,12 +3,11 @@ import { LoginDto } from './dto/login.dto';
 export declare class AuthController {
     private readonly authService;
     constructor(authService: AuthService);
-    login(loginDto: LoginDto): Promise<import("./dto/login-response.dto").LoginResponseDto>;
-    validateToken(body: {
-        token: string;
-    }): Promise<{
-        valid: boolean;
-        payload?: any;
-        error?: string;
+    login(loginDto: LoginDto, req: any): Promise<import("./dto/login-response.dto").LoginResponseDto>;
+    getProfile(req: any): Promise<{
+        user: any;
     }>;
+    healthCheck(): {
+        status: string;
+    };
 }

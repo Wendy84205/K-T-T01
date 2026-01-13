@@ -6,6 +6,7 @@ export declare class RegisterDto {
     lastName: string;
     phone?: string;
     jobTitle?: string;
+    employeeId?: string;
     department?: string;
     mfaRequired?: boolean;
 }

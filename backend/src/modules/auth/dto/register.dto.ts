@@ -57,6 +57,11 @@ export class RegisterDto {
   @IsString({ message: 'Job title must be a string' })
   @MaxLength(100, { message: 'Job title must be less than 100 characters' })
   jobTitle?: string;
+  
+  @IsOptional()
+  @IsString({ message: 'Employee ID must be a string' })
+  @MaxLength(50, { message: 'Employee ID must be less than 50 characters' })
+  employeeId?: string;
 
   @IsOptional()
   @IsString({ message: 'Department must be a string' })
