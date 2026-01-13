@@ -1,0 +1,34 @@
+declare const _default: (() => {
+    host: string;
+    port: number;
+    username: string;
+    password: string;
+    database: string;
+    synchronize: boolean;
+    logging: boolean;
+    migrationsRun: boolean;
+    dropSchema: boolean;
+    maxConnections: number;
+    connectionTimeout: number;
+    ssl: boolean;
+    sslCert: string;
+    sslKey: string;
+    sslCa: string;
+}) & import("@nestjs/config").ConfigFactoryKeyHost<{
+    host: string;
+    port: number;
+    username: string;
+    password: string;
+    database: string;
+    synchronize: boolean;
+    logging: boolean;
+    migrationsRun: boolean;
+    dropSchema: boolean;
+    maxConnections: number;
+    connectionTimeout: number;
+    ssl: boolean;
+    sslCert: string;
+    sslKey: string;
+    sslCa: string;
+}>;
+export default _default;
