@@ -1,0 +1,95 @@
+
+# ====== PROJECT SPECIFIC ======
+
+# MySQL Database files (QUAN TRỌNG!)
+mysql-data/
+*.ibd
+ibdata*
+ib_logfile*
+undo_*
+redo_*
+binlog.*
+*.myd
+*.myi
+*.frm
+*.sql
+backup.sql
+
+# Database dumps
+*.dump
+*.backup
+
+# Frontend
+frontend/node_modules/
+frontend/.cache/
+frontend/dist/
+frontend/build/
+frontend/.next/
+frontend/.nuxt/
+frontend/.svelte-kit/
+
+# Backend specific
+backend/dist/
+backend/tsconfig.build.tsbuildinfo
+backend/.npm
+backend/npm-debug.log*
+
+# Large binary files
+*.zip
+*.tar.gz
+*.rar
+*.7z
+*.iso
+*.dmg
+
+# Media files
+*.mp4
+*.avi
+*.mov
+*.mp3
+*.wav
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+
+# Documents
+*.pdf
+*.doc
+*.docx
+*.xls
+*.xlsx
+*.ppt
+*.pptx
+
+# IDE specific
+.vscode/settings.json
+.vscode/launch.json
+.vscode/tasks.json
+.idea/workspace.xml
+.idea/modules.xml
+
+# OS X
+.DS_Store
+.AppleDouble
+.LSOverride
+.Spotlight-V100
+.Trashes
+._*
+
+# Windows
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+
+# Package manager locks (chọn một)
+# yarn.lock  # nếu dùng yarn
+# pnpm-lock.yaml  # nếu dùng pnpm
