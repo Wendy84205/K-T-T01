@@ -19,7 +19,6 @@ import databaseConfig from './config/database.config';
       envFilePath: '.env',
       load: [databaseConfig],
     }),
-
     // Database configuration
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
@@ -35,6 +34,7 @@ import databaseConfig from './config/database.config';
           __dirname + '/**/*.entity{.ts,.js}',
           __dirname + '/database/entities/**/*.entity{.ts,.js}',
         ],
+
         synchronize: false,  // <-- ĐẶT LÀ false
         // Hoặc: synchronize: configService.get('DB_SYNC') === 'true',
         logging: configService.get('NODE_ENV') === 'development',
@@ -45,7 +45,6 @@ import databaseConfig from './config/database.config';
         },
       }),
     }),
-
     // Feature modules
     AuthModule,
     UsersModule,
