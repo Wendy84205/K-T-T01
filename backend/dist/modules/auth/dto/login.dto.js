@@ -13,6 +13,7 @@ exports.LoginDto = void 0;
 const class_validator_1 = require("class-validator");
 class LoginDto {
 }
+exports.LoginDto = LoginDto;
 __decorate([
     (0, class_validator_1.IsEmail)({}, { message: 'Invalid email format' }),
     (0, class_validator_1.IsNotEmpty)({ message: 'Email is required' }),
@@ -23,5 +24,4 @@ __decorate([
     (0, class_validator_1.IsNotEmpty)({ message: 'Password is required' }),
     __metadata("design:type", String)
 ], LoginDto.prototype, "password", void 0);
-exports.LoginDto = LoginDto;
 //# sourceMappingURL=login.dto.js.map

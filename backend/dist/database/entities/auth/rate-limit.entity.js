@@ -13,6 +13,7 @@ exports.RateLimit = void 0;
 const typeorm_1 = require("typeorm");
 let RateLimit = class RateLimit {
 };
+exports.RateLimit = RateLimit;
 __decorate([
     (0, typeorm_1.PrimaryGeneratedColumn)('uuid'),
     __metadata("design:type", String)
@@ -61,8 +62,7 @@ __decorate([
     (0, typeorm_1.CreateDateColumn)({ name: 'created_at' }),
     __metadata("design:type", Date)
 ], RateLimit.prototype, "createdAt", void 0);
-RateLimit = __decorate([
+exports.RateLimit = RateLimit = __decorate([
     (0, typeorm_1.Entity)('rate_limits')
 ], RateLimit);
-exports.RateLimit = RateLimit;
 //# sourceMappingURL=rate-limit.entity.js.map

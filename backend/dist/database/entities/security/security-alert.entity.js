@@ -14,6 +14,7 @@ const typeorm_1 = require("typeorm");
 const user_entity_1 = require("../core/user.entity");
 let SecurityAlert = class SecurityAlert {
 };
+exports.SecurityAlert = SecurityAlert;
 __decorate([
     (0, typeorm_1.PrimaryGeneratedColumn)('uuid'),
     __metadata("design:type", String)
@@ -80,8 +81,7 @@ __decorate([
     (0, typeorm_1.JoinColumn)({ name: 'resolved_by' }),
     __metadata("design:type", user_entity_1.User)
 ], SecurityAlert.prototype, "resolver", void 0);
-SecurityAlert = __decorate([
+exports.SecurityAlert = SecurityAlert = __decorate([
     (0, typeorm_1.Entity)('security_alerts')
 ], SecurityAlert);
-exports.SecurityAlert = SecurityAlert;
 //# sourceMappingURL=security-alert.entity.js.map

@@ -1,4 +1,3 @@
-// src/modules/auth/dto/login-response.dto.ts
 export class LoginResponseDto {
   accessToken: string;
   user: {

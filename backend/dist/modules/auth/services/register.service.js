@@ -136,12 +136,12 @@ let RegisterService = class RegisterService {
         };
     }
 };
-RegisterService = __decorate([
+exports.RegisterService = RegisterService;
+exports.RegisterService = RegisterService = __decorate([
     (0, common_1.Injectable)(),
     __param(0, (0, typeorm_1.InjectRepository)(user_entity_1.User)),
     __param(1, (0, typeorm_1.InjectRepository)(mfa_setting_entity_1.MfaSetting)),
     __metadata("design:paramtypes", [typeorm_2.Repository,
         typeorm_2.Repository])
 ], RegisterService);
-exports.RegisterService = RegisterService;
 //# sourceMappingURL=register.service.js.map

@@ -15,6 +15,7 @@ const role_entity_1 = require("../core/role.entity");
 const permission_entity_1 = require("../core/permission.entity");
 let RolePermission = class RolePermission {
 };
+exports.RolePermission = RolePermission;
 __decorate([
     (0, typeorm_1.PrimaryGeneratedColumn)('uuid'),
     __metadata("design:type", String)
@@ -45,8 +46,7 @@ __decorate([
     (0, typeorm_1.JoinColumn)({ name: 'permission_id' }),
     __metadata("design:type", permission_entity_1.Permission)
 ], RolePermission.prototype, "permission", void 0);
-RolePermission = __decorate([
+exports.RolePermission = RolePermission = __decorate([
     (0, typeorm_1.Entity)('role_permissions')
 ], RolePermission);
-exports.RolePermission = RolePermission;
 //# sourceMappingURL=role-permission.entity.js.map

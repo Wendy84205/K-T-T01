@@ -19,8 +19,9 @@ export class TeamMember {
   @Column({ name: 'security_clearance', type: 'tinyint', default: 2 })
   securityClearance: number;
 
-  @Column({ name: 'joined_date', type: 'date', default: () => 'CURRENT_DATE' })
+  @Column({ name: 'joined_date', type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   joinedDate: Date;
+
 
   @Column({ name: 'left_date', type: 'date', nullable: true })
   leftDate: Date;
@@ -37,12 +38,14 @@ export class TeamMember {
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
-  // Relations
-  @ManyToOne(() => Team, team => team.id)
+  // Relations - FIXED
+  @ManyToOne(() => Team, team => team.members)
   @JoinColumn({ name: 'team_id' })
   team: Team;
 
-  @ManyToOne(() => User, user => user.id)
+  @ManyToOne(() => User, user => user.teamMemberships) 
   @JoinColumn({ name: 'user_id' })
   user: User;
+    updatedAt: Date;
+    leftBy: string;
 }

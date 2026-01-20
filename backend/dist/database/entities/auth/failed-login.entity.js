@@ -14,6 +14,7 @@ const typeorm_1 = require("typeorm");
 const user_entity_1 = require("../core/user.entity");
 let FailedLoginAttempt = class FailedLoginAttempt {
 };
+exports.FailedLoginAttempt = FailedLoginAttempt;
 __decorate([
     (0, typeorm_1.PrimaryGeneratedColumn)('uuid'),
     __metadata("design:type", String)
@@ -63,8 +64,7 @@ __decorate([
     (0, typeorm_1.JoinColumn)({ name: 'user_id' }),
     __metadata("design:type", user_entity_1.User)
 ], FailedLoginAttempt.prototype, "user", void 0);
-FailedLoginAttempt = __decorate([
+exports.FailedLoginAttempt = FailedLoginAttempt = __decorate([
     (0, typeorm_1.Entity)('failed_login_attempts')
 ], FailedLoginAttempt);
-exports.FailedLoginAttempt = FailedLoginAttempt;
 //# sourceMappingURL=failed-login.entity.js.map

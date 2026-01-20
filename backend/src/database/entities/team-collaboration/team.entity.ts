@@ -1,6 +1,7 @@
-// src/database/entities/team.entity.ts
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+// src/database/entities/team-collaboration/team.entity.ts
+import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, OneToMany } from 'typeorm';
 import { User } from '../core/user.entity';
+import { TeamMember } from './team-member.entity';
 
 @Entity('teams')
 export class Team {
@@ -56,7 +57,7 @@ export class Team {
   @Column({ name: 'parent_team_id', type: 'char', length: 36, nullable: true })
   parentTeamId: string;
 
-  // Relations - sử dụng forward reference
+  // Relations
   @ManyToOne(() => User, { nullable: false })
   @JoinColumn({ name: 'manager_id' })
   manager: User;
@@ -64,4 +65,8 @@ export class Team {
   @ManyToOne(() => Team, { nullable: true })
   @JoinColumn({ name: 'parent_team_id' })
   parentTeam: Team;
+
+  // Add this relation
+  @OneToMany(() => TeamMember, teamMember => teamMember.team)
+  members: TeamMember[];
 }

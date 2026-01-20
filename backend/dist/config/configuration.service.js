@@ -77,9 +77,9 @@ let ConfigurationService = class ConfigurationService {
         };
     }
 };
-ConfigurationService = __decorate([
+exports.ConfigurationService = ConfigurationService;
+exports.ConfigurationService = ConfigurationService = __decorate([
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [config_1.ConfigService])
 ], ConfigurationService);
-exports.ConfigurationService = ConfigurationService;
 //# sourceMappingURL=configuration.service.js.map

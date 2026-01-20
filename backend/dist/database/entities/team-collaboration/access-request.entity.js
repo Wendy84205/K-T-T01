@@ -14,6 +14,7 @@ const typeorm_1 = require("typeorm");
 const user_entity_1 = require("../core/user.entity");
 let AccessRequest = class AccessRequest {
 };
+exports.AccessRequest = AccessRequest;
 __decorate([
     (0, typeorm_1.PrimaryGeneratedColumn)('uuid'),
     __metadata("design:type", String)
@@ -104,8 +105,7 @@ __decorate([
     (0, typeorm_1.JoinColumn)({ name: 'approver_id' }),
     __metadata("design:type", user_entity_1.User)
 ], AccessRequest.prototype, "approver", void 0);
-AccessRequest = __decorate([
+exports.AccessRequest = AccessRequest = __decorate([
     (0, typeorm_1.Entity)('access_requests')
 ], AccessRequest);
-exports.AccessRequest = AccessRequest;
 //# sourceMappingURL=access-request.entity.js.map

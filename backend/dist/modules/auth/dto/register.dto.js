@@ -18,6 +18,7 @@ class RegisterDto {
         this.mfaRequired = true;
     }
 }
+exports.RegisterDto = RegisterDto;
 __decorate([
     (0, class_validator_1.IsEmail)({}, { message: 'Invalid email format' }),
     (0, class_validator_1.IsNotEmpty)({ message: 'Email is required' }),
@@ -97,5 +98,4 @@ __decorate([
     }),
     __metadata("design:type", Boolean)
 ], RegisterDto.prototype, "mfaRequired", void 0);
-exports.RegisterDto = RegisterDto;
 //# sourceMappingURL=register.dto.js.map

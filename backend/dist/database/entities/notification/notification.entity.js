@@ -14,6 +14,7 @@ const typeorm_1 = require("typeorm");
 const user_entity_1 = require("../core/user.entity");
 let Notification = class Notification {
 };
+exports.Notification = Notification;
 __decorate([
     (0, typeorm_1.PrimaryGeneratedColumn)('uuid'),
     __metadata("design:type", String)
@@ -83,8 +84,7 @@ __decorate([
     (0, typeorm_1.JoinColumn)({ name: 'user_id' }),
     __metadata("design:type", user_entity_1.User)
 ], Notification.prototype, "user", void 0);
-Notification = __decorate([
+exports.Notification = Notification = __decorate([
     (0, typeorm_1.Entity)('notifications')
 ], Notification);
-exports.Notification = Notification;
 //# sourceMappingURL=notification.entity.js.map

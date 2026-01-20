@@ -9,8 +9,8 @@ import * as bcrypt from 'bcrypt';
 @Injectable()
 export class UsersService {
   constructor(
-    @InjectRepository(UserRepository)  // Inject custom repository
-    private userRepository: UserRepository,  // Sử dụng UserRepository type
+    @InjectRepository(UserRepository) 
+    private userRepository: UserRepository,  
   ) {}
 
   async create(createUserDto: CreateUserDto): Promise<any> {

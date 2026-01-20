@@ -1,4 +1,5 @@
 import { User } from '../core/user.entity';
+import { TeamMember } from './team-member.entity';
 export declare class Team {
     id: string;
     name: string;
@@ -19,4 +20,5 @@ export declare class Team {
     parentTeamId: string;
     manager: User;
     parentTeam: Team;
+    members: TeamMember[];
 }

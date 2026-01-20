@@ -4,9 +4,6 @@ export declare class RegisterResponseDto {
     username: string;
     firstName: string;
     lastName: string;
-    employeeId: string;
-    department?: string;
-    jobTitle?: string;
     mfaRequired: boolean;
     isEmailVerified: boolean;
     requiresEmailVerification: boolean;

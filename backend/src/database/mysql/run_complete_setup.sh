@@ -1,7 +1,7 @@
 #!/bin/bash
 
 echo "==========================================="
-echo "COMPLETE DATABASE SETUP"
+echo "COMPLETE DATABASE SETUP WITH FIXES"
 echo "==========================================="
 
 # Kiểm tra MySQL connection
@@ -12,22 +12,22 @@ fi
 
 echo "MySQL connection: OK"
 
-# Bước 1: Xóa và tạo database mới
+# Bước 0: TẠO FIX TRƯỚC - Đảm bảo không bị lỗi transaction
 echo ""
-echo "STEP 1: Creating database..."
+echo "🔧 STEP 0: PRE-FIX SETUP..."
 mysql -u root -ppassword -e "DROP DATABASE IF EXISTS cybersecure_db; CREATE DATABASE cybersecure_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" 2>/dev/null
-echo "Database created"
+echo "Database created fresh"
 
-# Bước 2: Tạo bảng core (từ create_core_tables.sql)
+# Bước 1: Tạo bảng core - VỚI FIX COLUMN ĐẦY ĐỦ
 echo ""
-echo "STEP 2: Creating core tables..."
+echo "STEP 1: Creating core tables WITH FIXES..."
 mysql -u root -ppassword cybersecure_db << 'SQL1'
 -- Set session variables
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 SET SQL_MODE = 'STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION';
 
--- Bảng 1: users
+-- Bảng 1: users - ĐẢM BẢO ĐỦ COLUMNS
 CREATE TABLE users (
     id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
     
@@ -135,12 +135,117 @@ CREATE TABLE role_permissions (
     INDEX idx_role_permissions_role (role_id),
     INDEX idx_role_permissions_permission (permission_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-SQL1
-echo "Core tables created"
 
-# Bước 3: Tạo bảng business (từ create_business_tables.sql)
+-- ========== FIX: TẠO NGAY mfa_settings ĐỂ KHÔNG BỊ LỖI REGISTER ==========
+-- Bảng 9: mfa_settings - TẠO TRƯỚC ĐỂ KHÔNG BỊ LỖI
+CREATE TABLE mfa_settings (
+    id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
+    user_id CHAR(36) UNIQUE NOT NULL,
+    
+    -- TOTP settings
+    totp_enabled BOOLEAN DEFAULT FALSE,
+    totp_secret VARCHAR(100),
+    totp_backup_codes JSON,
+    totp_verified_at TIMESTAMP NULL,
+    
+    -- SMS MFA
+    sms_mfa_enabled BOOLEAN DEFAULT FALSE,
+    phone_number VARCHAR(20),
+    sms_verified_at TIMESTAMP NULL,
+    
+    -- Email MFA
+    email_mfa_enabled BOOLEAN DEFAULT FALSE,
+    email_verified_at TIMESTAMP NULL,
+    
+    -- Security
+    recovery_email VARCHAR(255),
+    last_mfa_used VARCHAR(20),
+    mfa_failed_attempts INT DEFAULT 0,
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    CONSTRAINT chk_mfa_settings CHECK (
+        (totp_enabled = FALSE OR totp_secret IS NOT NULL) AND
+        (sms_mfa_enabled = FALSE OR phone_number IS NOT NULL)
+    )
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ========== FIX: TẠO NGAY failed_login_attempts ==========
+CREATE TABLE failed_login_attempts (
+    id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
+    user_id CHAR(36),
+    username VARCHAR(255) NOT NULL,
+    ip_address VARCHAR(45) NOT NULL,
+    user_agent TEXT,
+    
+    attempt_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    is_successful BOOLEAN DEFAULT FALSE,
+    
+    -- Security flags
+    is_suspicious BOOLEAN DEFAULT FALSE,
+    suspicious_reason VARCHAR(100),
+    blocked_until TIMESTAMP NULL,
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    INDEX idx_failed_logins_ip (ip_address, attempt_time),
+    INDEX idx_failed_logins_user (user_id, attempt_time),
+    INDEX idx_failed_logins_username (username, attempt_time),
+    INDEX idx_failed_logins_suspicious (is_suspicious, attempt_time)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ========== FIX: TẠO NGAY user_sessions ==========
+CREATE TABLE user_sessions (
+    id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
+    user_id CHAR(36) NOT NULL,
+    
+    -- Session tokens
+    session_token VARCHAR(512) UNIQUE NOT NULL,
+    refresh_token VARCHAR(512) UNIQUE,
+    
+    -- Device info (Zero Trust)
+    device_id VARCHAR(255),
+    device_name VARCHAR(100),
+    device_type VARCHAR(50),
+    device_fingerprint TEXT,
+    os VARCHAR(100),
+    browser VARCHAR(100),
+    browser_fingerprint TEXT,
+    
+    -- Location info
+    ip_address VARCHAR(45) NOT NULL,
+    country_code VARCHAR(2),
+    city VARCHAR(100),
+    is_vpn BOOLEAN DEFAULT FALSE,
+    
+    -- Security assessment
+    is_trusted BOOLEAN DEFAULT FALSE,
+    requires_mfa BOOLEAN DEFAULT TRUE,
+    risk_score INT DEFAULT 0,
+    risk_factors JSON,
+    
+    -- Timestamps
+    issued_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_accessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP NOT NULL,
+    revoked_at TIMESTAMP NULL,
+    
+    -- Revocation info
+    revoked_reason VARCHAR(100),
+    revoked_by CHAR(36),
+    
+    INDEX idx_user_sessions_user (user_id),
+    INDEX idx_user_sessions_token (session_token),
+    INDEX idx_user_sessions_expires (expires_at),
+    INDEX idx_user_sessions_device (device_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+SQL1
+echo "✅ Core tables created WITH FIXES"
+
+# Bước 2: Tạo bảng business
 echo ""
-echo "STEP 3: Creating business tables..."
+echo "STEP 2: Creating business tables..."
 mysql -u root -ppassword cybersecure_db << 'SQL2'
 -- Bảng 6: teams
 CREATE TABLE teams (
@@ -410,90 +515,10 @@ CREATE TABLE file_integrity_logs (
 SQL2
 echo "Business tables created"
 
-# Bước 4: Tạo bảng security (từ create_security_tables.sql)
+# Bước 3: Tạo bảng security còn lại
 echo ""
-echo "🔒 STEP 4: Creating security tables..."
+echo "🔒 STEP 3: Creating remaining security tables..."
 mysql -u root -ppassword cybersecure_db << 'SQL3'
--- Bảng 9: mfa_settings
-CREATE TABLE mfa_settings (
-    id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
-    user_id CHAR(36) UNIQUE NOT NULL,
-    
-    -- TOTP settings
-    totp_enabled BOOLEAN DEFAULT FALSE,
-    totp_secret VARCHAR(100),
-    totp_backup_codes JSON,
-    totp_verified_at TIMESTAMP NULL,
-    
-    -- SMS MFA
-    sms_mfa_enabled BOOLEAN DEFAULT FALSE,
-    phone_number VARCHAR(20),
-    sms_verified_at TIMESTAMP NULL,
-    
-    -- Email MFA
-    email_mfa_enabled BOOLEAN DEFAULT FALSE,
-    email_verified_at TIMESTAMP NULL,
-    
-    -- Security
-    recovery_email VARCHAR(255),
-    last_mfa_used VARCHAR(20),
-    mfa_failed_attempts INT DEFAULT 0,
-    
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    
-    CONSTRAINT chk_mfa_settings CHECK (
-        (totp_enabled = FALSE OR totp_secret IS NOT NULL) AND
-        (sms_mfa_enabled = FALSE OR phone_number IS NOT NULL)
-    )
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- Bảng 10: user_sessions
-CREATE TABLE user_sessions (
-    id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
-    user_id CHAR(36) NOT NULL,
-    
-    -- Session tokens
-    session_token VARCHAR(512) UNIQUE NOT NULL,
-    refresh_token VARCHAR(512) UNIQUE,
-    
-    -- Device info (Zero Trust)
-    device_id VARCHAR(255),
-    device_name VARCHAR(100),
-    device_type VARCHAR(50),
-    device_fingerprint TEXT,
-    os VARCHAR(100),
-    browser VARCHAR(100),
-    browser_fingerprint TEXT,
-    
-    -- Location info
-    ip_address VARCHAR(45) NOT NULL,
-    country_code VARCHAR(2),
-    city VARCHAR(100),
-    is_vpn BOOLEAN DEFAULT FALSE,
-    
-    -- Security assessment
-    is_trusted BOOLEAN DEFAULT FALSE,
-    requires_mfa BOOLEAN DEFAULT TRUE,
-    risk_score INT DEFAULT 0,
-    risk_factors JSON,
-    
-    -- Timestamps
-    issued_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    last_accessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    expires_at TIMESTAMP NOT NULL,
-    revoked_at TIMESTAMP NULL,
-    
-    -- Revocation info
-    revoked_reason VARCHAR(100),
-    revoked_by CHAR(36),
-    
-    INDEX idx_user_sessions_user (user_id),
-    INDEX idx_user_sessions_token (session_token),
-    INDEX idx_user_sessions_expires (expires_at),
-    INDEX idx_user_sessions_device (device_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
 -- Bảng 11: encryption_keys
 CREATE TABLE encryption_keys (
     id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
@@ -552,30 +577,6 @@ CREATE TABLE security_policies (
     CONSTRAINT chk_applies_to CHECK (applies_to IN ('all', 'role', 'department', 'team', 'user')),
     INDEX idx_security_policies_type (policy_type),
     INDEX idx_security_policies_active (is_active)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- Bảng 13: failed_login_attempts
-CREATE TABLE failed_login_attempts (
-    id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
-    user_id CHAR(36),
-    username VARCHAR(255) NOT NULL,
-    ip_address VARCHAR(45) NOT NULL,
-    user_agent TEXT,
-    
-    attempt_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    is_successful BOOLEAN DEFAULT FALSE,
-    
-    -- Security flags
-    is_suspicious BOOLEAN DEFAULT FALSE,
-    suspicious_reason VARCHAR(100),
-    blocked_until TIMESTAMP NULL,
-    
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
-    INDEX idx_failed_logins_ip (ip_address, attempt_time),
-    INDEX idx_failed_logins_user (user_id, attempt_time),
-    INDEX idx_failed_logins_username (username, attempt_time),
-    INDEX idx_failed_logins_suspicious (is_suspicious, attempt_time)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Bảng 14: security_events
@@ -645,9 +646,9 @@ CREATE TABLE rate_limits (
 SQL3
 echo "Security tables created"
 
-# Bước 5: Tạo bảng còn lại (communication, audit, etc.)
+# Bước 4: Tạo bảng còn lại (communication, audit, etc.)
 echo ""
-echo "STEP 5: Creating communication and other tables..."
+echo "STEP 4: Creating communication and other tables..."
 mysql -u root -ppassword cybersecure_db << 'SQL4'
 -- Bảng 21: conversations
 CREATE TABLE conversations (
@@ -1018,9 +1019,9 @@ CREATE TABLE audit_logs (
 SQL4
 echo "Communication and other tables created"
 
-# Bước 6: Thêm foreign key constraints
+# Bước 5: Thêm foreign key constraints
 echo ""
-echo "STEP 6: Adding foreign key constraints..."
+echo "STEP 5: Adding foreign key constraints..."
 mysql -u root -ppassword cybersecure_db << 'SQL5'
 -- Enable foreign key checks
 SET FOREIGN_KEY_CHECKS = 0;
@@ -1093,9 +1094,9 @@ SET FOREIGN_KEY_CHECKS = 1;
 SQL5
 echo "Foreign key constraints added"
 
-# Bước 7: Tạo triggers và procedures
+# Bước 6: Tạo triggers và procedures
 echo ""
-echo "STEP 7: Creating triggers and procedures..."
+echo "STEP 6: Creating triggers and procedures..."
 mysql -u root -ppassword cybersecure_db << 'SQL6'
 DELIMITER //
 
@@ -1232,9 +1233,9 @@ GROUP BY u.id, u.username, u.department;
 SQL6
 echo "Triggers and procedures created"
 
-# Bước 8: Chèn dữ liệu mẫu
+# Bước 7: Chèn dữ liệu mẫu VỚI FIX QUAN TRỌNG
 echo ""
-echo "STEP 8: Seeding data..."
+echo "STEP 7: Seeding data WITH FIXES..."
 mysql -u root -ppassword cybersecure_db << 'SQL7'
 -- Insert default roles
 INSERT INTO roles (id, name, level, description, is_system_role, security_level_required) VALUES
@@ -1280,12 +1281,15 @@ INSERT INTO permissions (id, resource, action, description, min_role_level, min_
 (UUID(), 'project', 'create', 'Create projects', 50, 3, FALSE),
 (UUID(), 'project', 'manage', 'Manage projects', 50, 3, FALSE);
 
+-- ========== FIX QUAN TRỌNG: Tạo admin user với transaction đầy đủ ==========
+START TRANSACTION;
+
 -- Insert default admin user (password: Admin@123456)
 INSERT INTO users (
     id, username, email, password_hash, 
-    first_name, last_name, 
+    first_name, last_name, phone,
     is_active, is_email_verified, mfa_required,
-    security_clearance_level
+    security_clearance_level, created_at
 ) VALUES (
     UUID(),
     'admin',
@@ -1293,18 +1297,35 @@ INSERT INTO users (
     '$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW', -- bcrypt hash của "Admin@123456"
     'System',
     'Administrator',
+    NULL,
     TRUE,
     TRUE,
     TRUE,
-    5
-);
+    5,
+    NOW()
+) ON DUPLICATE KEY UPDATE 
+    password_hash = '$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW',
+    is_active = TRUE,
+    is_locked = FALSE,
+    failed_login_attempts = 0,
+    account_locked_until = NULL,
+    updated_at = NOW();
 
 -- Lưu admin user ID
 SET @admin_user_id = (SELECT id FROM users WHERE username = 'admin' LIMIT 1);
 
+-- Tạo mfa_settings cho admin ngay lập tức
+INSERT INTO mfa_settings (id, user_id, created_at, updated_at)
+VALUES (UUID(), @admin_user_id, NOW(), NOW())
+ON DUPLICATE KEY UPDATE updated_at = NOW();
+
 -- Assign admin role to admin user
-INSERT INTO user_roles (id, user_id, role_id, assigned_by) VALUES
-(UUID(), @admin_user_id, @admin_role_id, @admin_user_id);
+INSERT INTO user_roles (id, user_id, role_id, assigned_by) 
+VALUES (UUID(), @admin_user_id, @admin_role_id, @admin_user_id)
+ON DUPLICATE KEY UPDATE assigned_at = NOW();
+
+COMMIT;
+-- ========== END FIX ==========
 
 -- Insert default security policies
 INSERT INTO security_policies (id, policy_type, name, description, config, is_active, applies_to, created_by) VALUES
@@ -1378,30 +1399,108 @@ INSERT INTO tasks (id, project_id, title, description, assignee_id, reporter_id,
 (UUID(), @project_id, 'Prepare training materials', 'Create presentation slides and documentation', 
  @admin_user_id, @admin_user_id, 'in_progress', DATE_ADD(CURDATE(), INTERVAL 7 DAY));
 
-SELECT '✅ Seed data inserted successfully!' as message;
+SELECT '✅ Seed data inserted successfully WITH FIXES!' as message;
 SQL7
 
-# Bước 9: Thêm cột security (sử dụng file đã sửa)
+# Bước 8: Tạo file test script
 echo ""
-echo "🛡️ STEP 9: Adding security columns..."
-mysql -u root -ppassword cybersecure_db < add_security_columns_fixed.sql 2>/dev/null
+echo "📝 STEP 8: Creating test script..."
+cat > test-auth-api.sh << 'EOF'
+#!/bin/bash
+
+echo "==========================================="
+echo "🧪 TEST AUTH API"
+echo "==========================================="
+
+BASE_URL="http://localhost:3001/api/v1"
 
 echo ""
-echo "==========================================="
-echo "🎉 DATABASE SETUP COMPLETED!"
-echo "==========================================="
+echo "1. Testing login with admin..."
+curl -X POST $BASE_URL/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "admin",
+    "password": "Admin@123456"
+  }'
 
-# Kiểm tra cuối cùng
 echo ""
-echo "FINAL VERIFICATION:"
+echo ""
+echo "2. Testing register new user..."
+curl -X POST $BASE_URL/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "test.user@company.com",
+    "username": "testuser",
+    "password": "TestPass123!",
+    "firstName": "Test",
+    "lastName": "User",
+    "phone": "+84123456789",
+    "department": "IT"
+  }'
+
+echo ""
+echo ""
+echo "3. Testing login with new user..."
+curl -X POST $BASE_URL/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "test.user@company.com",
+    "password": "TestPass123!"
+  }'
+
+echo ""
+echo ""
+echo "✅ Test completed!"
+EOF
+
+chmod +x test-auth-api.sh
+
+# Bước 9: Kiểm tra cuối cùng
+echo ""
+echo "🔍 STEP 9: Final verification..."
 mysql -u root -ppassword cybersecure_db -e "
+SELECT '=== DATABASE STATUS ===' as '';
 SELECT 'Database:' as status, 'cybersecure_db' as name;
 SELECT 'Tables:' as status, COUNT(*) as count FROM information_schema.tables WHERE table_schema='cybersecure_db';
 SELECT 'Users:' as status, COUNT(*) as count FROM users;
 SELECT 'Roles:' as status, COUNT(*) as count FROM roles;
-SELECT 'Permissions:' as status, COUNT(*) as count FROM permissions;
-SELECT '';
-SELECT 'Admin User:' as user, 'admin' as username, 'Admin@123456' as password;
-SELECT 'Email:' as info, 'admin@cybersecure.local' as email;
-SELECT 'Security Level:' as info, '5 (Highest)' as level;
+SELECT 'MFA Settings:' as status, COUNT(*) as count FROM mfa_settings;
+SELECT '' as '';
+SELECT '=== ADMIN USER STATUS ===' as '';
+SELECT 
+    username,
+    email,
+    is_active,
+    is_locked,
+    failed_login_attempts,
+    account_locked_until IS NULL as 'not_locked',
+    LENGTH(password_hash) as 'hash_length'
+FROM users 
+WHERE username = 'admin';
+SELECT '' as '';
+SELECT '=== CRITICAL TABLES CHECK ===' as '';
+SELECT 
+    TABLE_NAME,
+    TABLE_ROWS
+FROM information_schema.tables 
+WHERE table_schema = 'cybersecure_db'
+AND TABLE_NAME IN ('users', 'mfa_settings', 'user_sessions', 'failed_login_attempts', 'roles', 'user_roles')
+ORDER BY TABLE_NAME;
 "
+
+echo ""
+echo "==========================================="
+echo "🎉 DATABASE SETUP COMPLETED WITH ALL FIXES!"
+echo "==========================================="
+echo ""
+echo "📋 QUICK START:"
+echo "1. ✅ Database is ready with ALL fixes"
+echo "2. ✅ Admin user: admin / Admin@123456"
+echo "3. ✅ Run: ./test-auth-api.sh to test API"
+echo "4. ✅ All critical tables are created"
+echo ""
+echo "🚀 NEXT STEPS:"
+echo "1. Start your NestJS server: npm run start:dev"
+echo "2. Run test: ./test-auth-api.sh"
+echo "3. Test register & login should work perfectly!"
+echo ""

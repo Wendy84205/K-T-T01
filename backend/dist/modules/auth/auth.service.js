@@ -148,7 +148,8 @@ let AuthService = class AuthService {
         };
     }
 };
-AuthService = __decorate([
+exports.AuthService = AuthService;
+exports.AuthService = AuthService = __decorate([
     (0, common_1.Injectable)(),
     __param(0, (0, typeorm_1.InjectRepository)(user_entity_1.User)),
     __param(1, (0, typeorm_1.InjectRepository)(mfa_setting_entity_1.MfaSetting)),
@@ -156,5 +157,4 @@ AuthService = __decorate([
         typeorm_2.Repository,
         jwt_1.JwtService])
 ], AuthService);
-exports.AuthService = AuthService;
 //# sourceMappingURL=auth.service.js.map

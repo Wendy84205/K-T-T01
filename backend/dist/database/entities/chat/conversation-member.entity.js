@@ -15,6 +15,7 @@ const conversation_entity_1 = require("./conversation.entity");
 const user_entity_1 = require("../core/user.entity");
 let ConversationMember = class ConversationMember {
 };
+exports.ConversationMember = ConversationMember;
 __decorate([
     (0, typeorm_1.PrimaryGeneratedColumn)('uuid'),
     __metadata("design:type", String)
@@ -65,8 +66,7 @@ __decorate([
     (0, typeorm_1.JoinColumn)({ name: 'user_id' }),
     __metadata("design:type", user_entity_1.User)
 ], ConversationMember.prototype, "user", void 0);
-ConversationMember = __decorate([
+exports.ConversationMember = ConversationMember = __decorate([
     (0, typeorm_1.Entity)('conversation_members')
 ], ConversationMember);
-exports.ConversationMember = ConversationMember;
 //# sourceMappingURL=conversation-member.entity.js.map

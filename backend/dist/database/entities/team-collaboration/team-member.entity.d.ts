@@ -14,4 +14,6 @@ export declare class TeamMember {
     createdAt: Date;
     team: Team;
     user: User;
+    updatedAt: Date;
+    leftBy: string;
 }

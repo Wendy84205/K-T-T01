@@ -24,7 +24,8 @@ const jwt_strategy_1 = require("./strategies/jwt.strategy");
 const local_strategy_1 = require("./strategies/local.strategy");
 let AuthModule = class AuthModule {
 };
-AuthModule = __decorate([
+exports.AuthModule = AuthModule;
+exports.AuthModule = AuthModule = __decorate([
     (0, common_1.Module)({
         imports: [
             typeorm_1.TypeOrmModule.forFeature([user_entity_1.User, mfa_setting_entity_1.MfaSetting]),
@@ -52,5 +53,4 @@ AuthModule = __decorate([
         exports: [auth_service_1.AuthService, register_service_1.RegisterService, jwt_1.JwtModule],
     })
 ], AuthModule);
-exports.AuthModule = AuthModule;
 //# sourceMappingURL=auth.module.js.map

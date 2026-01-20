@@ -1,6 +1,9 @@
 import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
 import { Team } from '../team-collaboration/team.entity'; 
-
+import { TeamMember } from '../team-collaboration/team-member.entity';
+import { OneToMany } from 'typeorm';
+import { Role } from './role.entity';
+import { ManyToMany, JoinTable } from 'typeorm';
 @Entity('users')
 export class User {
   @PrimaryGeneratedColumn('uuid')
@@ -96,4 +99,14 @@ export class User {
   @ManyToOne(() => Team, { nullable: true })
   @JoinColumn({ name: 'primary_team_id' })
   primaryTeam: Team;
+
+  @OneToMany(() => TeamMember, teamMember => teamMember.user)
+  teamMemberships: TeamMember[];
+  @ManyToMany(() => Role, role => role.users)
+  @JoinTable({
+  name: 'user_roles',
+  joinColumn: { name: 'user_id', referencedColumnName: 'id' },
+  inverseJoinColumn: { name: 'role_id', referencedColumnName: 'id' },
+})
+roles: Role[];
 }

@@ -20,7 +20,8 @@ const redis_config_1 = require("./redis.config");
 const configuration_service_1 = require("./configuration.service");
 let ConfigurationModule = class ConfigurationModule {
 };
-ConfigurationModule = __decorate([
+exports.ConfigurationModule = ConfigurationModule;
+exports.ConfigurationModule = ConfigurationModule = __decorate([
     (0, common_1.Global)(),
     (0, common_1.Module)({
         imports: [
@@ -99,5 +100,4 @@ ConfigurationModule = __decorate([
         exports: [configuration_service_1.ConfigurationService],
     })
 ], ConfigurationModule);
-exports.ConfigurationModule = ConfigurationModule;
 //# sourceMappingURL=configuration.module.js.map

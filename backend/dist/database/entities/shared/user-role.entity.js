@@ -15,6 +15,7 @@ const user_entity_1 = require("../core/user.entity");
 const role_entity_1 = require("../core/role.entity");
 let UserRole = class UserRole {
 };
+exports.UserRole = UserRole;
 __decorate([
     (0, typeorm_1.PrimaryGeneratedColumn)('uuid'),
     __metadata("design:type", String)
@@ -57,8 +58,7 @@ __decorate([
     (0, typeorm_1.JoinColumn)({ name: 'role_id' }),
     __metadata("design:type", role_entity_1.Role)
 ], UserRole.prototype, "role", void 0);
-UserRole = __decorate([
+exports.UserRole = UserRole = __decorate([
     (0, typeorm_1.Entity)('user_roles')
 ], UserRole);
-exports.UserRole = UserRole;
 //# sourceMappingURL=user-role.entity.js.map

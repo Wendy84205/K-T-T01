@@ -28,6 +28,7 @@ let RegisterController = class RegisterController {
         return this.registerService.checkAvailability(field, value);
     }
 };
+exports.RegisterController = RegisterController;
 __decorate([
     (0, common_1.Post)(),
     (0, common_1.HttpCode)(common_1.HttpStatus.CREATED),
@@ -45,10 +46,9 @@ __decorate([
     __metadata("design:paramtypes", [String, String]),
     __metadata("design:returntype", Promise)
 ], RegisterController.prototype, "checkAvailability", null);
-RegisterController = __decorate([
+exports.RegisterController = RegisterController = __decorate([
     (0, common_1.Controller)('auth/register'),
     (0, public_decorator_1.Public)(),
     __metadata("design:paramtypes", [register_service_1.RegisterService])
 ], RegisterController);
-exports.RegisterController = RegisterController;
 //# sourceMappingURL=register.controller.js.map

@@ -13,6 +13,7 @@ exports.SecurityMetric = void 0;
 const typeorm_1 = require("typeorm");
 let SecurityMetric = class SecurityMetric {
 };
+exports.SecurityMetric = SecurityMetric;
 __decorate([
     (0, typeorm_1.PrimaryGeneratedColumn)('uuid'),
     __metadata("design:type", String)
@@ -49,8 +50,7 @@ __decorate([
     (0, typeorm_1.UpdateDateColumn)({ name: 'updated_at' }),
     __metadata("design:type", Date)
 ], SecurityMetric.prototype, "updatedAt", void 0);
-SecurityMetric = __decorate([
+exports.SecurityMetric = SecurityMetric = __decorate([
     (0, typeorm_1.Entity)('security_metrics')
 ], SecurityMetric);
-exports.SecurityMetric = SecurityMetric;
 //# sourceMappingURL=security-metric.entity.js.map

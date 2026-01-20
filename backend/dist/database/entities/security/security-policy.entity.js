@@ -13,6 +13,7 @@ exports.SecurityPolicy = void 0;
 const typeorm_1 = require("typeorm");
 let SecurityPolicy = class SecurityPolicy {
 };
+exports.SecurityPolicy = SecurityPolicy;
 __decorate([
     (0, typeorm_1.PrimaryGeneratedColumn)('uuid'),
     __metadata("design:type", String)
@@ -53,8 +54,7 @@ __decorate([
     (0, typeorm_1.UpdateDateColumn)({ name: 'updated_at' }),
     __metadata("design:type", Date)
 ], SecurityPolicy.prototype, "updatedAt", void 0);
-SecurityPolicy = __decorate([
+exports.SecurityPolicy = SecurityPolicy = __decorate([
     (0, typeorm_1.Entity)('security_policies')
 ], SecurityPolicy);
-exports.SecurityPolicy = SecurityPolicy;
 //# sourceMappingURL=security-policy.entity.js.map

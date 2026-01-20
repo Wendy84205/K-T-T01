@@ -15,6 +15,7 @@ const team_entity_1 = require("../team-collaboration/team.entity");
 const user_entity_1 = require("../core/user.entity");
 let Conversation = class Conversation {
 };
+exports.Conversation = Conversation;
 __decorate([
     (0, typeorm_1.PrimaryGeneratedColumn)('uuid'),
     __metadata("design:type", String)
@@ -73,8 +74,7 @@ __decorate([
     (0, typeorm_1.JoinColumn)({ name: 'created_by' }),
     __metadata("design:type", user_entity_1.User)
 ], Conversation.prototype, "creator", void 0);
-Conversation = __decorate([
+exports.Conversation = Conversation = __decorate([
     (0, typeorm_1.Entity)('conversations')
 ], Conversation);
-exports.Conversation = Conversation;
 //# sourceMappingURL=conversation.entity.js.map

@@ -126,12 +126,10 @@ export class RegisterService {
     response.requiresEmailVerification = !user.isEmailVerified;
     response.requiresManagerApproval = this.requiresManagerApproval(user);
     response.nextSteps = this.getNextSteps(user);
-    
     return response;
   }
 
   private requiresManagerApproval(user: User): boolean {
-    // Simple logic - modify as needed
     return user.department === 'IT' || user.jobTitle?.includes('Manager');
   }
 

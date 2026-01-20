@@ -1,3 +1,4 @@
+import { User } from './user.entity';
 export declare class Role {
     id: string;
     name: string;
@@ -6,4 +7,5 @@ export declare class Role {
     isSystemRole: boolean;
     securityLevelRequired: number;
     createdAt: Date;
+    users: User[];
 }
