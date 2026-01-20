@@ -1,4 +1,6 @@
 import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn } from 'typeorm';
+import { ManyToMany } from 'typeorm';
+import { User } from './user.entity';
 
 @Entity('roles')
 export class Role {
@@ -22,4 +24,6 @@ export class Role {
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
+  @ManyToMany(() => User, user => user.roles)
+  users: User[];
 }

@@ -1,4 +1,6 @@
 import { Team } from '../team-collaboration/team.entity';
+import { TeamMember } from '../team-collaboration/team-member.entity';
+import { Role } from './role.entity';
 export declare class User {
     id: string;
     username: string;
@@ -30,4 +32,6 @@ export declare class User {
     primaryTeamId: string;
     manager: User;
     primaryTeam: Team;
+    teamMemberships: TeamMember[];
+    roles: Role[];
 }

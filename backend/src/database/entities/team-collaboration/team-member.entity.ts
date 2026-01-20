@@ -37,12 +37,14 @@ export class TeamMember {
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
-  // Relations
-  @ManyToOne(() => Team, team => team.id)
+  // Relations - FIXED
+  @ManyToOne(() => Team, team => team.members)
   @JoinColumn({ name: 'team_id' })
   team: Team;
 
-  @ManyToOne(() => User, user => user.id)
+  @ManyToOne(() => User, user => user.teamMemberships) 
   @JoinColumn({ name: 'user_id' })
   user: User;
+    updatedAt: Date;
+    leftBy: string;
 }

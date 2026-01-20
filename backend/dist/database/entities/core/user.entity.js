@@ -13,6 +13,10 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.User = void 0;
 const typeorm_1 = require("typeorm");
 const team_entity_1 = require("../team-collaboration/team.entity");
+const team_member_entity_1 = require("../team-collaboration/team-member.entity");
+const typeorm_2 = require("typeorm");
+const role_entity_1 = require("./role.entity");
+const typeorm_3 = require("typeorm");
 let User = User_1 = class User {
 };
 __decorate([
@@ -137,6 +141,19 @@ __decorate([
     (0, typeorm_1.JoinColumn)({ name: 'primary_team_id' }),
     __metadata("design:type", team_entity_1.Team)
 ], User.prototype, "primaryTeam", void 0);
+__decorate([
+    (0, typeorm_2.OneToMany)(() => team_member_entity_1.TeamMember, teamMember => teamMember.user),
+    __metadata("design:type", Array)
+], User.prototype, "teamMemberships", void 0);
+__decorate([
+    (0, typeorm_3.ManyToMany)(() => role_entity_1.Role, role => role.users),
+    (0, typeorm_3.JoinTable)({
+        name: 'user_roles',
+        joinColumn: { name: 'user_id', referencedColumnName: 'id' },
+        inverseJoinColumn: { name: 'role_id', referencedColumnName: 'id' },
+    }),
+    __metadata("design:type", Array)
+], User.prototype, "roles", void 0);
 User = User_1 = __decorate([
     (0, typeorm_1.Entity)('users')
 ], User);

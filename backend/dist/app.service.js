@@ -10,7 +10,7 @@ exports.AppService = void 0;
 const common_1 = require("@nestjs/common");
 let AppService = class AppService {
     getHello() {
-        return 'Cybersecure API v1.0 is running!';
+        return 'Cybersecure API is running!';
     }
 };
 AppService = __decorate([

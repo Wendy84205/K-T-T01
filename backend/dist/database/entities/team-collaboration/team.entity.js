@@ -13,6 +13,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.Team = void 0;
 const typeorm_1 = require("typeorm");
 const user_entity_1 = require("../core/user.entity");
+const team_member_entity_1 = require("./team-member.entity");
 let Team = Team_1 = class Team {
 };
 __decorate([
@@ -93,6 +94,10 @@ __decorate([
     (0, typeorm_1.JoinColumn)({ name: 'parent_team_id' }),
     __metadata("design:type", Team)
 ], Team.prototype, "parentTeam", void 0);
+__decorate([
+    (0, typeorm_1.OneToMany)(() => team_member_entity_1.TeamMember, teamMember => teamMember.team),
+    __metadata("design:type", Array)
+], Team.prototype, "members", void 0);
 Team = Team_1 = __decorate([
     (0, typeorm_1.Entity)('teams')
 ], Team);
