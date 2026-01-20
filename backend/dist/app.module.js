@@ -43,7 +43,7 @@ exports.AppModule = AppModule = __decorate([
                         __dirname + '/**/*.entity{.ts,.js}',
                         __dirname + '/database/entities/**/*.entity{.ts,.js}',
                     ],
-                    synchronize: configService.get('NODE_ENV') !== 'production',
+                    synchronize: false,
                     logging: configService.get('NODE_ENV') === 'development',
                     charset: 'utf8mb4',
                     timezone: 'Z',
