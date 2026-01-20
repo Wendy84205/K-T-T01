@@ -1,3 +1,10 @@
+
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Install netcat for waiting mysql
+RUN apk add --no-cache netcat-openbsd curl
 FROM node:18
 
 WORKDIR /app
@@ -30,4 +37,8 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
   CMD curl -f http://localhost:3001/api/v1/health || exit 1
 
 # Start application in development mode
+<<<<<<< Updated upstream
 CMD ["npm", "run", "start:dev"]
+=======
+CMD ["npm", "run", "start:dev"]
+>>>>>>> Stashed changes
