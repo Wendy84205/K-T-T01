@@ -19,8 +19,9 @@ export class TeamMember {
   @Column({ name: 'security_clearance', type: 'tinyint', default: 2 })
   securityClearance: number;
 
-  @Column({ name: 'joined_date', type: 'date', default: () => 'CURRENT_DATE' })
+  @Column({ name: 'joined_date', type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   joinedDate: Date;
+
 
   @Column({ name: 'left_date', type: 'date', nullable: true })
   leftDate: Date;

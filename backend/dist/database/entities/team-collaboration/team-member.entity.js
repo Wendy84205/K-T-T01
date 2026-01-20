@@ -15,6 +15,7 @@ const team_entity_1 = require("./team.entity");
 const user_entity_1 = require("../core/user.entity");
 let TeamMember = class TeamMember {
 };
+exports.TeamMember = TeamMember;
 __decorate([
     (0, typeorm_1.PrimaryGeneratedColumn)('uuid'),
     __metadata("design:type", String)
@@ -36,7 +37,7 @@ __decorate([
     __metadata("design:type", Number)
 ], TeamMember.prototype, "securityClearance", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ name: 'joined_date', type: 'date', default: () => 'CURRENT_DATE' }),
+    (0, typeorm_1.Column)({ name: 'joined_date', type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' }),
     __metadata("design:type", Date)
 ], TeamMember.prototype, "joinedDate", void 0);
 __decorate([
@@ -60,17 +61,16 @@ __decorate([
     __metadata("design:type", Date)
 ], TeamMember.prototype, "createdAt", void 0);
 __decorate([
-    (0, typeorm_1.ManyToOne)(() => team_entity_1.Team, team => team.id),
+    (0, typeorm_1.ManyToOne)(() => team_entity_1.Team, team => team.members),
     (0, typeorm_1.JoinColumn)({ name: 'team_id' }),
     __metadata("design:type", team_entity_1.Team)
 ], TeamMember.prototype, "team", void 0);
 __decorate([
-    (0, typeorm_1.ManyToOne)(() => user_entity_1.User, user => user.id),
+    (0, typeorm_1.ManyToOne)(() => user_entity_1.User, user => user.teamMemberships),
     (0, typeorm_1.JoinColumn)({ name: 'user_id' }),
     __metadata("design:type", user_entity_1.User)
 ], TeamMember.prototype, "user", void 0);
-TeamMember = __decorate([
+exports.TeamMember = TeamMember = __decorate([
     (0, typeorm_1.Entity)('team_members')
 ], TeamMember);
-exports.TeamMember = TeamMember;
 //# sourceMappingURL=team-member.entity.js.map

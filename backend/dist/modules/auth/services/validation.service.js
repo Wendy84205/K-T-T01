@@ -132,8 +132,8 @@ let ValidationService = class ValidationService {
         this.validateJobTitle(dto.jobTitle);
     }
 };
-ValidationService = __decorate([
+exports.ValidationService = ValidationService;
+exports.ValidationService = ValidationService = __decorate([
     (0, common_1.Injectable)()
 ], ValidationService);
-exports.ValidationService = ValidationService;
 //# sourceMappingURL=validation.service.js.map

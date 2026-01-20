@@ -13,6 +13,7 @@ exports.Permission = void 0;
 const typeorm_1 = require("typeorm");
 let Permission = class Permission {
 };
+exports.Permission = Permission;
 __decorate([
     (0, typeorm_1.PrimaryGeneratedColumn)('uuid'),
     __metadata("design:type", String)
@@ -45,8 +46,7 @@ __decorate([
     (0, typeorm_1.CreateDateColumn)({ name: 'created_at' }),
     __metadata("design:type", Date)
 ], Permission.prototype, "createdAt", void 0);
-Permission = __decorate([
+exports.Permission = Permission = __decorate([
     (0, typeorm_1.Entity)('permissions')
 ], Permission);
-exports.Permission = Permission;
 //# sourceMappingURL=permission.entity.js.map

@@ -15,6 +15,7 @@ const message_entity_1 = require("./message.entity");
 const user_entity_1 = require("../core/user.entity");
 let MessageReadReceipt = class MessageReadReceipt {
 };
+exports.MessageReadReceipt = MessageReadReceipt;
 __decorate([
     (0, typeorm_1.PrimaryGeneratedColumn)('uuid'),
     __metadata("design:type", String)
@@ -49,8 +50,7 @@ __decorate([
     (0, typeorm_1.JoinColumn)({ name: 'user_id' }),
     __metadata("design:type", user_entity_1.User)
 ], MessageReadReceipt.prototype, "user", void 0);
-MessageReadReceipt = __decorate([
+exports.MessageReadReceipt = MessageReadReceipt = __decorate([
     (0, typeorm_1.Entity)('message_read_receipts')
 ], MessageReadReceipt);
-exports.MessageReadReceipt = MessageReadReceipt;
 //# sourceMappingURL=message-read.entity.js.map

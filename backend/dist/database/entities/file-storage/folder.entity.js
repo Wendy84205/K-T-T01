@@ -15,6 +15,7 @@ const user_entity_1 = require("../core/user.entity");
 const team_entity_1 = require("../team-collaboration/team.entity");
 let Folder = class Folder {
 };
+exports.Folder = Folder;
 __decorate([
     (0, typeorm_1.PrimaryGeneratedColumn)('uuid'),
     __metadata("design:type", String)
@@ -69,8 +70,7 @@ __decorate([
     (0, typeorm_1.JoinColumn)({ name: 'team_id' }),
     __metadata("design:type", team_entity_1.Team)
 ], Folder.prototype, "team", void 0);
-Folder = __decorate([
+exports.Folder = Folder = __decorate([
     (0, typeorm_1.Entity)('folders')
 ], Folder);
-exports.Folder = Folder;
 //# sourceMappingURL=folder.entity.js.map

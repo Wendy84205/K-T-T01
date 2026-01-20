@@ -1,0 +1,14 @@
+{
+  "dependencies": {
+    "joi": "^18.0.2",
+    "passport-local": "^1.0.0",
+    "qrcode": "^1.5.4",
+    "speakeasy": "^2.0.0"
+  },
+  "devDependencies": {
+    "@types/joi": "^17.2.2",
+    "@types/passport-local": "^1.0.38",
+    "@types/qrcode": "^1.5.6",
+    "@types/speakeasy": "^2.0.10"
+  }
+}

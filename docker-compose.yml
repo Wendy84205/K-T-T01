@@ -5,15 +5,12 @@ services:
     image: mysql:8.0
     container_name: cybersecure-mysql
     ports:
-      - "3307:3306"
+      - "3307:3306"  
     environment:
       MYSQL_ROOT_PASSWORD: password
       MYSQL_DATABASE: cybersecure_db
     volumes:
-      # QUAN TRỌNG: Thay volume bằng bind mount ra local
-      - ./mysql-data:/var/lib/mysql
-      # File init SQL (chỉ chạy lần đầu)
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+      - mysql_data:/var/lib/mysql
     command: 
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
@@ -35,7 +32,6 @@ services:
       DB_DATABASE: cybersecure_db
       DB_SYNC: "true"
       JWT_SECRET: dev-secret-key-for-development-only-change-this
-      CORS_ORIGIN: http://localhost:3000
     volumes:
       - ./backend:/app
       - backend_node_modules:/app/node_modules
@@ -60,5 +56,6 @@ services:
     tty: true
 
 volumes:
+  mysql_data:
   backend_node_modules:
   frontend_node_modules:

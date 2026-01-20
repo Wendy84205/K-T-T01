@@ -14,6 +14,7 @@ const typeorm_1 = require("typeorm");
 const file_entity_1 = require("./file.entity");
 let FileShare = class FileShare {
 };
+exports.FileShare = FileShare;
 __decorate([
     (0, typeorm_1.PrimaryGeneratedColumn)('uuid'),
     __metadata("design:type", String)
@@ -75,8 +76,7 @@ __decorate([
     (0, typeorm_1.JoinColumn)({ name: 'file_id' }),
     __metadata("design:type", file_entity_1.File)
 ], FileShare.prototype, "file", void 0);
-FileShare = __decorate([
+exports.FileShare = FileShare = __decorate([
     (0, typeorm_1.Entity)('file_shares')
 ], FileShare);
-exports.FileShare = FileShare;
 //# sourceMappingURL=file-share.entity.js.map

@@ -8,14 +8,14 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
-var Team_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.Team = void 0;
 const typeorm_1 = require("typeorm");
 const user_entity_1 = require("../core/user.entity");
 const team_member_entity_1 = require("./team-member.entity");
-let Team = Team_1 = class Team {
+let Team = class Team {
 };
+exports.Team = Team;
 __decorate([
     (0, typeorm_1.PrimaryGeneratedColumn)('uuid'),
     __metadata("design:type", String)
@@ -90,7 +90,7 @@ __decorate([
     __metadata("design:type", user_entity_1.User)
 ], Team.prototype, "manager", void 0);
 __decorate([
-    (0, typeorm_1.ManyToOne)(() => Team_1, { nullable: true }),
+    (0, typeorm_1.ManyToOne)(() => Team, { nullable: true }),
     (0, typeorm_1.JoinColumn)({ name: 'parent_team_id' }),
     __metadata("design:type", Team)
 ], Team.prototype, "parentTeam", void 0);
@@ -98,8 +98,7 @@ __decorate([
     (0, typeorm_1.OneToMany)(() => team_member_entity_1.TeamMember, teamMember => teamMember.team),
     __metadata("design:type", Array)
 ], Team.prototype, "members", void 0);
-Team = Team_1 = __decorate([
+exports.Team = Team = __decorate([
     (0, typeorm_1.Entity)('teams')
 ], Team);
-exports.Team = Team;
 //# sourceMappingURL=team.entity.js.map

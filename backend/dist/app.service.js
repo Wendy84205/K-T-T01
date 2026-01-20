@@ -13,8 +13,8 @@ let AppService = class AppService {
         return 'Cybersecure API is running!';
     }
 };
-AppService = __decorate([
+exports.AppService = AppService;
+exports.AppService = AppService = __decorate([
     (0, common_1.Injectable)()
 ], AppService);
-exports.AppService = AppService;
 //# sourceMappingURL=app.service.js.map

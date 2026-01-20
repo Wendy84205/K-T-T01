@@ -14,34 +14,52 @@ const app_controller_1 = require("./app.controller");
 const app_service_1 = require("./app.service");
 const auth_module_1 = require("./modules/auth/auth.module");
 const users_module_1 = require("./modules/users/users.module");
-const user_entity_1 = require("./database/entities/core/user.entity");
+const team_module_1 = require("./modules/team/team.module");
+const mfa_module_1 = require("./modules/mfa/mfa.module");
+const security_module_1 = require("./modules/security/security.module");
+const database_config_1 = require("./config/database.config");
 let AppModule = class AppModule {
 };
-AppModule = __decorate([
+exports.AppModule = AppModule;
+exports.AppModule = AppModule = __decorate([
     (0, common_1.Module)({
         imports: [
             config_1.ConfigModule.forRoot({
                 isGlobal: true,
                 envFilePath: '.env',
+                load: [database_config_1.default],
             }),
-            typeorm_1.TypeOrmModule.forRoot({
-                type: 'mysql',
-                host: process.env.DB_HOST || 'localhost',
-                port: parseInt(process.env.DB_PORT || '3306'),
-                username: process.env.DB_USERNAME || 'root',
-                password: process.env.DB_PASSWORD || 'password',
-                database: process.env.DB_DATABASE || 'cybersecure_db',
-                entities: [__dirname + '/**/*.entity{.ts,.js}'],
-                synchronize: false,
-                logging: process.env.NODE_ENV === 'development',
+            typeorm_1.TypeOrmModule.forRootAsync({
+                imports: [config_1.ConfigModule],
+                inject: [config_1.ConfigService],
+                useFactory: (configService) => ({
+                    type: 'mysql',
+                    host: configService.get('DB_HOST', 'localhost'),
+                    port: configService.get('DB_PORT', 3306),
+                    username: configService.get('DB_USERNAME', 'root'),
+                    password: configService.get('DB_PASSWORD', 'password'),
+                    database: configService.get('DB_DATABASE', 'cybersecure_db'),
+                    entities: [
+                        __dirname + '/**/*.entity{.ts,.js}',
+                        __dirname + '/database/entities/**/*.entity{.ts,.js}',
+                    ],
+                    synchronize: configService.get('NODE_ENV') !== 'production',
+                    logging: configService.get('NODE_ENV') === 'development',
+                    charset: 'utf8mb4',
+                    timezone: 'Z',
+                    extra: {
+                        charset: 'utf8mb4_unicode_ci',
+                    },
+                }),
             }),
-            typeorm_1.TypeOrmModule.forFeature([user_entity_1.User]),
             auth_module_1.AuthModule,
             users_module_1.UsersModule,
+            team_module_1.TeamModule,
+            mfa_module_1.MfaModule,
+            security_module_1.SecurityModule,
         ],
         controllers: [app_controller_1.AppController],
         providers: [app_service_1.AppService],
     })
 ], AppModule);
-exports.AppModule = AppModule;
 //# sourceMappingURL=app.module.js.map

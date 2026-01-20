@@ -13,7 +13,8 @@ const user_entity_1 = require("./entities/core/user.entity");
 const user_repository_1 = require("./repositories/user.repository");
 let DatabaseModule = class DatabaseModule {
 };
-DatabaseModule = __decorate([
+exports.DatabaseModule = DatabaseModule;
+exports.DatabaseModule = DatabaseModule = __decorate([
     (0, common_1.Module)({
         imports: [
             typeorm_1.TypeOrmModule.forFeature([user_entity_1.User, user_repository_1.UserRepository]),
@@ -22,5 +23,4 @@ DatabaseModule = __decorate([
         exports: [typeorm_1.TypeOrmModule, user_repository_1.UserRepository],
     })
 ], DatabaseModule);
-exports.DatabaseModule = DatabaseModule;
 //# sourceMappingURL=database.module.js.map

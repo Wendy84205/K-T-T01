@@ -14,6 +14,7 @@ const typeorm_1 = require("typeorm");
 const user_entity_1 = require("../core/user.entity");
 let SecurityEvent = class SecurityEvent {
 };
+exports.SecurityEvent = SecurityEvent;
 __decorate([
     (0, typeorm_1.PrimaryGeneratedColumn)('uuid'),
     __metadata("design:type", String)
@@ -95,8 +96,7 @@ __decorate([
     (0, typeorm_1.JoinColumn)({ name: 'user_id' }),
     __metadata("design:type", user_entity_1.User)
 ], SecurityEvent.prototype, "user", void 0);
-SecurityEvent = __decorate([
+exports.SecurityEvent = SecurityEvent = __decorate([
     (0, typeorm_1.Entity)('security_events')
 ], SecurityEvent);
-exports.SecurityEvent = SecurityEvent;
 //# sourceMappingURL=security-event.entity.js.map

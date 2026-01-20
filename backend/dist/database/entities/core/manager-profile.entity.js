@@ -14,6 +14,7 @@ const typeorm_1 = require("typeorm");
 const user_entity_1 = require("./user.entity");
 let ManagerProfile = class ManagerProfile {
 };
+exports.ManagerProfile = ManagerProfile;
 __decorate([
     (0, typeorm_1.PrimaryGeneratedColumn)('uuid'),
     __metadata("design:type", String)
@@ -75,8 +76,7 @@ __decorate([
     (0, typeorm_1.JoinColumn)({ name: 'user_id' }),
     __metadata("design:type", user_entity_1.User)
 ], ManagerProfile.prototype, "user", void 0);
-ManagerProfile = __decorate([
+exports.ManagerProfile = ManagerProfile = __decorate([
     (0, typeorm_1.Entity)('manager_profiles')
 ], ManagerProfile);
-exports.ManagerProfile = ManagerProfile;
 //# sourceMappingURL=manager-profile.entity.js.map

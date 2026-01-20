@@ -15,6 +15,7 @@ const team_entity_1 = require("./team.entity");
 const user_entity_1 = require("../core/user.entity");
 let Project = class Project {
 };
+exports.Project = Project;
 __decorate([
     (0, typeorm_1.PrimaryGeneratedColumn)('uuid'),
     __metadata("design:type", String)
@@ -81,8 +82,7 @@ __decorate([
     (0, typeorm_1.JoinColumn)({ name: 'manager_id' }),
     __metadata("design:type", user_entity_1.User)
 ], Project.prototype, "manager", void 0);
-Project = __decorate([
+exports.Project = Project = __decorate([
     (0, typeorm_1.Entity)('projects')
 ], Project);
-exports.Project = Project;
 //# sourceMappingURL=project.entity.js.map

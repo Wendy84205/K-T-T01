@@ -9,7 +9,8 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.validate = exports.Configuration = exports.FileConfig = exports.SecurityConfig = exports.AppConfig = exports.JwtConfig = exports.DatabaseConfig = void 0;
+exports.Configuration = exports.FileConfig = exports.SecurityConfig = exports.AppConfig = exports.JwtConfig = exports.DatabaseConfig = void 0;
+exports.validate = validate;
 const class_validator_1 = require("class-validator");
 const class_transformer_1 = require("class-transformer");
 class DatabaseConfig {
@@ -23,6 +24,7 @@ class DatabaseConfig {
         this.DB_LOGGING = false;
     }
 }
+exports.DatabaseConfig = DatabaseConfig;
 __decorate([
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
@@ -53,7 +55,6 @@ __decorate([
     (0, class_validator_1.IsOptional)(),
     __metadata("design:type", Boolean)
 ], DatabaseConfig.prototype, "DB_LOGGING", void 0);
-exports.DatabaseConfig = DatabaseConfig;
 class JwtConfig {
     constructor() {
         this.JWT_SECRET = 'dev-secret-key-for-development';
@@ -62,6 +63,7 @@ class JwtConfig {
         this.JWT_REFRESH_EXPIRATION = '7d';
     }
 }
+exports.JwtConfig = JwtConfig;
 __decorate([
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
@@ -81,7 +83,6 @@ __decorate([
     (0, class_validator_1.IsOptional)(),
     __metadata("design:type", String)
 ], JwtConfig.prototype, "JWT_REFRESH_EXPIRATION", void 0);
-exports.JwtConfig = JwtConfig;
 class AppConfig {
     constructor() {
         this.NODE_ENV = 'development';
@@ -90,6 +91,7 @@ class AppConfig {
         this.CORS_ORIGIN = 'http://localhost:3000';
     }
 }
+exports.AppConfig = AppConfig;
 __decorate([
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
@@ -108,7 +110,6 @@ __decorate([
     (0, class_validator_1.IsOptional)(),
     __metadata("design:type", String)
 ], AppConfig.prototype, "CORS_ORIGIN", void 0);
-exports.AppConfig = AppConfig;
 class SecurityConfig {
     constructor() {
         this.BCRYPT_SALT_ROUNDS = 12;
@@ -117,6 +118,7 @@ class SecurityConfig {
         this.SESSION_SECRET = 'dev-session-secret';
     }
 }
+exports.SecurityConfig = SecurityConfig;
 __decorate([
     (0, class_validator_1.IsNumber)(),
     (0, class_validator_1.IsOptional)(),
@@ -137,7 +139,6 @@ __decorate([
     (0, class_validator_1.IsOptional)(),
     __metadata("design:type", String)
 ], SecurityConfig.prototype, "SESSION_SECRET", void 0);
-exports.SecurityConfig = SecurityConfig;
 class FileConfig {
     constructor() {
         this.UPLOAD_PATH = './uploads';
@@ -146,6 +147,7 @@ class FileConfig {
         this.STORAGE_TYPE = 'local';
     }
 }
+exports.FileConfig = FileConfig;
 __decorate([
     (0, class_validator_1.IsString)(),
     (0, class_validator_1.IsOptional)(),
@@ -166,7 +168,6 @@ __decorate([
     (0, class_validator_1.IsOptional)(),
     __metadata("design:type", String)
 ], FileConfig.prototype, "STORAGE_TYPE", void 0);
-exports.FileConfig = FileConfig;
 class Configuration {
     constructor() {
         this.database = new DatabaseConfig();
@@ -176,6 +177,7 @@ class Configuration {
         this.file = new FileConfig();
     }
 }
+exports.Configuration = Configuration;
 __decorate([
     (0, class_validator_1.IsOptional)(),
     __metadata("design:type", DatabaseConfig)
@@ -196,7 +198,6 @@ __decorate([
     (0, class_validator_1.IsOptional)(),
     __metadata("design:type", FileConfig)
 ], Configuration.prototype, "file", void 0);
-exports.Configuration = Configuration;
 function validate(config) {
     const validatedConfig = (0, class_transformer_1.plainToClass)(Configuration, config, {
         enableImplicitConversion: true,
@@ -209,5 +210,4 @@ function validate(config) {
     }
     return validatedConfig;
 }
-exports.validate = validate;
 //# sourceMappingURL=configuration.js.map

@@ -16,6 +16,7 @@ const user_entity_1 = require("../core/user.entity");
 const file_entity_1 = require("../file-storage/file.entity");
 let Message = class Message {
 };
+exports.Message = Message;
 __decorate([
     (0, typeorm_1.PrimaryGeneratedColumn)('uuid'),
     __metadata("design:type", String)
@@ -99,8 +100,7 @@ __decorate([
     (0, typeorm_1.JoinColumn)({ name: 'file_id' }),
     __metadata("design:type", file_entity_1.File)
 ], Message.prototype, "file", void 0);
-Message = __decorate([
+exports.Message = Message = __decorate([
     (0, typeorm_1.Entity)('messages')
 ], Message);
-exports.Message = Message;
 //# sourceMappingURL=message.entity.js.map

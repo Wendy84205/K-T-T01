@@ -14,6 +14,7 @@ const typeorm_1 = require("typeorm");
 const user_entity_1 = require("../core/user.entity");
 let MfaSetting = class MfaSetting {
 };
+exports.MfaSetting = MfaSetting;
 __decorate([
     (0, typeorm_1.PrimaryGeneratedColumn)('uuid'),
     __metadata("design:type", String)
@@ -83,8 +84,7 @@ __decorate([
     (0, typeorm_1.JoinColumn)({ name: 'user_id' }),
     __metadata("design:type", user_entity_1.User)
 ], MfaSetting.prototype, "user", void 0);
-MfaSetting = __decorate([
+exports.MfaSetting = MfaSetting = __decorate([
     (0, typeorm_1.Entity)('mfa_settings')
 ], MfaSetting);
-exports.MfaSetting = MfaSetting;
 //# sourceMappingURL=mfa-setting.entity.js.map

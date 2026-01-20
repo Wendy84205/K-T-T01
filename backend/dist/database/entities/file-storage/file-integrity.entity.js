@@ -14,6 +14,7 @@ const typeorm_1 = require("typeorm");
 const file_entity_1 = require("./file.entity");
 let FileIntegrityLog = class FileIntegrityLog {
 };
+exports.FileIntegrityLog = FileIntegrityLog;
 __decorate([
     (0, typeorm_1.PrimaryGeneratedColumn)('uuid'),
     __metadata("design:type", String)
@@ -75,8 +76,7 @@ __decorate([
     (0, typeorm_1.JoinColumn)({ name: 'file_id' }),
     __metadata("design:type", file_entity_1.File)
 ], FileIntegrityLog.prototype, "file", void 0);
-FileIntegrityLog = __decorate([
+exports.FileIntegrityLog = FileIntegrityLog = __decorate([
     (0, typeorm_1.Entity)('file_integrity_logs')
 ], FileIntegrityLog);
-exports.FileIntegrityLog = FileIntegrityLog;
 //# sourceMappingURL=file-integrity.entity.js.map

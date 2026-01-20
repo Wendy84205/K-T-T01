@@ -83,10 +83,10 @@ let EmployeeIdGeneratorService = class EmployeeIdGeneratorService {
         return codeMap[deptCode] || null;
     }
 };
-EmployeeIdGeneratorService = __decorate([
+exports.EmployeeIdGeneratorService = EmployeeIdGeneratorService;
+exports.EmployeeIdGeneratorService = EmployeeIdGeneratorService = __decorate([
     (0, common_1.Injectable)(),
     __param(0, (0, typeorm_1.InjectRepository)(user_entity_1.User)),
     __metadata("design:paramtypes", [typeorm_2.Repository])
 ], EmployeeIdGeneratorService);
-exports.EmployeeIdGeneratorService = EmployeeIdGeneratorService;
 //# sourceMappingURL=employee-id-generator.service.js.map

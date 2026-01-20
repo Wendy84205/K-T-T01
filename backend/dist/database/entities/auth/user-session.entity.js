@@ -14,6 +14,7 @@ const typeorm_1 = require("typeorm");
 const user_entity_1 = require("../core/user.entity");
 let UserSession = class UserSession {
 };
+exports.UserSession = UserSession;
 __decorate([
     (0, typeorm_1.PrimaryGeneratedColumn)('uuid'),
     __metadata("design:type", String)
@@ -119,8 +120,7 @@ __decorate([
     (0, typeorm_1.JoinColumn)({ name: 'user_id' }),
     __metadata("design:type", user_entity_1.User)
 ], UserSession.prototype, "user", void 0);
-UserSession = __decorate([
+exports.UserSession = UserSession = __decorate([
     (0, typeorm_1.Entity)('user_sessions')
 ], UserSession);
-exports.UserSession = UserSession;
 //# sourceMappingURL=user-session.entity.js.map

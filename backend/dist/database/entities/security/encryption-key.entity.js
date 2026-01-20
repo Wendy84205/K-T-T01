@@ -13,6 +13,7 @@ exports.EncryptionKey = void 0;
 const typeorm_1 = require("typeorm");
 let EncryptionKey = class EncryptionKey {
 };
+exports.EncryptionKey = EncryptionKey;
 __decorate([
     (0, typeorm_1.PrimaryGeneratedColumn)('uuid'),
     __metadata("design:type", String)
@@ -85,8 +86,7 @@ __decorate([
     (0, typeorm_1.Column)({ name: 'revoked_by', type: 'char', length: 36, nullable: true }),
     __metadata("design:type", String)
 ], EncryptionKey.prototype, "revokedBy", void 0);
-EncryptionKey = __decorate([
+exports.EncryptionKey = EncryptionKey = __decorate([
     (0, typeorm_1.Entity)('encryption_keys')
 ], EncryptionKey);
-exports.EncryptionKey = EncryptionKey;
 //# sourceMappingURL=encryption-key.entity.js.map

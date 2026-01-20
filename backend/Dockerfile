@@ -1,9 +1,12 @@
-FROM node:18-alpine
+FROM node:18
 
 WORKDIR /app
 
-# Install netcat for waiting mysql
-RUN apk add --no-cache netcat-openbsd curl
+# Install netcat and curl for waiting mysql (Debian/Ubuntu)
+RUN apt-get update && apt-get install -y \
+    netcat \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy package files
 COPY package*.json ./

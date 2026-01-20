@@ -14,6 +14,7 @@ const typeorm_1 = require("typeorm");
 const file_entity_1 = require("./file.entity");
 let FileVersion = class FileVersion {
 };
+exports.FileVersion = FileVersion;
 __decorate([
     (0, typeorm_1.PrimaryGeneratedColumn)('uuid'),
     __metadata("design:type", String)
@@ -59,8 +60,7 @@ __decorate([
     (0, typeorm_1.JoinColumn)({ name: 'file_id' }),
     __metadata("design:type", file_entity_1.File)
 ], FileVersion.prototype, "file", void 0);
-FileVersion = __decorate([
+exports.FileVersion = FileVersion = __decorate([
     (0, typeorm_1.Entity)('file_versions')
 ], FileVersion);
-exports.FileVersion = FileVersion;
 //# sourceMappingURL=file-version.entity.js.map
