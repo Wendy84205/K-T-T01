@@ -8,6 +8,7 @@ import { User } from '../../database/entities/core/user.entity';
 import { LoginDto } from './dto/login.dto';
 import { LoginResponseDto } from './dto/login-response.dto';
 import { MfaSetting } from '../../database/entities/auth/mfa-setting.entity';
+import { MfaService } from '../mfa/mfa.service';
 
 @Injectable()
 export class AuthService {
@@ -19,6 +20,7 @@ export class AuthService {
     private readonly mfaSettingRepository: Repository<MfaSetting>,
     
     private readonly jwtService: JwtService,
+    private readonly mfaService: MfaService,
   ) {}
 
   // Validate user for login
@@ -80,16 +82,48 @@ export class AuthService {
     return user;
   }
 
-  // Login method
-  async login(loginDto: LoginDto): Promise<LoginResponseDto> {
+  // Login method - returns temporary token if MFA required and configured; otherwise full token
+  async login(loginDto: LoginDto): Promise<LoginResponseDto | { requiresMfa: boolean; tempToken: string; mfaMethods: string[] }> {
     const user = await this.validateUser(loginDto.email, loginDto.password);
+
+    // Load user with roles for JWT and response
+    const userWithRoles = await this.userRepository.findOne({
+      where: { id: user.id },
+      relations: ['roles'],
+    });
+    const roles: string[] = (userWithRoles?.roles || []).map((r: { name: string }) => r.name);
 
     // Check MFA settings
     const mfaSettings = await this.mfaSettingRepository.findOne({
       where: { userId: user.id }
     });
 
-    // Create JWT payload
+    const mfaMethods: string[] = [];
+    if (mfaSettings) {
+      if (mfaSettings.totpEnabled) mfaMethods.push('totp');
+      if (mfaSettings.emailMfaEnabled) mfaMethods.push('email');
+      if (mfaSettings.smsMfaEnabled) mfaMethods.push('sms');
+    }
+
+    // MFA required and at least one method configured -> require MFA step
+    if (user.mfaRequired && mfaMethods.length > 0) {
+      const tempPayload = {
+        sub: user.id,
+        email: user.email,
+        username: user.username,
+        mfaPending: true,
+      };
+      const tempToken = this.jwtService.sign(tempPayload, { expiresIn: '5m' });
+      return {
+        requiresMfa: true,
+        tempToken,
+        mfaMethods,
+      };
+    }
+
+    // No MFA or no method configured: allow login, issue full token
+    const mfaSetupRequired = user.mfaRequired && mfaMethods.length === 0;
+
     const payload = {
       sub: user.id,
       email: user.email,
@@ -97,20 +131,13 @@ export class AuthService {
       employeeId: user.employeeId,
       securityLevel: user.securityClearanceLevel,
       mfaRequired: user.mfaRequired,
+      mfaVerified: !mfaSetupRequired,
+      roles,
     };
 
-    // Generate token
     const accessToken = this.jwtService.sign(payload, {
-      expiresIn: '24h', // Token expires in 24 hours
+      expiresIn: '24h',
     });
-
-    // Check if MFA is verified
-    const mfaVerified = user.mfaRequired ? 
-      !!(
-        (mfaSettings?.emailMfaEnabled && mfaSettings?.emailVerifiedAt) ||
-        (mfaSettings?.totpEnabled && mfaSettings?.totpVerifiedAt) ||
-        (mfaSettings?.smsMfaEnabled && mfaSettings?.smsVerifiedAt)
-      ) : true;
 
     return {
       accessToken,
@@ -123,8 +150,58 @@ export class AuthService {
         employeeId: user.employeeId,
         department: user.department,
         mfaRequired: user.mfaRequired,
-        mfaVerified: mfaVerified,
+        mfaVerified: !mfaSetupRequired,
+        mfaSetupRequired: mfaSetupRequired || undefined,
         securityClearanceLevel: user.securityClearanceLevel,
+        roles,
+      },
+    };
+  }
+
+  // Verify MFA and complete login
+  async verifyMfaAndLogin(userId: string, token: string): Promise<LoginResponseDto> {
+    const user = await this.userRepository.findOne({
+      where: { id: userId, isActive: true },
+      relations: ['roles'],
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    const mfaResult = await this.mfaService.verifyTotpLogin(userId, token);
+    if (!mfaResult.verified) {
+      throw new UnauthorizedException('Invalid MFA token');
+    }
+
+    const roles: string[] = (user.roles || []).map((r: { name: string }) => r.name);
+    const payload = {
+      sub: user.id,
+      email: user.email,
+      username: user.username,
+      employeeId: user.employeeId,
+      securityLevel: user.securityClearanceLevel,
+      mfaRequired: true,
+      mfaVerified: true,
+      roles,
+    };
+
+    const accessToken = this.jwtService.sign(payload, { expiresIn: '24h' });
+
+    return {
+      accessToken,
+      user: {
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        employeeId: user.employeeId,
+        department: user.department,
+        mfaRequired: true,
+        mfaVerified: true,
+        securityClearanceLevel: user.securityClearanceLevel,
+        roles,
       },
     };
   }

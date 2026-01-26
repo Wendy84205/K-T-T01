@@ -1,4 +1,4 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
 import { Team } from './team.entity';
 import { User } from '../core/user.entity';
 
@@ -22,9 +22,11 @@ export class TeamMember {
   @Column({ name: 'joined_date', type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   joinedDate: Date;
 
-
   @Column({ name: 'left_date', type: 'date', nullable: true })
   leftDate: Date;
+
+  @Column({ name: 'left_by', type: 'char', length: 36, nullable: true })
+  leftBy: string;
 
   @Column({ name: 'added_by', type: 'char', length: 36, nullable: true })
   addedBy: string;
@@ -38,14 +40,14 @@ export class TeamMember {
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
-  // Relations - FIXED
+  @UpdateDateColumn({ name: 'updated_at' })
+  updatedAt: Date;
+
   @ManyToOne(() => Team, team => team.members)
   @JoinColumn({ name: 'team_id' })
   team: Team;
 
-  @ManyToOne(() => User, user => user.teamMemberships) 
+  @ManyToOne(() => User, user => user.teamMemberships)
   @JoinColumn({ name: 'user_id' })
   user: User;
-    updatedAt: Date;
-    leftBy: string;
 }

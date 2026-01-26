@@ -15,23 +15,18 @@ export class RolesGuard implements CanActivate {
     
     const request = context.switchToHttp().getRequest();
     const user = request.user;
-    
+
     if (!user) {
       throw new ForbiddenException('User not authenticated');
     }
-    
-    // For now, use a simple check. Later implement proper role checking
-    // TODO: Implement proper role checking with user.roles
-    const hasRole = requiredRoles.some(role => 
-      role === 'System Admin' || 
-      role === 'Security Admin' || 
-      role === 'Department Manager'
-    );
-    
+
+    const userRoles: string[] = Array.isArray(user.roles) ? user.roles : [];
+    const hasRole = requiredRoles.some((role) => userRoles.includes(role));
+
     if (!hasRole) {
       throw new ForbiddenException('Insufficient permissions');
     }
-    
+
     return true;
   }
 }

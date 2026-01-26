@@ -10,6 +10,8 @@ export class LoginResponseDto {
     department?: string;
     mfaRequired: boolean;
     mfaVerified?: boolean;
+    mfaSetupRequired?: boolean;
     securityClearanceLevel: number;
+    roles?: string[];
   };
 }
