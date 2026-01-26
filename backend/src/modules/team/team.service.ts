@@ -538,8 +538,8 @@ export class TeamService {
       throw new NotFoundException('Team member not found');
     }
 
+    const oldRole = member.roleInTeam;
     member.roleInTeam = newRole;
-    member.updatedAt = new Date();
 
     const updatedMember = await this.teamMemberRepository.save(member);
 
@@ -548,7 +548,7 @@ export class TeamService {
       teamId, 
       'UPDATE_MEMBER_ROLE', 
       updatedBy, 
-      { userId, oldRole: member.roleInTeam, newRole }
+      { userId, oldRole, newRole }
     );
 
     return updatedMember;

@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
@@ -22,10 +22,14 @@ import { EmployeeIdGeneratorService } from './services/employee-id-generator.ser
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { LocalStrategy } from './strategies/local.strategy';
 
+// Import MfaModule to use MfaService
+import { MfaModule } from '../mfa/mfa.module';
+
 @Module({
   imports: [
     TypeOrmModule.forFeature([User, MfaSetting]),
     PassportModule,
+    forwardRef(() => MfaModule), // Use forwardRef to avoid circular dependency
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({

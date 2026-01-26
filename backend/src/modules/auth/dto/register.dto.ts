@@ -47,20 +47,23 @@ export class RegisterDto {
   lastName: string;
 
   @IsOptional()
-  @IsString({ message: 'Phone must be a string' })
+  @IsString()
+  @Transform(({ value }) => (value === '' || value == null ? undefined : value))
   @Matches(/^\+?[1-9]\d{1,14}$/, {
-    message: 'Phone number must be valid international format',
+    message: 'Phone number must be valid international format (e.g. +84123456789)',
   })
   phone?: string;
 
   @IsOptional()
-  @IsString({ message: 'Job title must be a string' })
+  @IsString()
   @MaxLength(100, { message: 'Job title must be less than 100 characters' })
+  @Transform(({ value }) => (value === '' || value == null ? undefined : value))
   jobTitle?: string;
-  
+
   @IsOptional()
-  @IsString({ message: 'Employee ID must be a string' })
+  @IsString()
   @MaxLength(50, { message: 'Employee ID must be less than 50 characters' })
+  @Transform(({ value }) => (value === '' || value == null ? undefined : value))
   employeeId?: string;
 
   @IsOptional()

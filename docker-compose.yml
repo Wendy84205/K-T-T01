@@ -5,17 +5,46 @@ services:
     image: mysql:8.0
     container_name: cybersecure-mysql
     ports:
-      - "3307:3306"  
+      - "3307:3306"
     environment:
       MYSQL_ROOT_PASSWORD: password
       MYSQL_DATABASE: cybersecure_db
     volumes:
       - mysql_data:/var/lib/mysql
-    command: 
+    command:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
       - --default-authentication-plugin=mysql_native_password
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-ppassword"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  migrate:
+    image: mysql:8.0
+    container_name: cybersecure-migrate
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_USER: root
+      MYSQL_PASSWORD: password
+      MYSQL_DATABASE: cybersecure_db
+      MYSQL_PORT: 3306
+      MIGRATIONS_DIR: /migrations
+      MYSQL_SCRIPTS_DIR: /scripts
+      MIGRATION_DONE_FILE: /migration_done/done
+    volumes:
+      - ./docker:/docker
+      - ./backend/src/database/mysql:/scripts
+      - ./backend/src/database/migrations:/migrations
+      - migration_done:/migration_done
+    entrypoint: ["/bin/bash", "/docker/migrate-entrypoint.sh"]
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: "no"
 
   backend:
     build: ./backend
@@ -30,13 +59,15 @@ services:
       DB_USERNAME: root
       DB_PASSWORD: password
       DB_DATABASE: cybersecure_db
-      DB_SYNC: "true"
+      DB_SYNC: "false"
       JWT_SECRET: dev-secret-key-for-development-only-change-this
+      MIGRATION_DONE_FILE: /migration_done/done
     volumes:
       - ./backend:/app
       - backend_node_modules:/app/node_modules
+      - migration_done:/migration_done
     depends_on:
-      - mysql
+      - migrate
     restart: unless-stopped
 
   frontend:
@@ -57,5 +88,6 @@ services:
 
 volumes:
   mysql_data:
+  migration_done:
   backend_node_modules:
   frontend_node_modules:
