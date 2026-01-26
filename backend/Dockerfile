@@ -1,10 +1,3 @@
-
-FROM node:18-alpine
-
-WORKDIR /app
-
-# Install netcat for waiting mysql
-RUN apk add --no-cache netcat-openbsd curl
 FROM node:18
 
 WORKDIR /app
