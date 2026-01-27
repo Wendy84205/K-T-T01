@@ -1,11 +1,11 @@
-import { 
-  Controller, 
-  Post, 
-  Body, 
-  Get, 
-  Query, 
-  HttpCode, 
-  HttpStatus 
+import {
+  Controller,
+  Post,
+  Body,
+  Get,
+  Query,
+  HttpCode,
+  HttpStatus
 } from '@nestjs/common';
 
 import { RegisterService } from '../services/register.service';
@@ -16,7 +16,7 @@ import { Public } from '../../../common/decorators/public.decorator';
 @Controller('auth/register')
 @Public()
 export class RegisterController {
-  constructor(private readonly registerService: RegisterService) {}
+  constructor(private readonly registerService: RegisterService) { }
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
