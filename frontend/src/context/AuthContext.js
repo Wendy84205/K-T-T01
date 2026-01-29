@@ -38,7 +38,7 @@ export function AuthProvider({ children }) {
     if (u) {
       try {
         setUser(JSON.parse(u));
-      } catch (_) {}
+      } catch (_) { }
     }
     loadUser();
   }, [loadUser]);
@@ -51,9 +51,15 @@ export function AuthProvider({ children }) {
     setUser(u);
   }, []);
 
-  const isAdmin = Boolean(user?.roles?.length && user.roles.some(r =>
-    ['System Admin', 'Security Admin', 'Department Manager', 'Team Manager'].includes(r)
-  ));
+  const isAdmin = Boolean(user?.roles?.length && user.roles.some(r => {
+    const roleName = typeof r === 'string' ? r : r.name;
+    return ['System Admin', 'Security Admin'].includes(roleName);
+  }));
+
+  const isManager = Boolean(user?.roles?.length && user.roles.some(r => {
+    const roleName = typeof r === 'string' ? r : r.name;
+    return ['Department Manager', 'Team Manager'].includes(roleName);
+  }));
 
   const value = {
     user,
@@ -63,6 +69,7 @@ export function AuthProvider({ children }) {
     logout,
     loadUser,
     isAdmin,
+    isManager,
     isAuthenticated: Boolean(token && user),
   };
 

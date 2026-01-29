@@ -8,7 +8,7 @@ class ApiClient {
   async request(endpoint, options = {}) {
     const url = `${this.baseURL}${endpoint}`;
     const token = localStorage.getItem('accessToken');
-    
+
     const config = {
       ...options,
       headers: {
@@ -34,7 +34,11 @@ class ApiClient {
           localStorage.removeItem('accessToken');
           localStorage.removeItem('user');
         }
-        throw new Error(data.message || data.error || `HTTP ${response.status}`);
+
+        const error = new Error(data.message || data.error || `HTTP ${response.status}`);
+        error.data = data; // Attach full response data
+        error.status = response.status;
+        throw error;
       }
 
       return data;
@@ -87,18 +91,89 @@ class ApiClient {
   }
 
   // Users endpoints
-  async getUsers() {
-    return this.request('/users', {
+  async getUsers(page = 1, limit = 10, filters = {}) {
+    const params = new URLSearchParams({ page, limit, ...filters });
+    return this.request(`/users?${params}`, {
       method: 'GET',
     });
   }
 
-  // Teams endpoints
-  async getTeams() {
-    return this.request('/teams', {
+  async updateUser(id, userData) {
+    return this.request(`/users/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(userData),
+    });
+  }
+
+  async approveUser(id) {
+    return this.updateUser(id, { isActive: true, isLocked: false });
+  }
+
+  async rejectUser(id) {
+    return this.request(`/users/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async emergencyLock(id) {
+    return this.updateUser(id, { isLocked: true, lockReason: 'EMERGENCY_LOCK' });
+  }
+
+  async addUser(userData) {
+    return this.request('/users', {
+      method: 'POST',
+      body: JSON.stringify(userData),
+    });
+  }
+
+  // Security endpoints
+  async getSecurityDashboard(days = 7) {
+    return this.request(`/security/dashboard?days=${days}`, {
       method: 'GET',
+    });
+  }
+
+  async getSecurityAlerts(active = true, severity) {
+    let url = `/security/alerts?active=${active}`;
+    if (severity) url += `&severity=${severity}`;
+    return this.request(url, {
+      method: 'GET',
+    });
+  }
+
+  async getSecurityEvents(page = 1, limit = 10, filters = {}) {
+    const params = new URLSearchParams({ page, limit, ...filters });
+    return this.request(`/security/events?${params}`, {
+      method: 'GET',
+    });
+  }
+
+  async getAuditLogs(page = 1, limit = 10, filters = {}) {
+    const params = new URLSearchParams({ page, limit, ...filters });
+    return this.request(`/security/audit-logs?${params}`, {
+      method: 'GET',
+    });
+  }
+
+  async runDiagnostics() {
+    return this.request('/security/integrity/check-files', {
+      method: 'POST',
+    });
+  }
+
+  async exportSecurityReport() {
+    return this.request('/security/reports/daily', {
+      method: 'GET',
+    });
+  }
+
+  async acknowledgeAlert(id) {
+    return this.request(`/security/alerts/${id}/acknowledge`, {
+      method: 'POST',
+      body: JSON.stringify({ notes: 'Acknowledged via Dashboard' }),
     });
   }
 }
 
-export default new ApiClient();
+const api = new ApiClient();
+export default api;

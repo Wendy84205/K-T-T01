@@ -9,19 +9,21 @@ import { LoginDto } from './dto/login.dto';
 import { LoginResponseDto } from './dto/login-response.dto';
 import { MfaSetting } from '../../database/entities/auth/mfa-setting.entity';
 import { MfaService } from '../mfa/mfa.service';
+import { SecurityService } from '../security/security.service';
 
 @Injectable()
 export class AuthService {
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
-    
+
     @InjectRepository(MfaSetting)
     private readonly mfaSettingRepository: Repository<MfaSetting>,
-    
+
     private readonly jwtService: JwtService,
     private readonly mfaService: MfaService,
-  ) {}
+    private readonly securityService: SecurityService,
+  ) { }
 
   // Validate user for login
   async validateUser(identifier: string, password: string): Promise<User> {
@@ -34,6 +36,7 @@ export class AuthService {
     });
 
     if (!user) {
+      this.securityService.logSecurityEvent('LOGIN_FAILURE', null, `Login attempt failed: User not found (${identifier})`, {}, 'MEDIUM');
       throw new UnauthorizedException('Invalid credentials');
     }
 
@@ -43,9 +46,16 @@ export class AuthService {
         const remainingMinutes = Math.ceil(
           (user.accountLockedUntil.getTime() - Date.now()) / (1000 * 60)
         );
-        throw new UnauthorizedException(
-          `Account is locked. Try again in ${remainingMinutes} minutes`
+        const remainingSeconds = Math.ceil(
+          (user.accountLockedUntil.getTime() - Date.now()) / 1000
         );
+        this.securityService.logSecurityEvent('LOGIN_BLOCKED', user.id, `Login attempt blocked: Account is locked`, {}, 'HIGH');
+        throw new UnauthorizedException({
+          message: `Account is locked. Try again in ${remainingMinutes} minutes`,
+          error: 'ACCOUNT_LOCKED',
+          remainingSeconds,
+          lockedUntil: user.accountLockedUntil.toISOString()
+        });
       } else {
         // Unlock if lock period has passed
         user.isLocked = false;
@@ -57,19 +67,39 @@ export class AuthService {
 
     // Verify password
     const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
-    
+
     if (!isPasswordValid) {
       // Increment failed login attempts
       user.failedLoginAttempts += 1;
       user.lastFailedLogin = new Date();
-      
+
+      this.securityService.logSecurityEvent('LOGIN_FAILURE', user.id, `Invalid password attempt for ${user.email}`, { attempts: user.failedLoginAttempts }, 'MEDIUM');
+
       // Lock account after 5 failed attempts
       if (user.failedLoginAttempts >= 5) {
         user.isLocked = true;
         user.accountLockedUntil = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes
         user.lockReason = 'Too many failed login attempts';
+
+        await this.userRepository.save(user);
+
+        this.securityService.logSecurityEvent('ACCOUNT_LOCKOUT', user.id, `Account locked due to too many failed attempts`, { attempts: user.failedLoginAttempts }, 'HIGH');
+
+        const remainingMinutes = Math.ceil(
+          (user.accountLockedUntil.getTime() - Date.now()) / (1000 * 60)
+        );
+        const remainingSeconds = Math.ceil(
+          (user.accountLockedUntil.getTime() - Date.now()) / 1000
+        );
+
+        throw new UnauthorizedException({
+          message: `Account is locked. Try again in ${remainingMinutes} minutes`,
+          error: 'ACCOUNT_LOCKED',
+          remainingSeconds,
+          lockedUntil: user.accountLockedUntil.toISOString()
+        });
       }
-      
+
       await this.userRepository.save(user);
       throw new UnauthorizedException('Invalid credentials');
     }
@@ -83,8 +113,7 @@ export class AuthService {
   }
 
   // Login method - returns temporary token if MFA required and configured; otherwise full token
-  async login(loginDto: LoginDto): Promise<LoginResponseDto | { requiresMfa: boolean; tempToken: string; mfaMethods: string[] }> {
-    const user = await this.validateUser(loginDto.email, loginDto.password);
+  async login(user: User): Promise<LoginResponseDto | { requiresMfa: boolean; tempToken: string; mfaMethods: string[] }> {
 
     // Load user with roles for JWT and response
     const userWithRoles = await this.userRepository.findOne({
@@ -105,8 +134,10 @@ export class AuthService {
       if (mfaSettings.smsMfaEnabled) mfaMethods.push('sms');
     }
 
-    // MFA required and at least one method configured -> require MFA step
-    if (user.mfaRequired && mfaMethods.length > 0) {
+    // FORCED MFA LOGIC: Nếu user.mfaRequired = true thì bắt buộc phải qua Stage 3
+    if (user.mfaRequired) {
+      if (mfaMethods.length === 0) mfaMethods.push('totp'); // Mặc định hiện TOTP nếu chưa setup phương thức nào
+      this.securityService.logSecurityEvent('MFA_STEP_REQUIRED', user.id, `MFA verification step required for user: ${user.email}`, { methods: mfaMethods }, 'LOW');
       const tempPayload = {
         sub: user.id,
         email: user.email,
@@ -139,6 +170,8 @@ export class AuthService {
       expiresIn: '24h',
     });
 
+    this.securityService.logSecurityEvent('LOGIN_SUCCESS', user.id, `User logged in successfully: ${user.email}`, { roles }, 'LOW');
+
     return {
       accessToken,
       user: {
@@ -169,10 +202,24 @@ export class AuthService {
       throw new UnauthorizedException('User not found');
     }
 
+    /* 
+    // BYPASS FOR TESTING: Cho phép 123456 để test luồng nhanh
+    let isVerified = token === '123456';
+    if (!isVerified) {
+      const mfaResult = await this.mfaService.verifyTotpLogin(userId, token);
+      isVerified = mfaResult.verified;
+    }
+    */
+
     const mfaResult = await this.mfaService.verifyTotpLogin(userId, token);
-    if (!mfaResult.verified) {
+    const isVerified = mfaResult.verified;
+
+    if (!isVerified) {
+      this.securityService.logSecurityEvent('MFA_VERIFY_FAILURE', userId, `MFA verification failed for user: ${user.email}`, {}, 'MEDIUM');
       throw new UnauthorizedException('Invalid MFA token');
     }
+
+    this.securityService.logSecurityEvent('MFA_VERIFY_SUCCESS', userId, `MFA verification successful for user: ${user.email}`, {}, 'LOW');
 
     const roles: string[] = (user.roles || []).map((r: { name: string }) => r.name);
     const payload = {
@@ -210,16 +257,16 @@ export class AuthService {
   async validateToken(token: string): Promise<{ valid: boolean; payload?: any; error?: string }> {
     try {
       const payload = this.jwtService.verify(token);
-      
+
       // Check if user still exists and is active
       const user = await this.userRepository.findOne({
         where: { id: payload.sub, isActive: true }
       });
-      
+
       if (!user) {
         return { valid: false, error: 'User not found or inactive' };
       }
-      
+
       return { valid: true, payload };
     } catch (err) {
       return { valid: false, error: err?.message ?? 'Invalid token' };
@@ -230,11 +277,7 @@ export class AuthService {
   async getUserProfile(userId: string) {
     const user = await this.userRepository.findOne({
       where: { id: userId, isActive: true },
-      select: [
-        'id', 'username', 'email', 'firstName', 'lastName',
-        'employeeId', 'department', 'jobTitle', 'phone',
-        'mfaRequired', 'securityClearanceLevel', 'createdAt'
-      ]
+      relations: ['roles']
     });
 
     if (!user) {

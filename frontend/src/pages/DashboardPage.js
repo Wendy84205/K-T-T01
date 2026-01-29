@@ -1,9 +1,9 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 export default function DashboardPage() {
-  const { user, isAdmin, loading } = useAuth();
+  const { isAdmin, isManager, loading } = useAuth();
 
   if (loading) {
     return (
@@ -14,7 +14,12 @@ export default function DashboardPage() {
   }
 
   if (isAdmin) {
-    return <Navigate to="/admin" replace />;
+    return <Navigate to="/admin/dashboard" replace />;
   }
-  return <Navigate to="/dashboard/home" replace />;
+
+  if (isManager) {
+    return <Navigate to="/manage/dashboard" replace />;
+  }
+
+  return <Navigate to="/user/home" replace />;
 }

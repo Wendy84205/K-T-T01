@@ -6,6 +6,7 @@ export interface CreateUserDto {
   lastName?: string;
   mfaRequired?: boolean;
 }
+
 export class CreateUserDtoClass {
   username: string;
   email: string;
@@ -13,4 +14,8 @@ export class CreateUserDtoClass {
   firstName?: string;
   lastName?: string;
   mfaRequired?: boolean = true;
+  isActive?: boolean;
+  isLocked?: boolean;
+  lockReason?: string;
+  roles?: string[];
 }
