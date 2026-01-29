@@ -10,21 +10,23 @@ import { FailedLoginAttempt } from '../../database/entities/auth/failed-login.en
 import { SecurityAlert } from '../../database/entities/security/security-alert.entity';
 import { SecurityPolicy } from '../../database/entities/security/security-policy.entity';
 import { SystemLog } from '../../database/entities/security/system-log.entity';
+import { UserSession } from '../../database/entities/auth/user-session.entity';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([
-      AuditLog, 
-      SecurityEvent, 
-      RateLimit, 
+      AuditLog,
+      SecurityEvent,
+      RateLimit,
       FailedLoginAttempt,
       SecurityAlert,
       SecurityPolicy,
-      SystemLog
+      SystemLog,
+      UserSession
     ]),
   ],
   controllers: [SecurityController],
   providers: [SecurityService],
   exports: [SecurityService],
 })
-export class SecurityModule {}
+export class SecurityModule { }

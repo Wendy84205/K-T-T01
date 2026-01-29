@@ -18,6 +18,9 @@ export class SecurityAlert {
   @Column({ type: 'text' })
   description: string;
 
+  @Column({ name: 'ip_address', length: 45, nullable: true })
+  ipAddress: string;
+
   @Column({ name: 'affected_users', type: 'json', nullable: true })
   affectedUsers: string[];
 

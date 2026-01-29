@@ -4,7 +4,7 @@ import { User } from '../entities/core/user.entity';
 
 @EntityRepository(User)
 export class UserRepository extends Repository<User> {
-  
+
   async findByEmail(email: string): Promise<User | undefined> {
     return this.findOne({ where: { email } });
   }
@@ -14,7 +14,7 @@ export class UserRepository extends Repository<User> {
   }
 
   async findActiveUsers(): Promise<User[]> {
-    return this.find({ 
+    return this.find({
       where: { isActive: true },
       order: { createdAt: 'DESC' }
     });
@@ -23,7 +23,7 @@ export class UserRepository extends Repository<User> {
   async findUserWithRoles(id: string): Promise<User | undefined> {
     return this.findOne({
       where: { id },
-      relations: ['userRoles', 'userRoles.role']
+      relations: ['roles']
     });
   }
 
@@ -43,9 +43,9 @@ export class UserRepository extends Repository<User> {
   }
 
   async deactivateUser(id: string): Promise<void> {
-    await this.update(id, { 
-      isActive: false, 
-      deletedAt: new Date() 
+    await this.update(id, {
+      isActive: false,
+      deletedAt: new Date()
     });
   }
 

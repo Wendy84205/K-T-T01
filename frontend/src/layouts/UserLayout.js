@@ -16,12 +16,12 @@ export default function UserLayout() {
     <div className="min-h-screen bg-slate-50">
       <MfaSetupBanner user={user} />
       <header className="bg-white border-b border-slate-200 px-6 py-3 flex items-center justify-between">
-        <Link to="/dashboard" className="font-semibold text-slate-800">
+        <Link to="/user/home" className="font-semibold text-slate-800">
           CyberSecure
         </Link>
         <nav className="flex items-center gap-4">
           <NavLink
-            to="/dashboard"
+            to="/user/home"
             end
             className={({ isActive }) =>
               `text-sm ${isActive ? 'text-indigo-600 font-medium' : 'text-slate-600 hover:text-slate-900'}`
@@ -30,7 +30,7 @@ export default function UserLayout() {
             Home
           </NavLink>
           <NavLink
-            to="/dashboard/profile"
+            to="/user/profile"
             className={({ isActive }) =>
               `text-sm ${isActive ? 'text-indigo-600 font-medium' : 'text-slate-600 hover:text-slate-900'}`
             }

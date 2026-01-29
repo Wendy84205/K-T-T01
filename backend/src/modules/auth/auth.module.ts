@@ -22,14 +22,16 @@ import { EmployeeIdGeneratorService } from './services/employee-id-generator.ser
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { LocalStrategy } from './strategies/local.strategy';
 
-// Import MfaModule to use MfaService
+// Import Modules
 import { MfaModule } from '../mfa/mfa.module';
+import { SecurityModule } from '../security/security.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([User, MfaSetting]),
     PassportModule,
-    forwardRef(() => MfaModule), // Use forwardRef to avoid circular dependency
+    forwardRef(() => MfaModule),
+    SecurityModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
@@ -43,13 +45,13 @@ import { MfaModule } from '../mfa/mfa.module';
   ],
   controllers: [AuthController, RegisterController],
   providers: [
-    AuthService, 
+    AuthService,
     RegisterService,
     ValidationService,
     EmployeeIdGeneratorService,
-    JwtStrategy, 
+    JwtStrategy,
     LocalStrategy
   ],
   exports: [AuthService, RegisterService, JwtModule],
 })
-export class AuthModule {}
+export class AuthModule { }
