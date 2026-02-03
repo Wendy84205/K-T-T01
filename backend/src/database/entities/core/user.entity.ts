@@ -1,5 +1,5 @@
 import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
-import { Team } from '../team-collaboration/team.entity'; 
+import { Team } from '../team-collaboration/team.entity';
 import { TeamMember } from '../team-collaboration/team-member.entity';
 import { OneToMany } from 'typeorm';
 import { Role } from './role.entity';
@@ -27,7 +27,7 @@ export class User {
   @Column({ length: 20, nullable: true })
   phone: string;
 
-  @Column({ name: 'avatar_url', length: 500, nullable: true })
+  @Column({ name: 'avatar_url', type: 'text', nullable: true })
   avatarUrl: string;
 
   @Column({ name: 'employee_id', length: 50, unique: true, nullable: true })
@@ -59,6 +59,13 @@ export class User {
 
   @Column({ name: 'is_active', default: true })
   isActive: boolean;
+
+  @Column({
+    type: 'enum',
+    enum: ['pending', 'active', 'banned'],
+    default: 'pending'
+  })
+  status: string;
 
   @Column({ name: 'is_email_verified', default: false })
   isEmailVerified: boolean;
@@ -104,9 +111,9 @@ export class User {
   teamMemberships: TeamMember[];
   @ManyToMany(() => Role, role => role.users)
   @JoinTable({
-  name: 'user_roles',
-  joinColumn: { name: 'user_id', referencedColumnName: 'id' },
-  inverseJoinColumn: { name: 'role_id', referencedColumnName: 'id' },
-})
-roles: Role[];
+    name: 'user_roles',
+    joinColumn: { name: 'user_id', referencedColumnName: 'id' },
+    inverseJoinColumn: { name: 'role_id', referencedColumnName: 'id' },
+  })
+  roles: Role[];
 }

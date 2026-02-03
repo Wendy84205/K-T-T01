@@ -7,6 +7,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 // Entities
 import { User } from '../../database/entities/core/user.entity';
 import { MfaSetting } from '../../database/entities/auth/mfa-setting.entity';
+import { UserSession } from '../../database/entities/auth/user-session.entity';
 
 // Controllers
 import { AuthController } from './auth.controller';
@@ -25,12 +26,14 @@ import { LocalStrategy } from './strategies/local.strategy';
 // Import Modules
 import { MfaModule } from '../mfa/mfa.module';
 import { SecurityModule } from '../security/security.module';
+import { UsersModule } from '../users/users.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User, MfaSetting]),
+    TypeOrmModule.forFeature([User, MfaSetting, UserSession]),
     PassportModule,
     forwardRef(() => MfaModule),
+    forwardRef(() => UsersModule),
     SecurityModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],

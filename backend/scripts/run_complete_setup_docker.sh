@@ -24,8 +24,14 @@ echo "MySQL connection: OK"
 # Bước 0: TẠO FIX TRƯỚC - Đảm bảo không bị lỗi transaction
 echo ""
 echo "🔧 STEP 0: PRE-FIX SETUP..."
-$MYSQL_CMD -e "DROP DATABASE IF EXISTS $MYSQL_DB; CREATE DATABASE $MYSQL_DB CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" 2>/dev/null
-echo "Database created fresh"
+$MYSQL_CMD -e "CREATE DATABASE IF NOT EXISTS $MYSQL_DB CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" 2>/dev/null
+HAS_DATA=$($MYSQL_CMD $MYSQL_DB -e "SHOW TABLES LIKE 'users';" | grep "users" || true)
+if [ -z "$HAS_DATA" ]; then
+    echo "Fresh system detected. Initializing first-time setup..."
+else
+    echo "!!! EXISTING DATA DETECTED !!! Keeping all your messages and users safe."
+    exit 0
+fi
 
 # Bước 1: Tạo bảng core - VỚI FIX COLUMN ĐẦY ĐỦ
 echo ""
@@ -391,7 +397,7 @@ CREATE TABLE files (
     checksum VARCHAR(64) NOT NULL,
     file_hash VARCHAR(64) NOT NULL,
     hash_algorithm VARCHAR(20) DEFAULT 'SHA-256',
-    encryption_key_id CHAR(36),
+    encryption_key_id VARCHAR(255),
     is_encrypted BOOLEAN DEFAULT TRUE,
     
     -- Integrity
@@ -454,7 +460,7 @@ CREATE TABLE file_versions (
     storage_path VARCHAR(500) NOT NULL,
     size_bytes BIGINT NOT NULL,
     file_hash VARCHAR(64),
-    encryption_key_id CHAR(36),
+    encryption_key_id VARCHAR(255),
     
     changes_description TEXT,
     changed_by CHAR(36),
@@ -475,7 +481,7 @@ CREATE TABLE file_shares (
     shared_with_id CHAR(36) NOT NULL,
     
     permission_level VARCHAR(20) DEFAULT 'view',
-    encryption_key_id CHAR(36),
+    encryption_key_id VARCHAR(255),
     
     share_token VARCHAR(100) UNIQUE,
     is_active BOOLEAN DEFAULT TRUE,
@@ -688,7 +694,7 @@ CREATE TABLE conversation_members (
     user_id CHAR(36) NOT NULL,
     
     role VARCHAR(20) DEFAULT 'member',
-    encryption_key_id CHAR(36),
+    encryption_key_id VARCHAR(255),
     is_muted BOOLEAN DEFAULT FALSE,
     is_pinned BOOLEAN DEFAULT FALSE,
     
@@ -716,7 +722,7 @@ CREATE TABLE messages (
     
     -- Security
     is_encrypted BOOLEAN DEFAULT TRUE,
-    encryption_key_id CHAR(36),
+    encryption_key_id VARCHAR(255),
     encryption_algorithm VARCHAR(50) DEFAULT 'AES-256-GCM',
     initialization_vector VARCHAR(64),
     

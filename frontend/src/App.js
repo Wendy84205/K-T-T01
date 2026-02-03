@@ -18,7 +18,10 @@ import SecurityPage from './pages/admin/SecurityPage';
 import UserHomePage from './pages/user/UserHomePage';
 import ProfilePage from './pages/user/ProfilePage';
 import LogsPage from './pages/admin/LogsPage';
-import PlaceholderPage from './pages/admin/PlaceholderPage';
+import AddUserPage from './pages/admin/AddUserPage';
+import NetworkPage from './pages/admin/NetworkPage';
+import SecurityRulesPage from './pages/admin/SecurityRulesPage';
+import SettingsPage from './pages/admin/SettingsPage';
 
 import './App.css';
 
@@ -29,7 +32,17 @@ function App() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
 
-          {/* USER: /user/drive */}
+          {/* USER: Full-screen chat interface */}
+          <Route
+            path="/user/home"
+            element={
+              <ProtectedRoute>
+                <UserHomePage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* USER: /user/drive with layout */}
           <Route
             path="/user"
             element={
@@ -38,9 +51,8 @@ function App() {
               </ProtectedRoute>
             }
           >
-            <Route index element={<Navigate to="/user/drive" replace />} />
+            <Route index element={<Navigate to="/user/home" replace />} />
             <Route path="drive" element={<DashboardPage />} />
-            <Route path="home" element={<UserHomePage />} />
             <Route path="profile" element={<ProfilePage />} />
           </Route>
 
@@ -69,12 +81,13 @@ function App() {
             <Route index element={<Navigate to="/admin/dashboard" replace />} />
             <Route path="dashboard" element={<AdminHomePage />} />
             <Route path="users" element={<UsersPage />} />
+            <Route path="users/add" element={<AddUserPage />} />
             <Route path="teams" element={<TeamsPage />} />
             <Route path="security" element={<SecurityPage />} />
             <Route path="logs" element={<LogsPage />} />
-            <Route path="network" element={<PlaceholderPage title="Network Traffic Analysis" />} />
-            <Route path="rules" element={<PlaceholderPage title="Security Firewall Rules" />} />
-            <Route path="settings" element={<PlaceholderPage title="Sentinel System Settings" />} />
+            <Route path="network" element={<NetworkPage />} />
+            <Route path="rules" element={<SecurityRulesPage />} />
+            <Route path="settings" element={<SettingsPage />} />
           </Route>
 
           <Route path="/" element={<Navigate to="/user/drive" replace />} />

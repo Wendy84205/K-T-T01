@@ -8,6 +8,9 @@ import { UsersModule } from './modules/users/users.module';
 import { TeamModule } from './modules/team/team.module';
 import { MfaModule } from './modules/mfa/mfa.module';
 import { SecurityModule } from './modules/security/security.module';
+import { SystemSettingsModule } from './modules/system-settings/system-settings.module';
+import { ChatModule } from './modules/chat/chat.module';
+import { FileStorageModule } from './modules/file-storage/file-storage.module';
 import databaseConfig from './config/database.config';
 
 @Module({
@@ -48,8 +51,9 @@ import databaseConfig from './config/database.config';
     TeamModule,
     MfaModule,
     SecurityModule,
-    // ChatModule,    
-    // FileStorageModule,
+    SystemSettingsModule,
+    ChatModule,
+    FileStorageModule,
     // NotificationModule,
     // ProjectModule,
   ],

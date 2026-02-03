@@ -1,19 +1,20 @@
-// src/pages/admin/LogsPage.js
 import React, { useEffect, useState, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 import api from '../../utils/api';
 
 export default function LogsPage() {
+    const location = useLocation();
     const [logs, setLogs] = useState([]);
     const [loading, setLoading] = useState(true);
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
     const [selectedLog, setSelectedLog] = useState(null);
-    const [filterActor, setFilterActor] = useState('');
+    const [filterActor, setFilterActor] = useState(location.state?.userId || '');
     const [filterAction, setFilterAction] = useState('All Actions');
 
-    const fetchLogs = useCallback(async () => {
+    const fetchLogs = useCallback(async (silent = false) => {
         try {
-            setLoading(true);
+            if (!silent) setLoading(true);
             const filters = {};
             if (filterActor) filters.userId = filterActor;
             if (filterAction !== 'All Actions') filters.eventType = filterAction;
@@ -28,12 +29,16 @@ export default function LogsPage() {
         } catch (error) {
             console.error('Failed to fetch audit logs:', error);
         } finally {
-            setLoading(false);
+            if (!silent) setLoading(false);
         }
     }, [page, filterActor, filterAction, selectedLog]);
 
     useEffect(() => {
         fetchLogs();
+        const interval = setInterval(() => {
+            fetchLogs(true);
+        }, 5000); // Poll every 5 seconds
+        return () => clearInterval(interval);
     }, [fetchLogs]);
 
     const handleExport = async () => {
@@ -63,9 +68,9 @@ export default function LogsPage() {
             </div>
 
             {/* FILTERS BAR */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '24px', alignItems: 'center' }}>
-                <div style={{ display: 'flex', gap: '16px', flex: 1 }}>
-                    <div style={{ position: 'relative', width: '280px' }}>
+            <div className="soc-filter-row" style={{ marginBottom: '24px' }}>
+                <div style={{ display: 'flex', gap: '16px', flex: 1, flexWrap: 'wrap' }}>
+                    <div className="search-container-mobile" style={{ position: 'relative' }}>
                         <i className='bx bx-group' style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: '#8b949e', fontSize: '18px' }}></i>
                         <input
                             type="text"
@@ -76,7 +81,7 @@ export default function LogsPage() {
                             onChange={(e) => setFilterActor(e.target.value)}
                         />
                     </div>
-                    <div style={{ position: 'relative', width: '240px' }}>
+                    <div className="search-container-mobile" style={{ position: 'relative' }}>
                         <i className='bx bx-list-check' style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: '#8b949e', fontSize: '18px', zIndex: 1 }}></i>
                         <select
                             className="admin-input"
@@ -97,11 +102,15 @@ export default function LogsPage() {
                             <option>All Actions</option>
                             <option>LOGIN_SUCCESS</option>
                             <option>LOGOUT_SUCCESS</option>
+                            <option>USER_CREATED</option>
+                            <option>USER_UPDATED</option>
+                            <option>USER_STATUS_CHANGED</option>
+                            <option>USER_DEACTIVATED</option>
+                            <option>USER_PURGED</option>
+                            <option>GLOBAL_SYSTEM_LOCKDOWN</option>
                             <option>FILE_DELETE</option>
                             <option>BRUTE_FORCE_ATTEMPT</option>
                             <option>PERMISSION_DENIED</option>
-                            <option>CONFIG_UPDATE</option>
-                            <option>HEALTH_CHECK</option>
                         </select>
                         <i className='bx bx-chevron-down' style={{ position: 'absolute', right: '16px', top: '50%', transform: 'translateY(-50%)', color: '#8b949e' }}></i>
                     </div>
@@ -149,21 +158,35 @@ export default function LogsPage() {
                                     style={{ cursor: 'pointer' }}
                                 >
                                     <td style={{ color: '#8b949e', fontSize: '13px' }}>
-                                        {new Date(log.createdAt).toISOString().replace('T', ' ').replace('Z', '').replace(/\..+/, 'Z')}
+                                        {new Date(log.createdAt).toLocaleString()}
                                     </td>
-                                    <td><span className="actor-link" style={{ fontSize: '13px', fontWeight: '700' }}>{log.userId || 'unknown_user'}</span></td>
                                     <td>
-                                        <span className={log.severity === 'CRITICAL' || log.eventType.includes('DENIED') || log.eventType.includes('FAILED') ? 'action-failed' : 'action-success'} style={{ fontSize: '13px' }}>
-                                            {log.eventType}
-                                        </span>
-                                        <span className="action-comment" style={{ fontSize: '12px', opacity: 0.6 }}>
-                                            {/* {log.description || 'System event triggered'} */}
-                                        </span>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: '#30363d', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', color: '#fff' }}>
+                                                {log.user?.firstName?.charAt(0) || log.userId?.charAt(0) || 'U'}
+                                            </div>
+                                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                                <span style={{ fontSize: '13px', fontWeight: '700', color: '#c9d1d9' }}>
+                                                    {log.user ? `${log.user.firstName} ${log.user.lastName}` : 'System/Anonymous'}
+                                                </span>
+                                                <span style={{ fontSize: '10px', color: '#8b949e' }}>@{log.user?.username || 'system'}</span>
+                                            </div>
+                                        </div>
                                     </td>
-                                    <td style={{ color: '#c9d1d9', fontSize: '13px' }}>{log.ipAddress || '127.0.0.1'}</td>
                                     <td>
-                                        <span className={`status-capsule ${log.severity === 'CRITICAL' || log.eventType.includes('DENIED') || log.eventType.includes('FAILED') ? 'failed' : 'success'}`} style={{ fontSize: '10px', padding: '4px 10px', minWidth: '70px', textAlign: 'center' }}>
-                                            {log.severity === 'CRITICAL' || log.eventType.includes('DENIED') || log.eventType.includes('FAILED') ? 'FAILED' : 'SUCCESS'}
+                                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                            <span className={log.severity === 'CRITICAL' || log.severity === 'HIGH' || log.eventType.includes('DENIED') || log.eventType.includes('FAILED') ? 'action-failed' : 'action-success'} style={{ fontSize: '12px', fontWeight: '800' }}>
+                                                {log.eventType}
+                                            </span>
+                                            <span style={{ fontSize: '11px', color: '#8b949e', marginTop: '2px' }}>
+                                                {log.description}
+                                            </span>
+                                        </div>
+                                    </td>
+                                    <td style={{ color: '#c9d1d9', fontSize: '13px', fontFamily: 'monospace' }}>{log.ipAddress || '127.0.0.1'}</td>
+                                    <td>
+                                        <span className={`status-capsule ${log.severity === 'CRITICAL' || log.severity === 'HIGH' ? 'failed' : 'success'}`} style={{ fontSize: '10px', padding: '4px 10px', minWidth: '70px', textAlign: 'center' }}>
+                                            {log.severity}
                                         </span>
                                     </td>
                                 </tr>
@@ -214,14 +237,20 @@ export default function LogsPage() {
                 <div className="forensic-card" style={{ background: '#010409' }}>
                     <h2 className="forensic-title">Raw Payload</h2>
                     {selectedLog ? (
-                        <pre className="payload-preview" style={{ background: 'transparent', border: 'none', padding: 0 }}>
+                        <pre className="payload-preview" style={{ background: 'transparent', border: 'none', padding: 0, fontSize: '12px', color: '#58a6ff' }}>
                             {JSON.stringify({
-                                event_id: `evt_${selectedLog.id.slice(0, 4)}`,
-                                timestamp: new Date(selectedLog.createdAt).getTime(),
-                                actor: selectedLog.userId || 'sys_admin_01',
+                                event_id: selectedLog.id,
+                                timestamp: selectedLog.createdAt,
+                                actor: selectedLog.user?.username || 'system',
                                 action: selectedLog.eventType,
-                                ip: selectedLog.ipAddress || '192.168.45.12',
-                                integrity_hash: "sha256:e3b0c44298fc1c149afbf6c8996fb92427ae41e4649b934ca495991b7852b855"
+                                entity: selectedLog.entityType,
+                                entity_id: selectedLog.entityId,
+                                severity: selectedLog.severity,
+                                values: {
+                                    old: selectedLog.oldValues,
+                                    new: selectedLog.newValues
+                                },
+                                metadata: selectedLog.metadata
                             }, null, 2)}
                         </pre>
                     ) : (

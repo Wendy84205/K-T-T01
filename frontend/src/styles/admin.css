@@ -44,6 +44,7 @@ body,
     display: flex;
     font-family: 'Outfit', sans-serif;
     color: var(--text-primary);
+    overflow-x: hidden;
 }
 
 .admin-body {
@@ -143,7 +144,20 @@ body,
     z-index: 100;
 }
 
-/* Global Search in Header */
+/* Header Actions */
+.admin-mobile-toggle {
+    display: none;
+    background: transparent;
+    border: 1px solid var(--border-subtle);
+    color: var(--text-secondary);
+    padding: 8px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 24px;
+    align-items: center;
+    justify-content: center;
+}
+
 .search-container {
     position: relative;
     width: 320px;
@@ -770,8 +784,17 @@ body,
 }
 
 .audit-table-container {
-    overflow-x: auto;
+    overflow-x: hidden;
     background: #0d1117;
+    scrollbar-width: none;
+    /* Firefox */
+    -ms-overflow-style: none;
+    /* IE and Edge */
+}
+
+.audit-table-container::-webkit-scrollbar {
+    display: none;
+    /* Chrome, Safari and Opera */
 }
 
 .audit-table {
@@ -1047,13 +1070,27 @@ body,
     }
 }
 
+@media (max-width: 640px) {
+    .admin-breadcrumb {
+        display: none;
+    }
+
+    .search-container {
+        display: none;
+    }
+
+    .admin-header-actions {
+        gap: 12px !important;
+    }
+}
+
 @media (max-width: 768px) {
     .soc-dashboard {
         padding: 16px;
     }
 
     .stats-grid {
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: 1fr;
         gap: 12px;
     }
 
@@ -1066,18 +1103,65 @@ body,
     }
 
     .soc-title-section {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 16px;
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 20px !important;
+        margin-bottom: 24px !important;
     }
 
     .soc-header-btns {
-        width: 100%;
+        width: 100% !important;
+        flex-direction: column !important;
     }
 
     .soc-header-btns button {
-        flex: 1;
+        width: 100% !important;
     }
+
+    .audit-table {
+        min-width: 600px;
+    }
+
+    .table-header {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 16px !important;
+    }
+
+    .soc-filter-row {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 16px !important;
+    }
+
+    .soc-filter-group {
+        flex-wrap: wrap;
+        gap: 8px !important;
+    }
+
+    .search-container-mobile {
+        width: 100% !important;
+    }
+
+    .forensic-grid {
+        grid-template-columns: 1fr !important;
+    }
+}
+
+.soc-filter-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.soc-filter-group {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+}
+
+.search-container-mobile {
+    width: 320px;
 }
 
 /* User Management Tag Buttons */

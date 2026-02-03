@@ -120,3 +120,21 @@ $RECYCLE.BIN/
 .fuse_hidden*
 .directory
 .Trash-*
+
+# ====== SECURITY & SENSITIVE DATA ======
+
+# Database exports (contains sensitive data)
+backend/src/database/exports/*.sql
+backend/src/database/exports/full_backup_*.sql
+
+# Uploaded files (may contain sensitive documents)
+uploads/
+uploads/**/*
+
+# Cloudflare tunnel binary
+cloudflared
+cloudflared.tgz
+
+# Tunnel logs (may contain URLs)
+logs/cloudflare-*.log
+logs/tunnel-urls.txt

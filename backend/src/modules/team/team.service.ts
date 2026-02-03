@@ -1,10 +1,10 @@
 // src/modules/team/team.service.ts
-import { 
-  Injectable, 
-  NotFoundException, 
+import {
+  Injectable,
+  NotFoundException,
   BadRequestException,
   ForbiddenException,
-  ConflictException 
+  ConflictException
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, FindManyOptions, Like, Between, MoreThanOrEqual, LessThanOrEqual } from 'typeorm';
@@ -17,13 +17,13 @@ export class TeamService {
   constructor(
     @InjectRepository(Team)
     private teamRepository: Repository<Team>,
-    
+
     @InjectRepository(TeamMember)
     private teamMemberRepository: Repository<TeamMember>,
-    
+
     @InjectRepository(User)
     private userRepository: Repository<User>,
-  ) {}
+  ) { }
 
   // ========== TEAM CRUD METHODS ==========
 
@@ -44,11 +44,11 @@ export class TeamService {
       page?: number;
       limit?: number;
     }
-  ): Promise<{ 
-    teams: Team[]; 
-    total: number; 
-    page: number; 
-    totalPages: number; 
+  ): Promise<{
+    teams: Team[];
+    total: number;
+    page: number;
+    totalPages: number;
     limit: number;
   }> {
     const page = pagination?.page || 1;
@@ -89,11 +89,11 @@ export class TeamService {
 
       if (filters.createdAfter || filters.createdBefore) {
         whereConditions.createdAt = {};
-        
+
         if (filters.createdAfter) {
           whereConditions.createdAt = MoreThanOrEqual(filters.createdAfter);
         }
-        
+
         if (filters.createdBefore) {
           whereConditions.createdAt = LessThanOrEqual(filters.createdBefore);
         }
@@ -103,7 +103,7 @@ export class TeamService {
     }
 
     const [teams, total] = await this.teamRepository.findAndCount(queryOptions);
-    
+
     return {
       teams,
       total,
@@ -131,16 +131,16 @@ export class TeamService {
 
     // Load relations based on options
     const relations = [];
-    
+
     if (options?.withManager !== false) {
       relations.push('manager');
     }
-    
+
     if (options?.withMembers) {
       relations.push('members');
       relations.push('members.user');
     }
-    
+
     if (options?.withParentTeam) {
       relations.push('parentTeam');
     }
@@ -175,8 +175,8 @@ export class TeamService {
    * Create a new team
    */
   async createTeam(
-    name: string, 
-    managerId: string, 
+    name: string,
+    managerId: string,
     options: {
       description?: string;
       department?: string;
@@ -194,7 +194,7 @@ export class TeamService {
     const manager = await this.userRepository.findOne({
       where: { id: managerId },
     });
-    
+
     if (!manager) {
       throw new NotFoundException('Manager not found');
     }
@@ -204,7 +204,7 @@ export class TeamService {
       const parentTeam = await this.teamRepository.findOne({
         where: { id: options.parentTeamId, isActive: true },
       });
-      
+
       if (!parentTeam) {
         throw new NotFoundException('Parent team not found');
       }
@@ -283,7 +283,7 @@ export class TeamService {
     updatedBy: string
   ): Promise<Team> {
     const team = await this.getTeamById(teamId);
-    
+
     if (!team) {
       throw new NotFoundException('Team not found');
     }
@@ -293,7 +293,7 @@ export class TeamService {
       const newManager = await this.userRepository.findOne({
         where: { id: updateData.managerId },
       });
-      
+
       if (!newManager) {
         throw new NotFoundException('New manager not found');
       }
@@ -327,7 +327,7 @@ export class TeamService {
    */
   async deleteTeam(teamId: string, deletedBy: string): Promise<{ message: string }> {
     const team = await this.getTeamById(teamId);
-    
+
     if (!team) {
       throw new NotFoundException('Team not found');
     }
@@ -359,7 +359,7 @@ export class TeamService {
    */
   async getTeamByCode(
     teamCode: string,
-    options?: { 
+    options?: {
       withMembers?: boolean;
       withManager?: boolean;
     }
@@ -424,7 +424,7 @@ export class TeamService {
     const currentMembers = await this.teamMemberRepository.count({
       where: { teamId, leftDate: null },
     });
-    
+
     if (currentMembers >= team.maxMembers) {
       throw new BadRequestException(
         `Team has reached maximum member limit of ${team.maxMembers}`
@@ -433,10 +433,10 @@ export class TeamService {
 
     // Check if user is already a member
     const existingMember = await this.teamMemberRepository.findOne({
-      where: { 
-        teamId, 
-        userId, 
-        leftDate: null 
+      where: {
+        teamId,
+        userId,
+        leftDate: null
       },
     });
 
@@ -471,9 +471,9 @@ export class TeamService {
 
     // Log the addition
     await this.logTeamActivity(
-      teamId, 
-      'ADD_MEMBER', 
-      addedById, 
+      teamId,
+      'ADD_MEMBER',
+      addedById,
       { userId, role: roleInTeam }
     );
 
@@ -485,14 +485,14 @@ export class TeamService {
    */
   async getTeamMembers(teamId: string): Promise<any[]> {
     const members = await this.teamMemberRepository.find({
-      where: { 
-        teamId, 
-        leftDate: null 
+      where: {
+        teamId,
+        leftDate: null
       },
       relations: ['user'],
-      order: { 
+      order: {
         roleInTeam: 'DESC', // Show admins first
-        joinedDate: 'ASC' 
+        joinedDate: 'ASC'
       },
     });
 
@@ -527,10 +527,10 @@ export class TeamService {
     await this.verifyTeamPermission(updatedBy, teamId, 'update_member_role');
 
     const member = await this.teamMemberRepository.findOne({
-      where: { 
-        teamId, 
-        userId, 
-        leftDate: null 
+      where: {
+        teamId,
+        userId,
+        leftDate: null
       },
     });
 
@@ -545,9 +545,9 @@ export class TeamService {
 
     // Log the role change
     await this.logTeamActivity(
-      teamId, 
-      'UPDATE_MEMBER_ROLE', 
-      updatedBy, 
+      teamId,
+      'UPDATE_MEMBER_ROLE',
+      updatedBy,
       { userId, oldRole, newRole }
     );
 
@@ -566,10 +566,10 @@ export class TeamService {
     await this.verifyTeamPermission(removedBy, teamId, 'remove_member');
 
     const member = await this.teamMemberRepository.findOne({
-      where: { 
-        teamId, 
-        userId, 
-        leftDate: null 
+      where: {
+        teamId,
+        userId,
+        leftDate: null
       },
     });
 
@@ -580,10 +580,10 @@ export class TeamService {
     // Prevent removing the team manager if they're the only admin
     if (member.roleInTeam === 'admin') {
       const adminCount = await this.teamMemberRepository.count({
-        where: { 
-          teamId, 
-          roleInTeam: 'admin', 
-          leftDate: null 
+        where: {
+          teamId,
+          roleInTeam: 'admin',
+          leftDate: null
         },
       });
 
@@ -600,9 +600,9 @@ export class TeamService {
 
     // Log the removal
     await this.logTeamActivity(
-      teamId, 
-      'REMOVE_MEMBER', 
-      removedBy, 
+      teamId,
+      'REMOVE_MEMBER',
+      removedBy,
       { userId, role: member.roleInTeam }
     );
 
@@ -614,9 +614,9 @@ export class TeamService {
   /**
    * Get teams for a specific user
    */
-  async getUserTeams(userId: string): Promise<{ 
-    managed: Team[]; 
-    memberOf: Team[]; 
+  async getUserTeams(userId: string): Promise<{
+    managed: Team[];
+    memberOf: Team[];
     total: number;
   }> {
     // Teams where user is the manager
@@ -628,7 +628,7 @@ export class TeamService {
 
     // Teams where user is a member
     const teamMemberships = await this.teamMemberRepository.find({
-      where: { 
+      where: {
         userId: userId,
         leftDate: null,
       },
@@ -655,16 +655,16 @@ export class TeamService {
     });
 
     const activeUsers = await this.teamMemberRepository.count({
-      where: { 
-        teamId, 
+      where: {
+        teamId,
         leftDate: null,
         user: { isActive: true }
       },
     });
 
     const adminsCount = await this.teamMemberRepository.count({
-      where: { 
-        teamId, 
+      where: {
+        teamId,
         leftDate: null,
         roleInTeam: 'admin'
       },
@@ -724,9 +724,9 @@ export class TeamService {
 
     // Check if user is team admin
     const member = await this.teamMemberRepository.findOne({
-      where: { 
-        teamId, 
-        userId, 
+      where: {
+        teamId,
+        userId,
         leftDate: null,
         roleInTeam: 'admin'
       },
@@ -741,10 +741,10 @@ export class TeamService {
       case 'view':
         // Any team member can view
         const isMember = await this.teamMemberRepository.findOne({
-          where: { 
-            teamId, 
-            userId, 
-            leftDate: null 
+          where: {
+            teamId,
+            userId,
+            leftDate: null
           },
         });
         return !!isMember;
@@ -765,10 +765,10 @@ export class TeamService {
    */
   async isTeamMember(teamId: string, userId: string): Promise<boolean> {
     const member = await this.teamMemberRepository.findOne({
-      where: { 
-        teamId, 
-        userId, 
-        leftDate: null 
+      where: {
+        teamId,
+        userId,
+        leftDate: null
       },
     });
 
@@ -783,16 +783,16 @@ export class TeamService {
     resource: string,
     action: string
   ): Promise<boolean> {
-    const user = await this.userRepository.findOne({ 
+    const user = await this.userRepository.findOne({
       where: { id: userId },
       relations: ['roles']
     });
-    
+
     // Check if user has admin role
-    if (user?.roles?.some(role => role.name === 'System Admin' || role.name === 'Security Admin')) {
+    if (user?.roles?.some(role => role.name === 'Admin')) {
       return true;
     }
-    
+
     return false;
   }
 
@@ -813,7 +813,7 @@ export class TeamService {
     // Implement your audit logging logic here
     // This could save to an audit log table or external service
     console.log(`Team Activity: ${action} on team ${teamId} by ${performedBy}`, details);
-    
+
     // Example implementation:
     // await this.auditLogService.log({
     //   entityType: 'Team',

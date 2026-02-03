@@ -89,8 +89,10 @@ function SecureLogin() {
 
                 // ROLE-BASED REDIRECTION
                 const roles = response.user?.roles || [];
-                const isAdmin = roles.some(r => ['System Admin', 'Security Admin'].includes(r));
-                const isManager = roles.some(r => ['Department Manager', 'Team Manager'].includes(r));
+                const roleNames = roles.map(r => typeof r === 'string' ? r : r.name);
+
+                const isAdmin = roleNames.includes('Admin');
+                const isManager = roleNames.includes('Manager');
 
                 if (isAdmin) {
                     navigate("/admin/dashboard", { replace: true });
@@ -131,8 +133,10 @@ function SecureLogin() {
 
             // ROLE-BASED REDIRECTION
             const roles = response.user?.roles || [];
-            const isAdmin = roles.some(r => ['System Admin', 'Security Admin'].includes(r));
-            const isManager = roles.some(r => ['Department Manager', 'Team Manager'].includes(r));
+            const roleNames = roles.map(r => typeof r === 'string' ? r : r.name);
+
+            const isAdmin = roleNames.includes('Admin');
+            const isManager = roleNames.includes('Manager');
 
             if (isAdmin) {
                 navigate("/admin/dashboard", { replace: true });
