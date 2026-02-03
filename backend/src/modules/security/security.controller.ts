@@ -21,33 +21,33 @@ import { SecurityService } from './security.service';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @UseInterceptors(ClassSerializerInterceptor)
 export class SecurityController {
-  constructor(private readonly securityService: SecurityService) {}
+  constructor(private readonly securityService: SecurityService) { }
 
   // ==================== SECURITY DASHBOARD ====================
 
   @Get('dashboard')
-  @Roles('System Admin', 'Security Admin', 'Department Manager')
+  @Roles('Admin', 'Manager')
   async getSecurityDashboard(@Query('days') days: string = '7') {
     const daysNumber = parseInt(days, 10);
     return this.securityService.getSecurityDashboard(daysNumber);
   }
 
   @Get('metrics')
-  @Roles('System Admin', 'Security Admin')
+  @Roles('Admin')
   async getSecurityMetrics(
     @Query('startDate') startDate: string,
     @Query('endDate') endDate: string,
   ) {
     const start = startDate ? new Date(startDate) : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     const end = endDate ? new Date(endDate) : new Date();
-    
+
     return this.securityService.getSecurityMetrics(start, end);
   }
 
   // ==================== AUDIT LOGS ====================
 
   @Get('audit-logs')
-  @Roles('System Admin', 'Security Admin')
+  @Roles('Admin')
   async getAuditLogs(
     @Query('page') page: string = '1',
     @Query('limit') limit: string = '50',
@@ -58,16 +58,16 @@ export class SecurityController {
     @Query('endDate') endDate?: string,
   ) {
     const filters: any = {};
-    
+
     if (userId) filters.userId = userId;
     if (eventType) filters.eventType = eventType;
     if (entityType) filters.entityType = entityType;
-    
+
     if (startDate && endDate) {
       filters.startDate = new Date(startDate);
       filters.endDate = new Date(endDate);
     }
-    
+
     return this.securityService.getAuditLogs(
       parseInt(page, 10),
       parseInt(limit, 10),
@@ -76,7 +76,7 @@ export class SecurityController {
   }
 
   @Get('audit-logs/:id')
-  @Roles('System Admin', 'Security Admin')
+  @Roles('Admin')
   async getAuditLogById(@Param('id') id: string) {
     return this.securityService.getAuditLogById(id);
   }
@@ -84,7 +84,7 @@ export class SecurityController {
   // ==================== SECURITY EVENTS ====================
 
   @Get('events')
-  @Roles('System Admin', 'Security Admin', 'Department Manager')
+  @Roles('Admin', 'Manager')
   async getSecurityEvents(
     @Query('page') page: string = '1',
     @Query('limit') limit: string = '50',
@@ -95,16 +95,16 @@ export class SecurityController {
     @Query('endDate') endDate?: string,
   ) {
     const filters: any = {};
-    
+
     if (severity) filters.severity = severity;
     if (eventType) filters.eventType = eventType;
     if (resolved) filters.resolved = resolved === 'true';
-    
+
     if (startDate && endDate) {
       filters.startDate = new Date(startDate);
       filters.endDate = new Date(endDate);
     }
-    
+
     return this.securityService.getSecurityEvents(
       parseInt(page, 10),
       parseInt(limit, 10),
@@ -113,14 +113,14 @@ export class SecurityController {
   }
 
   @Get('events/:id')
-  @Roles('System Admin', 'Security Admin', 'Department Manager')
+  @Roles('Admin', 'Manager')
   async getSecurityEventById(@Param('id') id: string) {
     return this.securityService.getSecurityEventById(id);
   }
 
   @Post('events/:id/resolve')
   @HttpCode(HttpStatus.OK)
-  @Roles('System Admin', 'Security Admin')
+  @Roles('Admin')
   async resolveSecurityEvent(
     @Param('id') id: string,
     @Body() body: { resolution: string; notes?: string },
@@ -135,7 +135,7 @@ export class SecurityController {
   // ==================== FAILED LOGIN ANALYSIS ====================
 
   @Get('failed-logins')
-  @Roles('System Admin', 'Security Admin')
+  @Roles('Admin')
   async analyzeFailedLogins(
     @Query('hours') hours: string = '24',
     @Query('ipAddress') ipAddress?: string,
@@ -149,14 +149,14 @@ export class SecurityController {
   }
 
   @Get('suspicious-ips')
-  @Roles('System Admin', 'Security Admin')
+  @Roles('Admin')
   async getSuspiciousIPs(@Query('hours') hours: string = '24') {
     return this.securityService.getSuspiciousIPs(parseInt(hours, 10));
   }
 
   @Post('block-ip')
   @HttpCode(HttpStatus.OK)
-  @Roles('System Admin', 'Security Admin')
+  @Roles('Admin')
   async blockIPAddress(
     @Body() body: { ipAddress: string; reason: string; durationHours: number },
   ) {
@@ -169,7 +169,7 @@ export class SecurityController {
 
   @Post('unblock-ip')
   @HttpCode(HttpStatus.OK)
-  @Roles('System Admin', 'Security Admin')
+  @Roles('Admin')
   async unblockIPAddress(@Body() body: { ipAddress: string }) {
     return this.securityService.unblockIPAddress(body.ipAddress);
   }
@@ -177,7 +177,7 @@ export class SecurityController {
   // ==================== RATE LIMITING ====================
 
   @Get('rate-limits')
-  @Roles('System Admin', 'Security Admin')
+  @Roles('Admin')
   async getRateLimits(@Query('identifier') identifier?: string) {
     if (identifier) {
       return this.securityService.getRateLimitStatus(identifier);
@@ -187,7 +187,7 @@ export class SecurityController {
 
   @Post('rate-limits/reset')
   @HttpCode(HttpStatus.OK)
-  @Roles('System Admin', 'Security Admin')
+  @Roles('Admin')
   async resetRateLimit(@Body() body: { identifier: string }) {
     return this.securityService.resetRateLimit(body.identifier);
   }
@@ -195,7 +195,7 @@ export class SecurityController {
   // ==================== SECURITY ALERTS ====================
 
   @Get('alerts')
-  @Roles('System Admin', 'Security Admin', 'Department Manager')
+  @Roles('Admin', 'Manager')
   async getSecurityAlerts(
     @Query('active') active: string = 'true',
     @Query('severity') severity?: string,
@@ -208,7 +208,7 @@ export class SecurityController {
 
   @Post('alerts/:id/acknowledge')
   @HttpCode(HttpStatus.OK)
-  @Roles('System Admin', 'Security Admin', 'Department Manager')
+  @Roles('Admin', 'Manager')
   async acknowledgeAlert(
     @Param('id') id: string,
     @Body() body: { notes?: string },
@@ -218,7 +218,7 @@ export class SecurityController {
 
   @Post('alerts/:id/resolve')
   @HttpCode(HttpStatus.OK)
-  @Roles('System Admin', 'Security Admin')
+  @Roles('Admin')
   async resolveAlert(
     @Param('id') id: string,
     @Body() body: { resolution: string; notes?: string },
@@ -233,7 +233,7 @@ export class SecurityController {
   // ==================== SYSTEM LOGS ====================
 
   @Get('system-logs')
-  @Roles('System Admin', 'Security Admin')
+  @Roles('Admin')
   async getSystemLogs(
     @Query('page') page: string = '1',
     @Query('limit') limit: string = '100',
@@ -243,15 +243,15 @@ export class SecurityController {
     @Query('endDate') endDate?: string,
   ) {
     const filters: any = {};
-    
+
     if (level) filters.level = level;
     if (component) filters.component = component;
-    
+
     if (startDate && endDate) {
       filters.startDate = new Date(startDate);
       filters.endDate = new Date(endDate);
     }
-    
+
     return this.securityService.getSystemLogs(
       parseInt(page, 10),
       parseInt(limit, 10),
@@ -262,27 +262,27 @@ export class SecurityController {
   // ==================== SECURITY POLICIES ====================
 
   @Get('policies')
-  @Roles('System Admin', 'Security Admin', 'Department Manager')
+  @Roles('Admin', 'Manager')
   async getSecurityPolicies(@Query('type') type?: string) {
     return this.securityService.getSecurityPolicies(type);
   }
 
   @Get('policies/:id')
-  @Roles('System Admin', 'Security Admin', 'Department Manager')
+  @Roles('Admin', 'Manager')
   async getSecurityPolicyById(@Param('id') id: string) {
     return this.securityService.getSecurityPolicyById(id);
   }
 
   @Post('policies')
   @HttpCode(HttpStatus.CREATED)
-  @Roles('System Admin', 'Security Admin')
+  @Roles('Admin')
   async createSecurityPolicy(@Body() body: any) {
     return this.securityService.createSecurityPolicy(body);
   }
 
   @Post('policies/:id')
   @HttpCode(HttpStatus.OK)
-  @Roles('System Admin', 'Security Admin')
+  @Roles('Admin')
   async updateSecurityPolicy(
     @Param('id') id: string,
     @Body() body: any,
@@ -292,7 +292,7 @@ export class SecurityController {
 
   @Post('policies/:id/toggle')
   @HttpCode(HttpStatus.OK)
-  @Roles('System Admin', 'Security Admin')
+  @Roles('Admin')
   async toggleSecurityPolicy(
     @Param('id') id: string,
     @Body() body: { isActive: boolean },
@@ -303,19 +303,19 @@ export class SecurityController {
   // ==================== REAL-TIME MONITORING ====================
 
   @Get('monitoring/active-sessions')
-  @Roles('System Admin', 'Security Admin')
+  @Roles('Admin')
   async getActiveSessions(@Query('limit') limit: string = '100') {
     return this.securityService.getActiveSessions(parseInt(limit, 10));
   }
 
   @Get('monitoring/current-activity')
-  @Roles('System Admin', 'Security Admin')
+  @Roles('Admin')
   async getCurrentActivity(@Query('minutes') minutes: string = '30') {
     return this.securityService.getCurrentActivity(parseInt(minutes, 10));
   }
 
   @Get('monitoring/risk-assessment')
-  @Roles('System Admin', 'Security Admin')
+  @Roles('Admin')
   async getRiskAssessment() {
     return this.securityService.getRiskAssessment();
   }
@@ -323,14 +323,14 @@ export class SecurityController {
   // ==================== SECURITY REPORTS ====================
 
   @Get('reports/daily')
-  @Roles('System Admin', 'Security Admin')
+  @Roles('Admin')
   async getDailySecurityReport(@Query('date') date?: string) {
     const reportDate = date ? new Date(date) : new Date();
     return this.securityService.generateDailyReport(reportDate);
   }
 
   @Get('reports/weekly')
-  @Roles('System Admin', 'Security Admin')
+  @Roles('Admin')
   async getWeeklySecurityReport(@Query('weekStart') weekStart?: string) {
     const startDate = weekStart ? new Date(weekStart) : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     return this.securityService.generateWeeklyReport(startDate);
@@ -338,7 +338,7 @@ export class SecurityController {
 
   @Post('reports/generate')
   @HttpCode(HttpStatus.OK)
-  @Roles('System Admin', 'Security Admin')
+  @Roles('Admin')
   async generateCustomReport(@Body() body: {
     reportType: string;
     startDate: string;
@@ -357,13 +357,13 @@ export class SecurityController {
 
   @Post('integrity/check-files')
   @HttpCode(HttpStatus.OK)
-  @Roles('System Admin', 'Security Admin')
+  @Roles('Admin')
   async checkFileIntegrity() {
     return this.securityService.checkFileIntegrity();
   }
 
   @Get('integrity/violations')
-  @Roles('System Admin', 'Security Admin')
+  @Roles('Admin')
   async getIntegrityViolations(
     @Query('page') page: string = '1',
     @Query('limit') limit: string = '50',
@@ -372,5 +372,11 @@ export class SecurityController {
       parseInt(page, 10),
       parseInt(limit, 10),
     );
+  }
+
+  @Get('network/traffic')
+  @Roles('Admin', 'Manager')
+  async getNetworkTraffic() {
+    return this.securityService.getNetworkTraffic();
   }
 }

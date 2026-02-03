@@ -1,4 +1,5 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Query, Req } from '@nestjs/common';
+import { Request } from 'express';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -13,7 +14,7 @@ export class UsersController {
 
   @Get()
   @UseGuards(RolesGuard)
-  @Roles('System Admin', 'Security Admin', 'Department Manager', 'Team Manager')
+  @Roles('Admin', 'Manager')
   findAll(
     @Query('page') page: number = 1,
     @Query('limit') limit: number = 10,
@@ -21,6 +22,7 @@ export class UsersController {
     @Query('status') status?: string,
     @Query('search') search?: string,
   ) {
+    console.log(`[DEBUG] UsersController.findAll hit:`, { page, limit, role, status, search });
     return this.usersService.findAll({ page, limit, role, status, search });
   }
 
@@ -31,22 +33,57 @@ export class UsersController {
 
   @Post()
   @UseGuards(RolesGuard)
-  @Roles('System Admin', 'Security Admin', 'Department Manager')
+  @Roles('Admin', 'Manager')
   create(@Body() createUserDto: CreateUserDto) {
     return this.usersService.create(createUserDto);
   }
 
   @Patch(':id')
   @UseGuards(RolesGuard)
-  @Roles('System Admin', 'Security Admin', 'Department Manager')
-  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
-    return this.usersService.update(id, updateUserDto);
+  @Roles('Admin', 'Manager')
+  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto, @Req() req: any) {
+    const currentUserId = req.user?.userId;
+    return this.usersService.update(id, updateUserDto, currentUserId);
+  }
+
+  @Patch(':id/status')
+  @UseGuards(RolesGuard)
+  @Roles('Admin', 'Manager')
+  updateStatus(@Param('id') id: string, @Body('status') status: string) {
+    return this.usersService.updateStatus(id, status);
   }
 
   @Delete(':id')
   @UseGuards(RolesGuard)
-  @Roles('System Admin', 'Security Admin')
+  @Roles('Admin', 'Manager')
   remove(@Param('id') id: string) {
     return this.usersService.remove(id);
+  }
+
+  @Delete(':id/purge')
+  @UseGuards(RolesGuard)
+  @Roles('Admin')
+  purge(@Param('id') id: string) {
+    return this.usersService.hardDelete(id);
+  }
+
+  @Post(':id/reset-password')
+  @Roles('Admin')
+  resetPassword(@Param('id') id: string) {
+    return this.usersService.resetPassword(id);
+  }
+
+  @Post('bulk-status')
+  @UseGuards(RolesGuard)
+  @Roles('Admin')
+  bulkUpdateStatus(@Body() body: { ids: string[], status: string }) {
+    return this.usersService.bulkUpdateStatus(body.ids, body.status);
+  }
+
+  @Post('global-lockdown')
+  @UseGuards(RolesGuard)
+  @Roles('Admin')
+  globalLockdown() {
+    return this.usersService.globalLockdown();
   }
 }

@@ -1,28 +1,17 @@
-// TODO: File Storage Module Configuration
-// 1. Import required modules
-//    - TypeOrmModule.forFeature([File, Folder, FileVersion, FileShare, FileIntegrity])
-//    - MulterModule.register({ dest: './uploads' })
-//    - Import EncryptionService, IntegrityCheckService
-// 2. Register FileStorageController and FileStorageService
-// 3. Configure Multer options
-//    - File size limits
-//    - File type filters
-//    - Custom filename generation
-// 4. Export FileStorageService for use in other modules (e.g., ChatModule)
-// 5. Schedule cleanup jobs
-//    - Use @nestjs/schedule for periodic cleanup
-//
-// Example structure:
-// @Module({
-//   imports: [
-//     TypeOrmModule.forFeature([File, Folder, FileVersion, FileShare, FileIntegrity]),
-//     MulterModule.register({
-//       dest: './uploads',
-//       limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
-//     }),
-//   ],
-//   controllers: [FileStorageController],
-//   providers: [FileStorageService, EncryptionService, IntegrityCheckService],
-//   exports: [FileStorageService],
-// })
-// export class FileStorageModule {}
+import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { FileStorageController } from './file-storage.controller';
+import { FileStorageService } from './file-storage.service';
+import { File } from '../../database/entities/file-storage/file.entity';
+import { Folder } from '../../database/entities/file-storage/folder.entity';
+import { EncryptionService } from '../../common/service/encryption.service';
+
+@Module({
+    imports: [
+        TypeOrmModule.forFeature([File, Folder]),
+    ],
+    controllers: [FileStorageController],
+    providers: [FileStorageService, EncryptionService],
+    exports: [FileStorageService],
+})
+export class FileStorageModule { }

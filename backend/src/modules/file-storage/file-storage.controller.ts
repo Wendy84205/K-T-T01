@@ -1,40 +1,44 @@
-// TODO: File Storage Controller Implementation
-// 1. File upload endpoints
-//    - POST /files/upload - Upload single file
-//    - POST /files/upload-multiple - Upload multiple files
-//    - Use @UseInterceptors(FileInterceptor('file')) or FilesInterceptor
-// 2. File download endpoints
-//    - GET /files/:id/download - Download file (decrypted)
-//    - GET /files/:id/preview - Preview file (for images/PDFs)
-//    - Use @Res() response to stream file
-// 3. File management endpoints
-//    - GET /files - List user's files (pagination, filters)
-//    - GET /files/:id - Get file metadata
-//    - PUT /files/:id - Update file metadata (rename, move)
-//    - DELETE /files/:id - Delete file
-// 4. Folder endpoints
-//    - POST /folders - Create folder
-//    - GET /folders/:id - Get folder contents
-//    - PUT /folders/:id - Rename/move folder
-//    - DELETE /folders/:id - Delete folder
-// 5. File sharing endpoints
-//    - POST /files/:id/share - Share file with user
-//    - GET /files/:id/shares - Get file share list
-//    - DELETE /files/:id/shares/:userId - Revoke access
-// 6. File versioning endpoints
-//    - GET /files/:id/versions - Get version history
-//    - POST /files/:id/versions - Create new version
-//    - POST /files/:id/versions/:versionId/restore - Restore version
-// 7. Integrity check endpoints
-//    - POST /files/:id/verify - Verify file integrity
-//    - GET /files/integrity-violations - List tampered files
-// 8. Search endpoint
-//    - GET /files/search?q=query&type=image&folder=xxx
-// 9. Authentication and authorization
-//    - Use @UseGuards(JwtAuthGuard) for all endpoints
-//    - Check file ownership and permissions
-// 10. DTOs
-//    - UploadFileDto
-//    - ShareFileDto
-//    - CreateFolderDto
-//    - UpdateFileDto
+import { Controller, Get, Post, Delete, Param, UploadedFile, UseInterceptors, UseGuards, Request, Res } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { FileStorageService } from './file-storage.service';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { Response } from 'express';
+
+@Controller('files')
+@UseGuards(JwtAuthGuard)
+export class FileStorageController {
+    constructor(private readonly fileStorageService: FileStorageService) { }
+
+    @Post('upload')
+    @UseInterceptors(FileInterceptor('file'))
+    async uploadFile(@UploadedFile() file: any, @Request() req) {
+        return this.fileStorageService.uploadFile(file, req.user.userId);
+    }
+
+    @Get()
+    async listFiles(@Request() req) {
+        return this.fileStorageService.listFiles(req.user.userId);
+    }
+
+    @Get(':id')
+    async getFile(@Param('id') id: string, @Request() req) {
+        return this.fileStorageService.getFileMetadata(id, req.user.userId);
+    }
+
+    @Get(':id/download')
+    async downloadFile(@Param('id') id: string, @Request() req, @Res() res: Response) {
+        const { buffer, metadata } = await this.fileStorageService.downloadFile(id, req.user.userId);
+
+        res.setHeader('Content-Type', metadata.mimeType);
+        res.setHeader('Content-Disposition', `attachment; filename="${metadata.name}"`);
+        res.setHeader('Content-Length', buffer.length);
+        res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
+
+        res.end(buffer);
+    }
+
+    @Delete(':id')
+    async deleteFile(@Param('id') id: string, @Request() req) {
+        return this.fileStorageService.deleteFile(id, req.user.userId);
+    }
+}

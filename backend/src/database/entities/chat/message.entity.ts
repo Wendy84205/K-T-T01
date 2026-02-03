@@ -26,7 +26,7 @@ export class Message {
   @Column({ name: 'is_encrypted', default: true })
   isEncrypted: boolean;
 
-  @Column({ name: 'encryption_key_id', type: 'char', length: 36, nullable: true })
+  @Column({ name: 'encryption_key_id', type: 'varchar', length: 255, nullable: true })
   encryptionKeyId: string;
 
   @Column({ name: 'encryption_algorithm', length: 50, default: 'AES-256-GCM' })
@@ -34,6 +34,9 @@ export class Message {
 
   @Column({ name: 'initialization_vector', length: 64, nullable: true })
   initializationVector: string;
+
+  @Column({ name: 'auth_tag', length: 64, nullable: true })
+  authTag: string;
 
   @Column({ name: 'file_id', type: 'char', length: 36, nullable: true })
   fileId: string;

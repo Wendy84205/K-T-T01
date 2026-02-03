@@ -41,8 +41,8 @@ export class File {
   @Column({ name: 'hash_algorithm', length: 20, default: 'SHA-256' })
   hashAlgorithm: string;
 
-  @Column({ name: 'encryption_key_id', type: 'char', length: 36, nullable: true })
-  encryptionKeyId: string;
+  @Column({ name: 'encryption_key_id', type: 'varchar', length: 255, nullable: true })
+  encryptionKeyId: string; // Base64 encoded key
 
   @Column({ name: 'is_encrypted', default: true })
   isEncrypted: boolean;

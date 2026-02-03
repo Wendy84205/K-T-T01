@@ -222,8 +222,12 @@ export default function AdminLayout() {
 
         <div className="admin-user-card-container">
           <div className="admin-user-card">
-            <div className="admin-avatar">
-              {user?.firstName?.charAt(0) || 'A'}
+            <div className="admin-avatar" style={{ overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {user?.avatarUrl ? (
+                <img src={user.avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              ) : (
+                user?.firstName?.charAt(0) || 'A'
+              )}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
               <span style={{ fontSize: '13px', fontWeight: 'bold', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={`${user?.firstName} ${user?.lastName}`}>

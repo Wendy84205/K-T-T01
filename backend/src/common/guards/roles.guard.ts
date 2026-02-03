@@ -23,8 +23,10 @@ export class RolesGuard implements CanActivate {
     const userRoles: any[] = Array.isArray(user.roles) ? user.roles : [];
     const hasRole = requiredRoles.some((requiredRole) =>
       userRoles.some(userRole => {
-        const name = typeof userRole === 'string' ? userRole : userRole?.name;
-        return name === requiredRole;
+        const name = (typeof userRole === 'string' ? userRole : userRole?.name) || '';
+        const lowerName = name.toLowerCase();
+        const lowerRequired = requiredRole.toLowerCase();
+        return lowerName === lowerRequired || lowerName.includes(lowerRequired);
       })
     );
 

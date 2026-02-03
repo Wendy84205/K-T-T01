@@ -16,7 +16,7 @@ export class ConversationMember {
   @Column({ length: 20, default: 'member' })
   role: string;
 
-  @Column({ name: 'encryption_key_id', type: 'char', length: 36, nullable: true })
+  @Column({ name: 'encryption_key_id', type: 'varchar', length: 255, nullable: true })
   encryptionKeyId: string;
 
   @Column({ name: 'is_muted', default: false })
@@ -30,6 +30,9 @@ export class ConversationMember {
 
   @Column({ name: 'left_at', nullable: true })
   leftAt: Date;
+
+  @Column({ name: 'last_read_at', nullable: true, default: () => 'CURRENT_TIMESTAMP' })
+  lastReadAt: Date;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

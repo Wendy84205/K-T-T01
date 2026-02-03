@@ -8,11 +8,17 @@ export function AuthProvider({ children }) {
   const [token, setToken] = useState(() => localStorage.getItem('accessToken'));
   const [loading, setLoading] = useState(true);
 
-  const logout = useCallback(() => {
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('user');
-    setToken(null);
-    setUser(null);
+  const logout = useCallback(async () => {
+    try {
+      await api.logout();
+    } catch (err) {
+      console.error('Logout failed on server:', err);
+    } finally {
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('user');
+      setToken(null);
+      setUser(null);
+    }
   }, []);
 
   const loadUser = useCallback(async () => {
@@ -41,6 +47,15 @@ export function AuthProvider({ children }) {
       } catch (_) { }
     }
     loadUser();
+
+    // Heartbeat for Active Status
+    const interval = setInterval(() => {
+      if (localStorage.getItem('accessToken')) {
+        api.heartbeat();
+      }
+    }, 3 * 60 * 1000); // 3 minutes
+
+    return () => clearInterval(interval);
   }, [loadUser]);
 
   const login = useCallback((data) => {
@@ -53,12 +68,12 @@ export function AuthProvider({ children }) {
 
   const isAdmin = Boolean(user?.roles?.length && user.roles.some(r => {
     const roleName = typeof r === 'string' ? r : r.name;
-    return ['System Admin', 'Security Admin'].includes(roleName);
+    return roleName === 'Admin';
   }));
 
   const isManager = Boolean(user?.roles?.length && user.roles.some(r => {
     const roleName = typeof r === 'string' ? r : r.name;
-    return ['Department Manager', 'Team Manager'].includes(roleName);
+    return roleName === 'Manager';
   }));
 
   const value = {
