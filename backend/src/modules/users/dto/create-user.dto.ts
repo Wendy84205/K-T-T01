@@ -89,4 +89,11 @@ export class CreateUserDtoClass {
   @IsString()
   @IsOptional()
   totpSecret?: string;
+
+  @IsString()
+  @IsOptional()
+  avatarUrl?: string;
+
+  @IsOptional()
+  preferences?: Record<string, any>;
 }

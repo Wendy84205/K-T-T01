@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Lock, Pin, MoreVertical, FileText, Download, Trash2, Reply, Forward, Edit2, Play, Pause, Mic, Check, CheckCheck } from 'lucide-react';
 import api from '../../utils/api';
+import socketService from '../../utils/socket';
 
 const VoiceMessage = ({ fileId }) => {
     const [audioUrl, setAudioUrl] = useState(null);
@@ -41,19 +42,27 @@ const VoiceMessage = ({ fileId }) => {
 
 export function EnhancedMessageBubble({ message, isOwn, showAvatar, currentUserId, conversationId, onPin, onDelete, onReply, onForward, onEdit, isRead }) {
     const [showReactions, setShowReactions] = useState(false);
-    const [reactions, setReactions] = useState({});
+    const [reactions, setReactions] = useState(message.reactions || {});
     const [showMenu, setShowMenu] = useState(false);
     const reactionEmojis = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
 
     useEffect(() => {
+        if (message.reactions) {
+            setReactions(message.reactions);
+        }
+    }, [message.reactions]);
+
+    useEffect(() => {
         if (!message || !message.id) return;
 
-        loadReactions();
+        if (!message.reactions) {
+            loadReactions();
+        }
 
-        // Polling for reactions every 5 seconds to sync with other users
+        // Polling for reactions every 15 seconds as a fallback
         const interval = setInterval(() => {
             loadReactions();
-        }, 5000);
+        }, 15000);
 
         return () => clearInterval(interval);
     }, [message?.id]);
@@ -64,7 +73,7 @@ export function EnhancedMessageBubble({ message, isOwn, showAvatar, currentUserI
             setReactions(data && typeof data === 'object' ? data : {});
         } catch (error) {
             console.error('Failed to load reactions:', error);
-            setReactions({});
+            // setReactions({}); // Don't clear if it fails, maybe we have socket data
         }
     };
 
@@ -73,13 +82,26 @@ export function EnhancedMessageBubble({ message, isOwn, showAvatar, currentUserI
     const handleReaction = async (emoji) => {
         console.log(`[Reactions] Clicked ${emoji} for message ${message.id}`);
         try {
-            const res = await api.addReaction(message.id, emoji);
-            console.log(`[Reactions] Success:`, res);
-            await loadReactions();
+            // Optimistic update local
+            const userId = currentUserId;
+            const currentUsers = reactions[emoji] || [];
+            if (!currentUsers.some(u => u.userId === userId)) {
+                setReactions(prev => ({
+                    ...prev,
+                    [emoji]: [...currentUsers, { userId }]
+                }));
+            }
+
+            // Emit to socket for real-time
+            socketService.sendMessageReaction(conversationId, message.id, emoji);
+
+            // Save to DB
+            await api.addReaction(message.id, emoji);
+
             setShowReactions(false);
         } catch (error) {
             console.error('[Reactions] Error:', error);
-            alert('Failed to add reaction. Please try again.');
+            // alert('Failed to add reaction. Please try again.');
         }
     };
 

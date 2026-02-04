@@ -1,11 +1,15 @@
 import { Controller, Get, Post, Delete, Body, Param, Query, UseGuards, Request } from '@nestjs/common';
 import { ChatService } from './chat.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { ChatGateway } from './chat.gateway';
 
 @Controller('chat')
 @UseGuards(JwtAuthGuard)
 export class ChatController {
-    constructor(private readonly chatService: ChatService) { }
+    constructor(
+        private readonly chatService: ChatService,
+        private readonly chatGateway: ChatGateway,
+    ) { }
 
     @Get('conversations')
     async getUserConversations(@Request() req) {
@@ -50,7 +54,7 @@ export class ChatController {
         @Body('fileId') fileId?: string,
         @Body('parentMessageId') parentMessageId?: string,
     ) {
-        return this.chatService.sendMessage(
+        const message = await this.chatService.sendMessage(
             conversationId,
             req.user.userId,
             content,
@@ -58,6 +62,11 @@ export class ChatController {
             fileId,
             parentMessageId,
         );
+
+        // Emit to WebSocket
+        this.chatGateway.emitNewMessage(conversationId, message);
+
+        return message;
     }
 
     @Get('users')
@@ -173,5 +182,69 @@ export class ChatController {
     @Post('conversations/:conversationId/read')
     async markAsRead(@Request() req, @Param('conversationId') conversationId: string) {
         return this.chatService.markConversationAsRead(conversationId, req.user.userId);
+    }
+
+    @Get('calls/history')
+    async getCallHistory(@Request() req) {
+        return this.chatService.getCallHistory(req.user.userId);
+    }
+
+    // Conversation shared content
+    @Get('conversations/:conversationId/media')
+    async getSharedMedia(@Request() req, @Param('conversationId') conversationId: string) {
+        return this.chatService.getSharedMedia(conversationId, req.user.userId);
+    }
+
+    @Get('conversations/:conversationId/files')
+    async getSharedFiles(@Request() req, @Param('conversationId') conversationId: string) {
+        return this.chatService.getSharedFiles(conversationId, req.user.userId);
+    }
+
+    @Get('conversations/:conversationId/links')
+    async getSharedLinks(@Request() req, @Param('conversationId') conversationId: string) {
+        return this.chatService.getSharedLinks(conversationId, req.user.userId);
+    }
+
+    // Discover Feature APIs
+    @Get('discover/groups')
+    async discoverPublicGroups(
+        @Request() req,
+        @Query('search') search?: string,
+        @Query('category') category?: string,
+        @Query('page') page?: number,
+        @Query('limit') limit?: number,
+    ) {
+        return this.chatService.discoverPublicGroups(
+            req.user.userId,
+            search,
+            category,
+            page ? parseInt(page.toString(), 10) : 1,
+            limit ? parseInt(limit.toString(), 10) : 20,
+        );
+    }
+
+    @Get('discover/users')
+    async discoverSuggestedUsers(
+        @Request() req,
+        @Query('limit') limit?: number,
+    ) {
+        return this.chatService.discoverSuggestedUsers(
+            req.user.userId,
+            limit ? parseInt(limit.toString(), 10) : 10,
+        );
+    }
+
+    @Post('groups/:conversationId/join')
+    async joinPublicGroup(
+        @Request() req,
+        @Param('conversationId') conversationId: string,
+    ) {
+        const result = await this.chatService.joinPublicGroup(conversationId, req.user.userId);
+
+        if (result.success && result.systemMessage) {
+            this.chatGateway.emitNewMessage(conversationId, result.systemMessage);
+        }
+
+        return result;
     }
 }

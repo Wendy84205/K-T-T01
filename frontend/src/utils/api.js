@@ -121,6 +121,80 @@ class ApiClient {
     });
   }
 
+  async updateProfile(userData) {
+    return this.request('/users/profile', {
+      method: 'PATCH',
+      body: JSON.stringify(userData),
+    });
+  }
+
+  async uploadAvatar(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const token = localStorage.getItem('accessToken');
+    const response = await fetch(`${this.baseURL}/users/profile/avatar`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      throw new Error('Avatar upload failed');
+    }
+    return response.json();
+  }
+
+  async getUserActivity() {
+    return this.request('/users/profile/activity', {
+      method: 'GET',
+    });
+  }
+
+  async getUserSessions() {
+    return this.request('/users/profile/sessions', {
+      method: 'GET',
+    });
+  }
+
+  async revokeSession(sessionId) {
+    return this.request(`/users/profile/sessions/${sessionId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getNotifications(page = 1, limit = 20) {
+    return this.request(`/notifications?page=${page}&limit=${limit}`, {
+      method: 'GET',
+    });
+  }
+
+  async markNotificationAsRead(id) {
+    return this.request(`/notifications/${id}/read`, {
+      method: 'PUT',
+    });
+  }
+
+  async markAllNotificationsRead() {
+    return this.request('/notifications/read-all', {
+      method: 'PUT',
+    });
+  }
+
+  async deleteNotification(id) {
+    return this.request(`/notifications/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async deleteAllNotifications() {
+    return this.request('/notifications/all', {
+      method: 'DELETE',
+    });
+  }
+
   async updateStatus(id, status) {
     return this.request(`/users/${id}/status`, {
       method: 'PATCH',
@@ -442,6 +516,51 @@ class ApiClient {
   async searchMessages(conversationId, query) {
     return this.request(`/chat/conversations/${conversationId}/search?q=${encodeURIComponent(query)}`, {
       method: 'GET',
+    });
+  }
+
+  async getCallHistory() {
+    return this.request('/chat/calls/history', {
+      method: 'GET',
+    });
+  }
+
+  // Shared content
+  async getSharedMedia(conversationId) {
+    return this.request(`/chat/conversations/${conversationId}/media`, {
+      method: 'GET',
+    });
+  }
+
+  async getSharedFiles(conversationId) {
+    return this.request(`/chat/conversations/${conversationId}/files`, {
+      method: 'GET',
+    });
+  }
+
+  async getSharedLinks(conversationId) {
+    return this.request(`/chat/conversations/${conversationId}/links`, {
+      method: 'GET',
+    });
+  }
+
+  // Discover methods
+  async discoverPublicGroups(search = '', category = '', page = 1, limit = 20) {
+    const params = new URLSearchParams({ search, category, page, limit });
+    return this.request(`/chat/discover/groups?${params}`, {
+      method: 'GET',
+    });
+  }
+
+  async discoverSuggestedUsers(limit = 10) {
+    return this.request(`/chat/discover/users?limit=${limit}`, {
+      method: 'GET',
+    });
+  }
+
+  async joinPublicGroup(conversationId) {
+    return this.request(`/chat/groups/${conversationId}/join`, {
+      method: 'POST',
     });
   }
 }

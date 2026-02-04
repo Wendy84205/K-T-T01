@@ -1,20 +1,61 @@
-// TODO: Notification Controller Implementation
-// 1. Get notifications endpoints
-//    - GET /notifications - Get user's notifications (pagination)
-//    - GET /notifications/unread-count - Get unread count
-//    - GET /notifications/:id - Get notification details
-// 2. Mark as read endpoints
-//    - PUT /notifications/:id/read - Mark single notification as read
-//    - PUT /notifications/read-all - Mark all as read
-// 3. Delete notifications
-//    - DELETE /notifications/:id - Delete single notification
-//    - DELETE /notifications - Delete all read notifications
-// 4. Notification preferences
-//    - GET /notifications/preferences - Get user preferences
-//    - PUT /notifications/preferences - Update preferences
-// 5. Authentication
-//    - Use @UseGuards(JwtAuthGuard) for all endpoints
-//    - Extract userId from JWT token
-// 6. DTOs
-//    - UpdateNotificationPreferencesDto
-//    - NotificationFilterDto
+import {
+    Controller,
+    Get,
+    Post,
+    Put,
+    Delete,
+    Param,
+    Query,
+    UseGuards,
+    Req,
+} from '@nestjs/common';
+import { NotificationService } from './notification.service';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+
+@Controller('notifications')
+@UseGuards(JwtAuthGuard)
+export class NotificationController {
+    constructor(private readonly notificationService: NotificationService) { }
+
+    @Get()
+    async getNotifications(
+        @Req() req,
+        @Query('page') page: string,
+        @Query('limit') limit: string,
+    ) {
+        return this.notificationService.findAll(
+            req.user.userId,
+            parseInt(page) || 1,
+            parseInt(limit) || 20,
+        );
+    }
+
+    @Put('read-all')
+    async markAllAsRead(@Req() req) {
+        await this.notificationService.markAllAsRead(req.user.userId);
+        return { success: true };
+    }
+
+    @Put(':id/read')
+    async markAsRead(@Param('id') id: string, @Req() req) {
+        return this.notificationService.markAsRead(id, req.user.userId);
+    }
+
+    @Delete('all')
+    async deleteAll(@Req() req) {
+        await this.notificationService.deleteAll(req.user.userId);
+        return { success: true };
+    }
+
+    @Delete(':id')
+    async delete(@Param('id') id: string, @Req() req) {
+        await this.notificationService.delete(id, req.user.userId);
+        return { success: true };
+    }
+
+    @Post('archive-read')
+    async archiveRead(@Req() req) {
+        await this.notificationService.archiveRead(req.user.userId);
+        return { success: true };
+    }
+}
