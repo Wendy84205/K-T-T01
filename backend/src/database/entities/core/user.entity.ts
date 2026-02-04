@@ -60,6 +60,9 @@ export class User {
   @Column({ name: 'is_active', default: true })
   isActive: boolean;
 
+  @Column({ type: 'json', nullable: true })
+  preferences: Record<string, any>;
+
   @Column({
     type: 'enum',
     enum: ['pending', 'active', 'banned'],
@@ -69,6 +72,9 @@ export class User {
 
   @Column({ name: 'is_email_verified', default: false })
   isEmailVerified: boolean;
+
+  @Column({ name: 'is_verified', default: false })
+  isVerified: boolean;
 
   @Column({ name: 'is_locked', default: false })
   isLocked: boolean;

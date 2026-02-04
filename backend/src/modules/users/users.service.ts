@@ -10,6 +10,8 @@ import { Repository, In, IsNull } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { SecurityService } from '../security/security.service';
 import { MfaSetting } from '../../database/entities/auth/mfa-setting.entity';
+import { UserSession } from '../../database/entities/auth/user-session.entity';
+import { NotificationService } from '../notification/notification.service';
 
 @Injectable()
 export class UsersService {
@@ -20,7 +22,10 @@ export class UsersService {
     private roleRepository: Repository<Role>,
     @InjectRepository(MfaSetting)
     private mfaSettingRepository: Repository<MfaSetting>,
+    @InjectRepository(UserSession)
+    private userSessionRepository: Repository<UserSession>,
     private securityService: SecurityService,
+    private notificationService: NotificationService,
   ) { }
 
   async create(createUserDto: CreateUserDto): Promise<any> {
@@ -295,6 +300,20 @@ export class UsersService {
       newValues: otherFields
     });
 
+    // NOTIFY USER
+    try {
+      await this.notificationService.create({
+        userId: id,
+        type: 'USER_UPDATED',
+        title: 'Profile Updated',
+        message: 'Your account information has been updated. If you did not make this change, please contact support immediately.',
+        priority: 'medium',
+        category: 'security'
+      });
+    } catch (err) {
+      console.error('Failed to send notification', err);
+    }
+
     return updatedUser;
   }
 
@@ -445,5 +464,30 @@ export class UsersService {
       temporaryPassword: tempPassword,
       message: 'Temporary password generated.'
     };
+  }
+
+  async getUserActivity(userId: string): Promise<any[]> {
+    return this.userRepository.query(
+      "SELECT event_type as eventType, description, created_at as createdAt FROM audit_logs WHERE user_id = ? ORDER BY created_at DESC LIMIT 10",
+      [userId]
+    );
+  }
+
+  async getUserSessions(userId: string): Promise<UserSession[]> {
+    return this.userSessionRepository.find({
+      where: { userId, revokedAt: IsNull() },
+      order: { lastAccessedAt: 'DESC' }
+    });
+  }
+
+  async revokeSession(sessionId: string, userId: string): Promise<void> {
+    const session = await this.userSessionRepository.findOne({
+      where: { id: sessionId, userId }
+    });
+    if (!session) throw new NotFoundException('Session not found');
+
+    session.revokedAt = new Date();
+    session.revokedReason = 'User requested revocation';
+    await this.userSessionRepository.save(session);
   }
 }

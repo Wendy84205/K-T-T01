@@ -4,7 +4,7 @@ module.exports = function (app) {
     app.use(
         '/api',
         createProxyMiddleware({
-            target: 'http://cybersecure-backend:3001',
+            target: 'http://backend:3001',
             changeOrigin: true,
             logLevel: 'debug',
         })

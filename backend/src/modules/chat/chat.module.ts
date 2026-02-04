@@ -7,9 +7,12 @@ import { Message } from '../../database/entities/chat/message.entity';
 import { ConversationMember } from '../../database/entities/chat/conversation-member.entity';
 import { MessageReaction } from '../../database/entities/chat/message-reaction.entity';
 import { PinnedMessage } from '../../database/entities/chat/pinned-message.entity';
+import { CallLog } from '../../database/entities/chat/call-log.entity';
 import { User } from '../../database/entities/core/user.entity';
 
 import { EncryptionService } from '../../common/service/encryption.service';
+import { ChatGateway } from './chat.gateway';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
     imports: [
@@ -19,11 +22,13 @@ import { EncryptionService } from '../../common/service/encryption.service';
             ConversationMember,
             MessageReaction,
             PinnedMessage,
+            CallLog,
             User,
         ]),
+        AuthModule,
     ],
     controllers: [ChatController],
-    providers: [ChatService, EncryptionService],
+    providers: [ChatService, EncryptionService, ChatGateway],
     exports: [ChatService],
 })
 export class ChatModule { }

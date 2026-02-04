@@ -43,6 +43,18 @@ export class Conversation {
   @Column({ name: 'is_deleted', default: false })
   isDeleted: boolean;
 
+  @Column({ length: 50, nullable: true })
+  category: string; // For group categorization (Technology, Finance, Art, etc.)
+
+  @Column({ name: 'is_verified', default: false })
+  isVerified: boolean; // Verified/Official groups
+
+  @Column({ type: 'text', nullable: true })
+  description: string; // Group description
+
+  @Column({ name: 'member_count', default: 0 })
+  memberCount: number; // Cached member count
+
   // Relations
   @ManyToOne(() => Team, team => team.id, { nullable: true })
   @JoinColumn({ name: 'team_id' })

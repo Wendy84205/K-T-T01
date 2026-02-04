@@ -1,38 +1,87 @@
-// TODO: Notification Service Implementation
-// 1. Install dependencies
-//    - npm install @nestjs/websockets @nestjs/platform-socket.io
-//    - npm install nodemailer @types/nodemailer (for email notifications)
-// 2. Create Notification entity
-//    - Fields: id, userId, type, title, message, isRead, createdAt
-//    - Types: 'SECURITY_ALERT', 'FILE_SHARED', 'MESSAGE', 'TASK_ASSIGNED', etc.
-// 3. Implement real-time notifications via WebSocket
-//    - Create NotificationGateway with @WebSocketGateway
-//    - Emit 'newNotification' event to connected users
-//    - Handle 'markAsRead' event from client
-// 4. Implement notification creation
-//    - createNotification(userId: string, type: string, title: string, message: string)
-//    - Emit to WebSocket if user is online
-//    - Save to database for offline users
-// 5. Get user notifications
-//    - getNotifications(userId: string, page: number, limit: number)
-//    - getUnreadCount(userId: string)
-//    - markAsRead(notificationId: string, userId: string)
-//    - markAllAsRead(userId: string)
-// 6. Email notifications integration
-//    - sendEmailNotification(userId: string, subject: string, body: string)
-//    - Use EmailService for sending
-//    - Queue emails for background processing
-// 7. Push notifications (optional)
-//    - Integrate with Firebase Cloud Messaging (FCM)
-//    - Store device tokens
-//    - Send push notifications to mobile devices
-// 8. Notification preferences
-//    - Allow users to configure notification settings
-//    - Email on/off, Push on/off, In-app on/off
-//    - Filter by notification type
-// 9. Notification templates
-//    - Create reusable templates for common notifications
-//    - Support variable substitution
-// 10. Cleanup old notifications
-//    - deleteOldNotifications(olderThanDays: number)
-//    - Archive read notifications after X days
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Notification } from '../../database/entities/notification/notification.entity';
+
+@Injectable()
+export class NotificationService {
+    constructor(
+        @InjectRepository(Notification)
+        private readonly notificationRepository: Repository<Notification>,
+    ) { }
+
+    async create(data: {
+        userId: string;
+        type: string;
+        title: string;
+        message: string;
+        data?: any;
+        priority?: string;
+        category?: string;
+        actionUrl?: string;
+        actionLabel?: string;
+    }): Promise<Notification> {
+        const notification = this.notificationRepository.create({
+            ...data,
+            isRead: false,
+            createdAt: new Date(),
+        });
+        return await this.notificationRepository.save(notification);
+    }
+
+    async findAll(userId: string, page = 1, limit = 20): Promise<any> {
+        const [items, total] = await this.notificationRepository.findAndCount({
+            where: { userId, isArchived: false },
+            order: { createdAt: 'DESC' },
+            skip: (page - 1) * limit,
+            take: limit,
+        });
+
+        const unreadCount = await this.notificationRepository.count({
+            where: { userId, isRead: false, isArchived: false },
+        });
+
+        return {
+            items,
+            total,
+            unreadCount,
+            page,
+            limit,
+            totalPages: Math.ceil(total / limit),
+        };
+    }
+
+    async markAsRead(id: string, userId: string): Promise<Notification> {
+        const notification = await this.notificationRepository.findOne({
+            where: { id, userId },
+        });
+        if (!notification) throw new NotFoundException('Notification not found');
+
+        notification.isRead = true;
+        notification.readAt = new Date();
+        return await this.notificationRepository.save(notification);
+    }
+
+    async markAllAsRead(userId: string): Promise<void> {
+        await this.notificationRepository.update(
+            { userId, isRead: false },
+            { isRead: true, readAt: new Date() },
+        );
+    }
+
+    async delete(id: string, userId: string): Promise<void> {
+        const result = await this.notificationRepository.delete({ id, userId });
+        if (result.affected === 0) throw new NotFoundException('Notification not found');
+    }
+
+    async deleteAll(userId: string): Promise<void> {
+        await this.notificationRepository.delete({ userId });
+    }
+
+    async archiveRead(userId: string): Promise<void> {
+        await this.notificationRepository.update(
+            { userId, isRead: true },
+            { isArchived: true },
+        );
+    }
+}

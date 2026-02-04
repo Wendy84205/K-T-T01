@@ -37,7 +37,7 @@ services:
       MIGRATION_DONE_FILE: /migration_done/done
     volumes:
       - ./docker:/docker
-      - ./backend/src/database/mysql:/scripts
+      - ./backend/scripts:/scripts
       - ./backend/src/database/migrations:/migrations
       - migration_done:/migration_done
     entrypoint: ["/bin/bash", "/docker/migrate-entrypoint.sh"]

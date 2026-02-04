@@ -11,6 +11,7 @@ import { SecurityModule } from './modules/security/security.module';
 import { SystemSettingsModule } from './modules/system-settings/system-settings.module';
 import { ChatModule } from './modules/chat/chat.module';
 import { FileStorageModule } from './modules/file-storage/file-storage.module';
+import { NotificationModule } from './modules/notification/notification.module';
 import databaseConfig from './config/database.config';
 
 @Module({
@@ -54,7 +55,7 @@ import databaseConfig from './config/database.config';
     SystemSettingsModule,
     ChatModule,
     FileStorageModule,
-    // NotificationModule,
+    NotificationModule,
     // ProjectModule,
   ],
   controllers: [AppController],

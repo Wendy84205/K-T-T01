@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, IsNull, Not, Like } from 'typeorm';
 import { Conversation } from '../../database/entities/chat/conversation.entity';
@@ -6,6 +6,7 @@ import { Message } from '../../database/entities/chat/message.entity';
 import { ConversationMember } from '../../database/entities/chat/conversation-member.entity';
 import { MessageReaction } from '../../database/entities/chat/message-reaction.entity';
 import { PinnedMessage } from '../../database/entities/chat/pinned-message.entity';
+import { CallLog } from '../../database/entities/chat/call-log.entity';
 import { User } from '../../database/entities/core/user.entity';
 
 import { EncryptionService } from '../../common/service/encryption.service';
@@ -27,6 +28,9 @@ export class ChatService {
 
         @InjectRepository(PinnedMessage)
         private pinnedMessageRepository: Repository<PinnedMessage>,
+
+        @InjectRepository(CallLog)
+        private callLogRepository: Repository<CallLog>,
 
         @InjectRepository(User)
         private userRepository: Repository<User>,
@@ -91,6 +95,13 @@ export class ChatService {
         );
 
         return conversationsWithDetails;
+    }
+
+    async getConversationMembers(conversationId: string) {
+        return await this.conversationMemberRepository.find({
+            where: { conversationId, leftAt: IsNull() },
+            relations: ['user'],
+        });
     }
 
     private async mapConversationDetails(conv: any, userId: string, members: any[], lastMessage: any, unreadCount: number) {
@@ -368,7 +379,10 @@ export class ChatService {
     // Get all users
     async getAllUsers(currentUserId: string) {
         const users = await this.userRepository.find({
-            where: { status: 'active' },
+            where: {
+                status: 'active',
+                isEmailVerified: true
+            },
             select: ['id', 'firstName', 'lastName', 'email', 'avatarUrl', 'department'],
         });
 
@@ -618,5 +632,333 @@ export class ChatService {
             createdAt: msg.createdAt,
             sender: { id: msg.sender.id, firstName: msg.sender.firstName, lastName: msg.sender.lastName },
         }));
+    }
+
+    // Shared Content
+    async getSharedMedia(conversationId: string, userId: string) {
+        const membership = await this.conversationMemberRepository.findOne({ where: { conversationId, userId, leftAt: IsNull() } });
+        if (!membership) throw new ForbiddenException('Not a member');
+        const messages = await this.messageRepository.find({
+            where: {
+                conversationId,
+                messageType: In(['image', 'video']),
+                isDeleted: false
+            },
+            relations: ['sender'],
+            order: { createdAt: 'DESC' }
+        });
+        return messages.map(m => ({
+            id: m.id,
+            content: m.content,
+            messageType: m.messageType,
+            fileId: m.fileId,
+            createdAt: m.createdAt,
+            sender: { id: m.sender.id, name: `${m.sender.firstName} ${m.sender.lastName}` }
+        }));
+    }
+
+    async getSharedFiles(conversationId: string, userId: string) {
+        const membership = await this.conversationMemberRepository.findOne({ where: { conversationId, userId, leftAt: IsNull() } });
+        if (!membership) throw new ForbiddenException('Not a member');
+        const messages = await this.messageRepository.find({
+            where: {
+                conversationId,
+                messageType: 'file',
+                isDeleted: false
+            },
+            relations: ['sender'],
+            order: { createdAt: 'DESC' }
+        });
+        return messages.map(m => ({
+            id: m.id,
+            content: m.content,
+            fileId: m.fileId,
+            createdAt: m.createdAt,
+            sender: { id: m.sender.id, name: `${m.sender.firstName} ${m.sender.lastName}` }
+        }));
+    }
+
+    async getSharedLinks(conversationId: string, userId: string) {
+        const membership = await this.conversationMemberRepository.findOne({ where: { conversationId, userId, leftAt: IsNull() } });
+        if (!membership) throw new ForbiddenException('Not a member');
+        const messages = await this.messageRepository.find({
+            where: {
+                conversationId,
+                content: Like('%http%'),
+                isDeleted: false
+            },
+            relations: ['sender'],
+            order: { createdAt: 'DESC' }
+        });
+        // Simplistic URL extract
+        return messages.map(m => ({
+            id: m.id,
+            content: m.content,
+            createdAt: m.createdAt,
+            sender: { id: m.sender.id, name: `${m.sender.firstName} ${m.sender.lastName}` }
+        }));
+    }
+
+    // Call Logs
+    async createCallLog(data: Partial<CallLog>) {
+        const log = this.callLogRepository.create(data);
+        return await this.callLogRepository.save(log);
+    }
+
+    async updateCallLog(id: string, data: Partial<CallLog>) {
+        await this.callLogRepository.update(id, data);
+        return await this.callLogRepository.findOne({ where: { id } });
+    }
+
+    async getCallHistory(userId: string) {
+        const memberships = await this.conversationMemberRepository.find({ where: { userId, leftAt: IsNull() } });
+        const conversationIds = memberships.map(m => m.conversationId);
+        if (conversationIds.length === 0) return [];
+
+        return await this.callLogRepository.find({
+            where: { conversationId: In(conversationIds) },
+            relations: ['caller', 'conversation'],
+            order: { createdAt: 'DESC' },
+            take: 50
+        });
+    }
+
+    // Discover Feature Methods
+    async discoverPublicGroups(
+        userId: string,
+        search?: string,
+        category?: string,
+        page: number = 1,
+        limit: number = 20,
+    ) {
+        const query = this.conversationRepository
+            .createQueryBuilder('conversation')
+            .leftJoinAndSelect('conversation.creator', 'creator')
+            .where('conversation.conversation_type = :type', { type: 'group' })
+            .andWhere('conversation.is_private = :isPrivate', { isPrivate: false })
+            .andWhere('conversation.is_deleted = :isDeleted', { isDeleted: false });
+
+        if (search) {
+            query.andWhere(
+                '(LOWER(conversation.name) LIKE LOWER(:search) OR LOWER(conversation.description) LIKE LOWER(:search))',
+                { search: `%${search}%` }
+            );
+        }
+
+        if (category) {
+            query.andWhere('conversation.category = :category', { category });
+        }
+
+        const total = await query.getCount();
+
+        const groups = await query
+            .select([
+                'conversation.id',
+                'conversation.name',
+                'conversation.avatarUrl',
+                'conversation.description',
+                'conversation.category',
+                'conversation.isVerified',
+                'conversation.memberCount',
+                'conversation.createdAt',
+                'creator.id',
+                'creator.firstName',
+                'creator.lastName',
+            ])
+            .orderBy('conversation.isVerified', 'DESC')
+            .addOrderBy('conversation.memberCount', 'DESC')
+            .skip((page - 1) * limit)
+            .take(limit)
+            .getMany();
+
+        const groupIds = groups.map(g => g.id);
+        const memberships = groupIds.length > 0 ? await this.conversationMemberRepository.find({
+            where: {
+                conversationId: In(groupIds),
+                userId,
+                leftAt: IsNull()
+            }
+        }) : [];
+        const membershipMap = new Set(memberships.map(m => m.conversationId));
+
+        return {
+            groups: groups.map(group => ({
+                id: group.id,
+                name: group.name,
+                avatarUrl: group.avatarUrl,
+                description: group.description,
+                category: group.category,
+                verified: group.isVerified,
+                members: group.memberCount,
+                createdAt: group.createdAt,
+                isMember: membershipMap.has(group.id),
+                creator: group.creator ? {
+                    id: group.creator.id,
+                    name: `${group.creator.firstName} ${group.creator.lastName}`
+                } : null
+            })),
+            pagination: {
+                page,
+                limit,
+                total,
+                totalPages: Math.ceil(total / limit)
+            }
+        };
+    }
+
+    async discoverSuggestedUsers(userId: string, limit: number = 10) {
+        const userConversations = await this.conversationMemberRepository.find({
+            where: { userId, leftAt: IsNull() },
+            relations: ['conversation']
+        });
+
+        const directConvIds = userConversations
+            .filter(m => m.conversation?.conversationType === 'direct')
+            .map(m => m.conversationId);
+
+        const currentConnections = directConvIds.length > 0 ? await this.conversationMemberRepository.find({
+            where: {
+                conversationId: In(directConvIds),
+                userId: Not(userId),
+                leftAt: IsNull()
+            }
+        }) : [];
+
+        const connectedUserIds = new Set(currentConnections.map(m => m.userId));
+
+        const groupConvIds = userConversations
+            .filter(m => m.conversation?.conversationType === 'group')
+            .map(m => m.conversationId);
+
+        if (groupConvIds.length === 0) {
+            const users = await this.userRepository
+                .createQueryBuilder('user')
+                .where('user.id != :userId', { userId })
+                .andWhere('user.is_active = :isActive', { isActive: true })
+                .orderBy('RANDOM()')
+                .limit(limit)
+                .getMany();
+
+            return users.map(user => ({
+                id: user.id,
+                name: `${user.firstName} ${user.lastName}`,
+                username: user.email.split('@')[0],
+                email: user.email,
+                verified: user.isVerified || false,
+                mutualFriends: 0
+            }));
+        }
+
+        const potentialConnections = await this.conversationMemberRepository
+            .createQueryBuilder('member')
+            .select('member.user_id', 'userId')
+            .addSelect('COUNT(DISTINCT member.conversation_id)', 'mutualGroups')
+            .where('member.conversation_id IN (:...groupIds)', { groupIds: groupConvIds })
+            .andWhere('member.user_id != :userId', { userId })
+            .andWhere('member.left_at IS NULL')
+            .groupBy('member.user_id')
+            .orderBy('mutualGroups', 'DESC')
+            .limit(limit * 2)
+            .getRawMany();
+
+        const suggestedUserIds = potentialConnections
+            .filter(p => !connectedUserIds.has(p.userId))
+            .slice(0, limit)
+            .map(p => p.userId);
+
+        if (suggestedUserIds.length === 0) {
+            return [];
+        }
+
+        const users = await this.userRepository.find({
+            where: { id: In(suggestedUserIds) }
+        });
+
+        const mutualGroupsMap = new Map(
+            potentialConnections.map(p => [p.userId, parseInt(p.mutualGroups)])
+        );
+
+        return users.map(user => ({
+            id: user.id,
+            name: `${user.firstName} ${user.lastName}`,
+            username: user.email.split('@')[0],
+            email: user.email,
+            verified: user.isVerified || false,
+            mutualFriends: mutualGroupsMap.get(user.id) || 0
+        }));
+    }
+
+    async joinPublicGroup(conversationId: string, userId: string) {
+        const conversation = await this.conversationRepository.findOne({
+            where: { id: conversationId }
+        });
+
+        if (!conversation) {
+            throw new NotFoundException('Group not found');
+        }
+
+        if (conversation.isPrivate) {
+            throw new ForbiddenException('This is a private group. You need an invitation to join.');
+        }
+
+        if (conversation.conversationType !== 'group') {
+            throw new BadRequestException('You can only join group conversations');
+        }
+
+        const existingMember = await this.conversationMemberRepository.findOne({
+            where: { conversationId, userId, leftAt: IsNull() }
+        });
+
+        if (existingMember) {
+            throw new BadRequestException('You are already a member of this group');
+        }
+
+        const previousMember = await this.conversationMemberRepository.findOne({
+            where: { conversationId, userId },
+            order: { leftAt: 'DESC' }
+        });
+
+        if (previousMember) {
+            previousMember.leftAt = null;
+            previousMember.joinedAt = new Date();
+            await this.conversationMemberRepository.save(previousMember);
+        } else {
+            const newMember = this.conversationMemberRepository.create({
+                conversationId,
+                userId,
+                role: 'member',
+                joinedAt: new Date()
+            });
+            await this.conversationMemberRepository.save(newMember);
+        }
+
+        await this.conversationRepository.increment(
+            { id: conversationId },
+            'memberCount',
+            1
+        );
+
+        const user = await this.userRepository.findOne({ where: { id: userId } });
+        const systemMessage = this.messageRepository.create({
+            conversationId,
+            senderId: userId,
+            messageType: 'system',
+            content: `${user.firstName} ${user.lastName} joined the group`,
+            createdAt: new Date()
+        });
+        const savedMessage = await this.messageRepository.save(systemMessage);
+
+        return {
+            success: true,
+            message: 'Successfully joined the group',
+            systemMessage: {
+                ...savedMessage,
+                sender: { id: user.id, firstName: user.firstName, lastName: user.lastName }
+            },
+            conversation: await this.conversationRepository.findOne({
+                where: { id: conversationId },
+                relations: ['creator']
+            })
+        };
     }
 }

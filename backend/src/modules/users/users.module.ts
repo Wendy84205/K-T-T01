@@ -4,11 +4,13 @@ import { DatabaseModule } from '../../database/database.module';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
 import { SecurityModule } from '../security/security.module';
+import { NotificationModule } from '../notification/notification.module';
 
 @Module({
   imports: [
     DatabaseModule,
-    SecurityModule
+    SecurityModule,
+    NotificationModule
   ],
   controllers: [UsersController],
   providers: [UsersService],
