@@ -92,6 +92,38 @@
 └─────────────────────────────────────────────────────────────┘
 ```
 
+### 🗄️ Database Schema Overview
+
+Hệ thống sử dụng **35 bảng** được thiết kế chặt chẽ. Dưới đây là sơ đồ quan hệ các thực thể chính:
+
+```mermaid
+erDiagram
+    User ||--o{ Message : sends
+    User ||--o{ File : owns
+    Conversation ||--o{ Message : contains
+    User ||--o{ ConversationMember : joins
+    Conversation ||--o{ ConversationMember : has
+    File ||--o{ FileIntegrityLog : verified_by
+    
+    User {
+        string username
+        string password_hash
+        boolean mfa_enabled
+    }
+    
+    Message {
+        string encrypted_content
+        string iv
+        string auth_tag
+    }
+    
+    File {
+        string name
+        string storage_path
+        string checksum_sha256
+    }
+```
+
 ---
 
 ## 🛠️ Tech Stack

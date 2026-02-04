@@ -44,6 +44,7 @@ binlog.*
 *.myi
 *.frm
 *.sql
+!backend/src/database/exports/*.sql
 backup.sql
 
 # Database dumps
@@ -120,12 +121,6 @@ $RECYCLE.BIN/
 .fuse_hidden*
 .directory
 .Trash-*
-
-# ====== SECURITY & SENSITIVE DATA ======
-
-# Database exports (contains sensitive data)
-backend/src/database/exports/*.sql
-backend/src/database/exports/full_backup_*.sql
 
 # Uploaded files (may contain sensitive documents)
 uploads/
