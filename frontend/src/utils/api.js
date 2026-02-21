@@ -66,6 +66,19 @@ class ApiClient {
     });
   }
 
+  async setupMfa() {
+    return this.request('/mfa/setup/totp', {
+      method: 'POST',
+    });
+  }
+
+  async verifyMfaSetup(token) {
+    return this.request('/mfa/verify/totp-setup', {
+      method: 'POST',
+      body: JSON.stringify({ token }),
+    });
+  }
+
   async register(userData) {
     return this.request('/auth/register', {
       method: 'POST',
@@ -334,10 +347,16 @@ class ApiClient {
     });
   }
 
-  async sendMessage(conversationId, content, messageType = 'text', fileId = null, parentMessageId = null) {
+  async sendMessage(conversationId, content, messageType = 'text', fileId = null, parentMessageId = null, selfDestructTime = null) {
     return this.request(`/chat/conversations/${conversationId}/messages`, {
       method: 'POST',
-      body: JSON.stringify({ content, messageType, fileId, parentMessageId }),
+      body: JSON.stringify({
+        content,
+        messageType,
+        fileId,
+        parentMessageId,
+        selfDestructTime // optional timer in seconds
+      }),
     });
   }
 
@@ -462,6 +481,12 @@ class ApiClient {
   async deleteFile(id) {
     return this.request(`/files/${id}`, {
       method: 'DELETE',
+    });
+  }
+
+  async verifyFileIntegrity(id) {
+    return this.request(`/files/${id}/verify`, {
+      method: 'POST',
     });
   }
 

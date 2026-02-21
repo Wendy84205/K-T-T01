@@ -87,4 +87,38 @@ export class FileStorageService {
         }
         await this.fileRepository.remove(file);
     }
+
+    async verifyFileIntegrity(fileId: string, userId: string): Promise<any> {
+        console.log(`[VAULT] Starting integrity check for file: ${fileId} by user: ${userId}`);
+        try {
+            const file = await this.getFileMetadata(fileId, userId);
+            console.log(`[VAULT] Metadata found. Name: ${file.name}, Path: ${file.storagePath}`);
+
+            if (!fs.existsSync(file.storagePath)) {
+                console.error(`[VAULT] Physical file NOT FOUND at: ${file.storagePath}`);
+                throw new NotFoundException('Physical file not found on disk');
+            }
+
+            const { buffer } = await this.downloadFile(fileId, userId);
+            const currentHash = this.encryptionService.hashSHA256(buffer);
+
+            const isValid = currentHash === file.fileHash;
+            console.log(`[VAULT] Integrity check finished. Valid: ${isValid}`);
+            if (!isValid) {
+                console.warn(`[VAULT] Hash mismatch! Expected: ${file.fileHash}, Got: ${currentHash}`);
+            }
+
+            return {
+                isValid,
+                originalHash: file.fileHash,
+                currentHash,
+                verifiedAt: new Date(),
+                fileName: file.name
+            };
+        } catch (error) {
+            console.error(`[VAULT] Integrity check error:`, error);
+            // Rethrow so the API returns the correct status code (e.g. 404, 403)
+            throw error;
+        }
+    }
 }
