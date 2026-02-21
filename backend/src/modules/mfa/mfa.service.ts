@@ -24,6 +24,7 @@ export class MfaService {
     const user = await this.userRepository.findOne({ where: { id: userId } });
     if (!user) throw new NotFoundException('User not found');
 
+    console.log(`[MFA] Generating new fresh secret for user ${userId}`);
     const secret = speakeasy.generateSecret({
       name: `CyberSecure:${user.email}`,
       issuer: 'CyberSecure',
@@ -31,7 +32,6 @@ export class MfaService {
     });
 
     const backupCodes = this.generateBackupCodes();
-
     let mfaSetting = await this.mfaSettingRepository.findOne({ where: { userId } });
 
     if (mfaSetting) {
@@ -39,6 +39,7 @@ export class MfaService {
         totpSecret: secret.base32,
         totpEnabled: true,
         totpBackupCodes: backupCodes,
+        totpVerifiedAt: null, // Reset verification status for new secret
         updatedAt: new Date(),
       });
     } else {
@@ -92,22 +93,39 @@ export class MfaService {
    * Xác thực mã khi thiết lập 2FA lần đầu
    */
   async verifyTotpSetup(userId: string, token: string): Promise<boolean> {
-    const mfaSetting = await this.mfaSettingRepository.findOne({ where: { userId } });
-    if (!mfaSetting?.totpSecret) return false;
+    try {
+      const tokenStr = String(token).trim();
+      console.log(`[MFA] Verifying setup for user: ${userId}, token: ${tokenStr}`);
+      const mfaSetting = await this.mfaSettingRepository.findOne({ where: { userId } });
 
-    const verified = speakeasy.totp.verify({
-      secret: mfaSetting.totpSecret,
-      encoding: 'base32',
-      token,
-      window: 1
-    });
+      if (!mfaSetting?.totpSecret) {
+        console.warn(`[MFA] Setup failing: No secret found for user ${userId}`);
+        return false;
+      }
 
-    if (verified) {
-      await this.mfaSettingRepository.update({ userId }, {
-        totpVerifiedAt: new Date()
+      const verified = speakeasy.totp.verify({
+        secret: mfaSetting.totpSecret,
+        encoding: 'base32',
+        token: tokenStr,
+        window: 10 // Tăng lên 10 để cực kỳ thoải mái về mặt thời gian (lệch tối đa 5 phút)
       });
+
+      console.log(`[MFA] Verification result for user ${userId}: ${verified}`);
+
+      if (verified) {
+        await Promise.all([
+          this.mfaSettingRepository.update({ userId }, {
+            totpVerifiedAt: new Date()
+          }),
+          this.userRepository.update({ id: userId }, { mfaRequired: true })
+        ]);
+        console.log(`[MFA] MFA Enabled for user ${userId}`);
+      }
+      return verified;
+    } catch (error) {
+      console.error('[MFA] Verify Error:', error);
+      return false;
     }
-    return verified;
   }
 
   /**

@@ -144,6 +144,7 @@ export default function UserHomePage() {
   const [showChatOptionsMenu, setShowChatOptionsMenu] = useState(false);
   const [isCallMaximized, setIsCallMaximized] = useState(true);
   const [onlineUserIds, setOnlineUserIds] = useState(new Set());
+  const [selfDestructTime, setSelfDestructTime] = useState(null); // null, 10, 60, 3600
 
   const peerConnectionRef = useRef(null);
   const [remoteStream, setRemoteStream] = useState(null);
@@ -543,12 +544,14 @@ export default function UserHomePage() {
           messageInput.trim(),
           'text',
           null,
-          replyingTo ? replyingTo.id : null
+          replyingTo ? replyingTo.id : null,
+          selfDestructTime
         );
       }
 
       setMessageInput('');
       setReplyingTo(null);
+      setSelfDestructTime(null);
 
       // Refresh list
       loadConversations();
@@ -646,7 +649,7 @@ export default function UserHomePage() {
       setShowAttachmentMenu(false);
       const uploadedFile = await api.uploadFile(file);
 
-      const messageContent = `📎 Shared a file: ${file.name} `;
+      const messageContent = `Shared a file: ${file.name} `;
       await api.sendMessage(selectedChat, messageContent, 'file', uploadedFile.id);
 
       // Refresh
@@ -673,7 +676,7 @@ export default function UserHomePage() {
       setUploading(true);
       setShowVaultModal(false);
 
-      const messageContent = `📎 Shared a file: ${file.name} `;
+      const messageContent = `Shared a file: ${file.name} `;
       await api.sendMessage(selectedChat, messageContent, 'file', file.id);
 
       loadMessages(selectedChat);
@@ -733,7 +736,7 @@ export default function UserHomePage() {
         setUploading(true);
         // Use FormData directly for better compatibility
         const uploadedFile = await api.uploadFile(blob, `photo_${Date.now()}.jpg`);
-        await api.sendMessage(selectedChat, `📷 Shared a photo`, 'file', uploadedFile.id);
+        await api.sendMessage(selectedChat, `Shared a photo`, 'file', uploadedFile.id);
 
         loadMessages(selectedChat, true);
         loadConversations(true);
@@ -755,7 +758,7 @@ export default function UserHomePage() {
     navigator.geolocation.getCurrentPosition(async (position) => {
       const { latitude, longitude } = position.coords;
       const mapLink = `https://www.google.com/maps?q=${latitude},${longitude}`;
-      await api.sendMessage(selectedChat, `📍 Shared location: ${mapLink}`, 'text');
+      await api.sendMessage(selectedChat, `Shared location: ${mapLink}`, 'text');
     }, () => {
       alert('Unable to retrieve your location');
     });
@@ -971,12 +974,12 @@ export default function UserHomePage() {
   };
 
   const getConversationAvatar = (conv) => {
-    if (!conv) return '👤';
+    if (!conv) return '?';
     if (conv.conversationType === 'direct') {
       const name = getConversationName(conv);
-      return name.charAt(0) || '👤';
+      return name.charAt(0) || '?';
     }
-    return '👥';
+    return 'G';
   };
 
   const isConversationOnline = (conv) => {
@@ -1090,7 +1093,7 @@ export default function UserHomePage() {
             }}
             title={user?.email}
           >
-            {user?.firstName?.charAt(0) || '👤'}
+            {user?.firstName?.charAt(0) || '?'}
           </div>
 
           <div
@@ -1472,6 +1475,32 @@ export default function UserHomePage() {
                                   title="Download"
                                 >
                                   <Download size={18} />
+                                </button>
+                                <button
+                                  onClick={async () => {
+                                    try {
+                                      const result = await api.verifyFileIntegrity(f.id);
+                                      if (result.isValid) {
+                                        alert(`Integrity Verified! \nFile: ${f.name}\nHash: ${result.currentHash} \nStatus: Secure and untouched.`);
+                                      } else {
+                                        alert(`WARNING: Integrity Failure! \nFile: ${f.name}\nExpected: ${result.originalHash} \nActual: ${result.currentHash} \nThis file may have been tampered with!`);
+                                      }
+                                    } catch (err) {
+                                      alert('Integrity check failed to execute.');
+                                    }
+                                  }}
+                                  style={{
+                                    background: 'rgba(16, 185, 129, 0.1)',
+                                    border: 'none',
+                                    color: '#10b981',
+                                    cursor: 'pointer',
+                                    padding: '8px',
+                                    borderRadius: '8px',
+                                    transition: 'all 0.2s'
+                                  }}
+                                  title="Verify Integrity"
+                                >
+                                  <ShieldCheck size={18} />
                                 </button>
                                 <button
                                   onClick={() => handleDeleteFile(f.id)}
@@ -1939,7 +1968,6 @@ export default function UserHomePage() {
                         >
                           <Shield size={16} /> Share from Vault
                         </button>
-                        <div style={{ height: '1px', background: '#2a3441', margin: '4px 0' }} />
                         <button
                           type="button"
                           onClick={handleShareLocation}
@@ -1961,27 +1989,36 @@ export default function UserHomePage() {
                         >
                           <MapPin size={16} color="#667eea" /> Share Location
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => { setShowPollModal(true); setShowAttachmentMenu(false); }}
-                          style={{
-                            background: 'transparent',
-                            border: 'none',
-                            color: '#fff',
-                            padding: '10px',
-                            textAlign: 'left',
-                            borderRadius: '8px',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '10px',
-                            fontSize: '13px'
-                          }}
-                          onMouseEnter={(e) => e.target.style.background = '#2a3441'}
-                          onMouseLeave={(e) => e.target.style.background = 'transparent'}
-                        >
-                          <List size={16} color="#667eea" /> Create Poll
-                        </button>
+
+                        <div style={{ height: '1px', background: '#2a3441', margin: '4px 0' }} />
+                        <div style={{ padding: '8px 10px', fontSize: '11px', color: '#8b98a5', textTransform: 'uppercase', fontWeight: 'bold' }}>Ephemeral Privacy</div>
+                        {[
+                          { label: 'Off', val: null },
+                          { label: '10 Seconds', val: 10 },
+                          { label: '1 Minute', val: 60 },
+                          { label: '1 Hour', val: 3600 }
+                        ].map(t => (
+                          <button
+                            key={t.label}
+                            type="button"
+                            onClick={() => { setSelfDestructTime(t.val); setShowAttachmentMenu(false); }}
+                            style={{
+                              background: selfDestructTime === t.val ? 'rgba(102, 126, 234, 0.2)' : 'transparent',
+                              border: 'none',
+                              color: selfDestructTime === t.val ? '#667eea' : '#fff',
+                              padding: '8px 10px',
+                              textAlign: 'left',
+                              borderRadius: '8px',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '10px',
+                              fontSize: '13px'
+                            }}
+                          >
+                            <Clock size={14} /> {t.label}
+                          </button>
+                        ))}
                       </div>
                     )}
                   </div>
@@ -2079,31 +2116,33 @@ export default function UserHomePage() {
             </div>
 
             {/* Right Sidebar */}
-            {showRightSidebar && (
-              <ConversationSidebar
-                conversation={{
-                  ...selectedConversation,
-                  isOnline: isConversationOnline(selectedConversation),
-                  isPinned: pinnedChatIds.has(selectedChat),
-                  isMuted: mutedChatIds.has(selectedChat),
-                  onTogglePin: () => setPinnedChatIds(prev => {
-                    const next = new Set(prev);
-                    if (next.has(selectedChat)) next.delete(selectedChat);
-                    else next.add(selectedChat);
-                    return next;
-                  }),
-                  onToggleMute: () => setMutedChatIds(prev => {
-                    const next = new Set(prev);
-                    if (next.has(selectedChat)) next.delete(selectedChat);
-                    else next.add(selectedChat);
-                    return next;
-                  })
-                }}
-                onlineUserIds={onlineUserIds}
-                onClose={() => setShowRightSidebar(false)}
-                currentUserId={user.id}
-              />
-            )}
+            {
+              showRightSidebar && (
+                <ConversationSidebar
+                  conversation={{
+                    ...selectedConversation,
+                    isOnline: isConversationOnline(selectedConversation),
+                    isPinned: pinnedChatIds.has(selectedChat),
+                    isMuted: mutedChatIds.has(selectedChat),
+                    onTogglePin: () => setPinnedChatIds(prev => {
+                      const next = new Set(prev);
+                      if (next.has(selectedChat)) next.delete(selectedChat);
+                      else next.add(selectedChat);
+                      return next;
+                    }),
+                    onToggleMute: () => setMutedChatIds(prev => {
+                      const next = new Set(prev);
+                      if (next.has(selectedChat)) next.delete(selectedChat);
+                      else next.add(selectedChat);
+                      return next;
+                    })
+                  }}
+                  onlineUserIds={onlineUserIds}
+                  onClose={() => setShowRightSidebar(false)}
+                  currentUserId={user.id}
+                />
+              )
+            }
           </div>
         ) : (
           <div style={{
@@ -2142,485 +2181,464 @@ export default function UserHomePage() {
               </div>
             </>
           </div>
-        )}
-      </div>
-
-      {/* New Chat Modal */}
-      {
-        showNewChatModal && !showGroupModal && (
-          <Modal title="Start New Chat" onClose={() => setShowNewChatModal(false)}>
-            <div style={{ overflowY: 'auto', maxHeight: 'calc(80vh - 80px)' }}>
-              {availableUsers.map(u => (
-                <div
-                  key={u.id}
-                  onClick={() => handleSelectUser(u.id)}
-                  style={{
-                    padding: '16px 20px',
-                    cursor: 'pointer',
-                    borderBottom: '1px solid #2a3441',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '12px',
-                    transition: 'background 0.2s'
-                  }}
-                  onMouseEnter={(e) => e.currentTarget.style.background = '#1a2332'}
-                  onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                >
-                  <div style={{
-                    width: '40px',
-                    height: '40px',
-                    borderRadius: '10px',
-                    background: '#667eea',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#fff',
-                    fontWeight: '700'
-                  }}>
-                    {u.firstName?.charAt(0) || '?'}
-                  </div>
-                  <div>
-                    <div style={{ color: '#fff', fontWeight: '600', fontSize: '14px' }}>
-                      {u.firstName} {u.lastName}
-                    </div>
-                    <div style={{ color: '#8b98a5', fontSize: '12px' }}>
-                      {u.email}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </Modal>
         )
-      }
+        }
 
-      {/* Group Chat Modal */}
-      {
-        showGroupModal && (
-          <Modal title="Create Group Chat" onClose={() => {
-            setShowGroupModal(false);
-            setGroupName('');
-            setSelectedMembers([]);
-          }}>
-            <div style={{ padding: '20px' }}>
-              <input
-                type="text"
-                placeholder="Group Name"
-                value={groupName}
-                onChange={(e) => setGroupName(e.target.value)}
-                style={{
-                  width: '100%',
-                  background: '#1a2332',
-                  border: '1px solid #2a3441',
-                  borderRadius: '10px',
-                  padding: '12px 16px',
-                  color: '#fff',
-                  fontSize: '14px',
-                  outline: 'none',
-                  marginBottom: '20px'
-                }}
-              />
-              <div style={{ marginBottom: '20px' }}>
-                <div style={{ color: '#8b98a5', fontSize: '12px', marginBottom: '12px' }}>
-                  Selected: {selectedMembers.length} members
+        {/* New Chat Modal */}
+        {
+          showNewChatModal && !showGroupModal && (
+            <Modal title="Start New Chat" onClose={() => setShowNewChatModal(false)}>
+              <div style={{ overflowY: 'auto', maxHeight: 'calc(80vh - 80px)' }}>
+                {availableUsers.map(u => (
+                  <div
+                    key={u.id}
+                    onClick={() => handleSelectUser(u.id)}
+                    style={{
+                      padding: '16px 20px',
+                      cursor: 'pointer',
+                      borderBottom: '1px solid #2a3441',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px',
+                      transition: 'background 0.2s'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = '#1a2332'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                  >
+                    <div style={{
+                      width: '40px',
+                      height: '40px',
+                      borderRadius: '10px',
+                      background: '#667eea',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#fff',
+                      fontWeight: '700'
+                    }}>
+                      {u.firstName?.charAt(0) || '?'}
+                    </div>
+                    <div>
+                      <div style={{ color: '#fff', fontWeight: '600', fontSize: '14px' }}>
+                        {u.firstName} {u.lastName}
+                      </div>
+                      <div style={{ color: '#8b98a5', fontSize: '12px' }}>
+                        {u.email}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Modal>
+          )
+        }
+
+        {/* Group Chat Modal */}
+        {
+          showGroupModal && (
+            <Modal title="Create Group Chat" onClose={() => {
+              setShowGroupModal(false);
+              setGroupName('');
+              setSelectedMembers([]);
+            }}>
+              <div style={{ padding: '20px' }}>
+                <input
+                  type="text"
+                  placeholder="Group Name"
+                  value={groupName}
+                  onChange={(e) => setGroupName(e.target.value)}
+                  style={{
+                    width: '100%',
+                    background: '#1a2332',
+                    border: '1px solid #2a3441',
+                    borderRadius: '10px',
+                    padding: '12px 16px',
+                    color: '#fff',
+                    fontSize: '14px',
+                    outline: 'none',
+                    marginBottom: '20px'
+                  }}
+                />
+                <div style={{ marginBottom: '20px' }}>
+                  <div style={{ color: '#8b98a5', fontSize: '12px', marginBottom: '12px' }}>
+                    Selected: {selectedMembers.length} members
+                  </div>
                 </div>
               </div>
-            </div>
-            <div style={{ overflowY: 'auto', maxHeight: '300px' }}>
-              {availableUsers.map(u => (
-                <div
-                  key={u.id}
-                  onClick={() => toggleMemberSelection(u.id)}
-                  style={{
-                    padding: '16px 20px',
-                    cursor: 'pointer',
-                    borderBottom: '1px solid #2a3441',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '12px',
-                    background: selectedMembers.includes(u.id) ? '#1a2332' : 'transparent',
-                    transition: 'background 0.2s'
-                  }}
-                >
-                  <div style={{
-                    width: '24px',
-                    height: '24px',
-                    borderRadius: '6px',
-                    border: `2px solid ${selectedMembers.includes(u.id) ? '#667eea' : '#2a3441'}`,
-                    background: selectedMembers.includes(u.id) ? '#667eea' : 'transparent',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#fff'
-                  }}>
-                    {selectedMembers.includes(u.id) && '✓'}
-                  </div>
-                  <div style={{
-                    width: '40px',
-                    height: '40px',
-                    borderRadius: '10px',
-                    background: '#667eea',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#fff',
-                    fontWeight: '700'
-                  }}>
-                    {u.firstName?.charAt(0) || '?'}
-                  </div>
-                  <div>
-                    <div style={{ color: '#fff', fontWeight: '600', fontSize: '14px' }}>
-                      {u.firstName} {u.lastName}
+              <div style={{ overflowY: 'auto', maxHeight: '300px' }}>
+                {availableUsers.map(u => (
+                  <div
+                    key={u.id}
+                    onClick={() => toggleMemberSelection(u.id)}
+                    style={{
+                      padding: '16px 20px',
+                      cursor: 'pointer',
+                      borderBottom: '1px solid #2a3441',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px',
+                      background: selectedMembers.includes(u.id) ? '#1a2332' : 'transparent',
+                      transition: 'background 0.2s'
+                    }}
+                  >
+                    <div style={{
+                      width: '24px',
+                      height: '24px',
+                      borderRadius: '6px',
+                      border: `2px solid ${selectedMembers.includes(u.id) ? '#667eea' : '#2a3441'}`,
+                      background: selectedMembers.includes(u.id) ? '#667eea' : 'transparent',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#fff'
+                    }}>
+                      {selectedMembers.includes(u.id) && 'Selected'}
                     </div>
-                    <div style={{ color: '#8b98a5', fontSize: '12px' }}>
-                      {u.email}
+                    <div style={{
+                      width: '40px',
+                      height: '40px',
+                      borderRadius: '10px',
+                      background: '#667eea',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#fff',
+                      fontWeight: '700'
+                    }}>
+                      {u.firstName?.charAt(0) || '?'}
                     </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div style={{ padding: '20px', borderTop: '1px solid #2a3441' }}>
-              <button
-                onClick={handleCreateGroup}
-                disabled={!groupName.trim() || selectedMembers.length === 0}
-                style={{
-                  width: '100%',
-                  background: groupName.trim() && selectedMembers.length > 0 ? '#667eea' : 'rgba(102, 126, 234, 0.3)',
-                  border: 'none',
-                  borderRadius: '10px',
-                  padding: '12px',
-                  color: '#fff',
-                  fontWeight: '600',
-                  cursor: groupName.trim() && selectedMembers.length > 0 ? 'pointer' : 'not-allowed'
-                }}
-              >
-                Create Group ({selectedMembers.length} members)
-              </button>
-            </div>
-          </Modal>
-        )
-      }
-
-      {/* Select File from Vault Modal */}
-      {
-        showVaultModal && (
-          <Modal title="Select File from Vault" onClose={() => setShowVaultModal(false)}>
-            <div style={{ maxHeight: '400px', overflowY: 'auto', padding: '10px' }}>
-              {filesLoading ? (
-                <div style={{ padding: '20px', textAlign: 'center', color: '#8b98a5' }}>Loading...</div>
-              ) : files.length === 0 ? (
-                <div style={{ padding: '40px', textAlign: 'center', color: '#8b98a5' }}>
-                  <FileText size={40} style={{ opacity: 0.2, marginBottom: '10px' }} />
-                  <p>Vault is empty</p>
-                </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {files.map(f => (
-                    <div
-                      key={f.id}
-                      onClick={() => handleShareVaultFile(f)}
-                      style={{
-                        padding: '12px',
-                        background: '#1a2332',
-                        borderRadius: '12px',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '12px',
-                        border: '1px solid #2a3441',
-                        transition: 'all 0.2s'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.borderColor = '#667eea';
-                        e.currentTarget.style.background = '#222b3c';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.borderColor = '#2a3441';
-                        e.currentTarget.style.background = '#1a2332';
-                      }}
-                    >
-                      <div style={{
-                        width: '36px',
-                        height: '36px',
-                        background: 'rgba(102, 126, 234, 0.1)',
-                        borderRadius: '8px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                      }}>
-                        <FileText size={18} color="#667eea" />
+                    <div>
+                      <div style={{ color: '#fff', fontWeight: '600', fontSize: '14px' }}>
+                        {u.firstName} {u.lastName}
                       </div>
-                      <div style={{ flex: 1, overflow: 'hidden' }}>
-                        <div style={{ color: '#fff', fontSize: '14px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: '500' }}>{f.name}</div>
-                        <div style={{ color: '#8b98a5', fontSize: '11px' }}>{(f.sizeBytes / 1024 / 1024).toFixed(2)} MB</div>
+                      <div style={{ color: '#8b98a5', fontSize: '12px' }}>
+                        {u.email}
                       </div>
-                      <Plus size={16} color="#4a5568" />
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </Modal>
-        )
-      }
-
-      {/* Camera Capture Modal */}
-      {
-        showCamera && (
-          <Modal title="Capture Photo" onClose={stopCamera}>
-            <div style={{ padding: '20px', background: '#000', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                style={{
-                  width: '100%',
-                  maxHeight: '400px',
-                  borderRadius: '12px',
-                  background: '#151f2e',
-                  transform: 'scaleX(-1)'
-                }}
-              />
-              <canvas ref={canvasRef} style={{ display: 'none' }} />
-              <div style={{ display: 'flex', gap: '20px', marginTop: '20px' }}>
+                  </div>
+                ))}
+              </div>
+              <div style={{ padding: '20px', borderTop: '1px solid #2a3441' }}>
                 <button
-                  onClick={stopCamera}
+                  onClick={handleCreateGroup}
+                  disabled={!groupName.trim() || selectedMembers.length === 0}
                   style={{
-                    background: 'rgba(239, 68, 68, 0.15)',
-                    color: '#ef4444',
-                    border: '1px solid rgba(239, 68, 68, 0.3)',
-                    padding: '12px 24px',
-                    borderRadius: '12px',
-                    cursor: 'pointer',
-                    fontWeight: '600'
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={capturePhoto}
-                  style={{
-                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                    color: '#fff',
+                    width: '100%',
+                    background: groupName.trim() && selectedMembers.length > 0 ? '#667eea' : 'rgba(102, 126, 234, 0.3)',
                     border: 'none',
-                    padding: '12px 40px',
-                    borderRadius: '30px',
-                    cursor: 'pointer',
+                    borderRadius: '10px',
+                    padding: '12px',
+                    color: '#fff',
                     fontWeight: '600',
-                    boxShadow: '0 4px 15px rgba(102, 126, 234, 0.4)'
+                    cursor: groupName.trim() && selectedMembers.length > 0 ? 'pointer' : 'not-allowed'
                   }}
                 >
-                  Capture & Send
+                  Create Group ({selectedMembers.length} members)
                 </button>
               </div>
-            </div>
-          </Modal>
-        )
-      }
+            </Modal>
+          )
+        }
 
-      {/* Calling Modal (Premium & Dynamic) */}
-      {
-        showCallModal && (
-          <div style={{
-            position: 'fixed',
-            inset: isCallMaximized ? 0 : 'auto',
-            bottom: isCallMaximized ? 0 : '30px',
-            right: isCallMaximized ? 0 : '30px',
-            width: isCallMaximized ? '100%' : '320px',
-            height: isCallMaximized ? '100%' : '480px',
-            background: '#0a0f1b',
-            zIndex: 7000,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: isCallMaximized ? '60px 20px' : '20px',
-            color: '#fff',
-            borderRadius: isCallMaximized ? '0' : '24px',
-            boxShadow: isCallMaximized ? 'none' : '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
-            border: isCallMaximized ? 'none' : '1px solid rgba(255, 255, 255, 0.1)',
-            overflow: 'hidden',
-            transition: 'all 0.5s cubic-bezier(0.19, 1, 0.22, 1)'
-          }}>
-            {/* Background Decor */}
-            {isCallMaximized && !remoteStream && (
-              <div style={{
-                position: 'absolute',
-                inset: 0,
-                background: `radial-gradient(circle at center, rgba(102, 126, 234, 0.15) 0%, transparent 70%)`,
-                opacity: 0.6,
-                zIndex: 0
-              }} />
-            )}
-
-            {/* Remote Video (Full Screen) */}
-            {callType === 'video' && remoteStream && (
-              <video
-                ref={(ref) => {
-                  if (ref && ref.srcObject !== remoteStream) {
-                    ref.srcObject = remoteStream;
-                  }
-                }}
-                autoPlay
-                playsInline
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'cover',
-                  zIndex: 0
-                }}
-              />
-            )}
-
-            {/* Header Controls */}
-            <div style={{
-              width: '100%',
-              display: 'flex',
-              justifyContent: 'flex-end',
-              zIndex: 10,
-              position: 'absolute',
-              top: isCallMaximized ? '30px' : '15px',
-              right: isCallMaximized ? '30px' : '15px'
-            }}>
-              <button
-                onClick={() => setIsCallMaximized(!isCallMaximized)}
-                style={{
-                  padding: '8px',
-                  borderRadius: '12px',
-                  background: 'rgba(255,255,255,0.1)',
-                  border: 'none',
-                  color: '#fff',
-                  cursor: 'pointer',
-                  backdropFilter: 'blur(10px)'
-                }}
-              >
-                {isCallMaximized ? <Minimize2 size={20} /> : <Maximize2 size={20} />}
-              </button>
-            </div>
-
-            {/* Contact Info (Visible when no video or maximized) */}
-            <div style={{
-              textAlign: 'center',
-              zIndex: 1,
-              marginTop: isCallMaximized ? '2vh' : '40px',
-              display: (callType === 'video' && remoteStream && !isCallMaximized) ? 'none' : 'block'
-            }}>
-              <div style={{
-                width: isCallMaximized ? '140px' : '80px',
-                height: isCallMaximized ? '140px' : '80px',
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                borderRadius: '50%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                margin: '0 auto 20px',
-                boxShadow: '0 20px 40px rgba(0,0,0,0.3)',
-                fontSize: isCallMaximized ? '56px' : '32px',
-                fontWeight: '800',
-                border: '4px solid rgba(255,255,255,0.1)'
-              }}>
-                {selectedChat ? (conversations.find(c => c.id === selectedChat)?.otherUser?.firstName?.charAt(0) || 'U') : '?'}
-              </div>
-              <h2 style={{ fontSize: isCallMaximized ? '32px' : '20px', marginBottom: '8px', textShadow: '0 2px 10px rgba(0,0,0,0.5)' }}>
-                {selectedChat ? getConversationName(conversations.find(c => c.id === selectedChat)) : 'Unknown'}
-              </h2>
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '8px',
-                color: '#818cf8',
-                fontSize: isCallMaximized ? '18px' : '14px',
-                fontWeight: '600'
-              }}>
-                {callStatus === 'ringing' ? (
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#818cf8', animation: 'pulse 1.5s infinite' }} />
-                    Ringing...
-                  </span>
+        {/* Select File from Vault Modal */}
+        {
+          showVaultModal && (
+            <Modal title="Select File from Vault" onClose={() => setShowVaultModal(false)}>
+              <div style={{ maxHeight: '400px', overflowY: 'auto', padding: '10px' }}>
+                {filesLoading ? (
+                  <div style={{ padding: '20px', textAlign: 'center', color: '#8b98a5' }}>Loading...</div>
+                ) : files.length === 0 ? (
+                  <div style={{ padding: '40px', textAlign: 'center', color: '#8b98a5' }}>
+                    <FileText size={40} style={{ opacity: 0.2, marginBottom: '10px' }} />
+                    <p>Vault is empty</p>
+                  </div>
                 ) : (
-                  <span>{formatDuration(callDuration)}</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {files.map(f => (
+                      <div
+                        key={f.id}
+                        onClick={() => handleShareVaultFile(f)}
+                        style={{
+                          padding: '12px',
+                          background: '#1a2332',
+                          borderRadius: '12px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '12px',
+                          border: '1px solid #2a3441',
+                          transition: 'all 0.2s'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.borderColor = '#667eea';
+                          e.currentTarget.style.background = '#222b3c';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.borderColor = '#2a3441';
+                          e.currentTarget.style.background = '#1a2332';
+                        }}
+                      >
+                        <div style={{
+                          width: '36px',
+                          height: '36px',
+                          background: 'rgba(102, 126, 234, 0.1)',
+                          borderRadius: '8px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}>
+                          <FileText size={18} color="#667eea" />
+                        </div>
+                        <div style={{ flex: 1, overflow: 'hidden' }}>
+                          <div style={{ color: '#fff', fontSize: '14px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: '500' }}>{f.name}</div>
+                          <div style={{ color: '#8b98a5', fontSize: '11px' }}>{(f.sizeBytes / 1024 / 1024).toFixed(2)} MB</div>
+                        </div>
+                        <Plus size={16} color="#4a5568" />
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
-            </div>
+            </Modal>
+          )
+        }
 
-            {/* Local Video Overlay (Always PIP) */}
-            {callType === 'video' && !isVideoOff && (
-              <div style={{
-                position: 'absolute',
-                top: isCallMaximized ? 'auto' : '20px',
-                bottom: isCallMaximized ? '180px' : 'auto',
-                right: '25px',
-                width: isCallMaximized ? '150px' : '100px',
-                height: isCallMaximized ? '220px' : '140px',
-                borderRadius: '20px',
-                overflow: 'hidden',
-                zIndex: 5,
-                border: '2px solid rgba(255,255,255,0.2)',
-                boxShadow: '0 10px 30px rgba(0,0,0,0.4)',
-                background: '#111'
-              }}>
+        {/* Camera Capture Modal */}
+        {
+          showCamera && (
+            <Modal title="Capture Photo" onClose={stopCamera}>
+              <div style={{ padding: '20px', background: '#000', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  style={{
+                    width: '100%',
+                    maxHeight: '400px',
+                    borderRadius: '12px',
+                    background: '#151f2e',
+                    transform: 'scaleX(-1)'
+                  }}
+                />
+                <canvas ref={canvasRef} style={{ display: 'none' }} />
+                <div style={{ display: 'flex', gap: '20px', marginTop: '20px' }}>
+                  <button
+                    onClick={stopCamera}
+                    style={{
+                      background: 'rgba(239, 68, 68, 0.15)',
+                      color: '#ef4444',
+                      border: '1px solid rgba(239, 68, 68, 0.3)',
+                      padding: '12px 24px',
+                      borderRadius: '12px',
+                      cursor: 'pointer',
+                      fontWeight: '600'
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={capturePhoto}
+                    style={{
+                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                      color: '#fff',
+                      border: 'none',
+                      padding: '12px 40px',
+                      borderRadius: '30px',
+                      cursor: 'pointer',
+                      fontWeight: '600',
+                      boxShadow: '0 4px 15px rgba(102, 126, 234, 0.4)'
+                    }}
+                  >
+                    Capture & Send
+                  </button>
+                </div>
+              </div>
+            </Modal>
+          )
+        }
+
+        {/* Calling Modal (Premium & Dynamic) */}
+        {
+          showCallModal && (
+            <div style={{
+              position: 'fixed',
+              inset: isCallMaximized ? 0 : 'auto',
+              bottom: isCallMaximized ? 0 : '30px',
+              right: isCallMaximized ? 0 : '30px',
+              width: isCallMaximized ? '100%' : '320px',
+              height: isCallMaximized ? '100%' : '480px',
+              background: '#0a0f1b',
+              zIndex: 7000,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: isCallMaximized ? '60px 20px' : '20px',
+              color: '#fff',
+              borderRadius: isCallMaximized ? '0' : '24px',
+              boxShadow: isCallMaximized ? 'none' : '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+              border: isCallMaximized ? 'none' : '1px solid rgba(255, 255, 255, 0.1)',
+              overflow: 'hidden',
+              transition: 'all 0.5s cubic-bezier(0.19, 1, 0.22, 1)'
+            }}>
+              {/* Background Decor */}
+              {isCallMaximized && !remoteStream && (
+                <div style={{
+                  position: 'absolute',
+                  inset: 0,
+                  background: `radial-gradient(circle at center, rgba(102, 126, 234, 0.15) 0%, transparent 70%)`,
+                  opacity: 0.6,
+                  zIndex: 0
+                }} />
+              )}
+
+              {/* Remote Video (Full Screen) */}
+              {callType === 'video' && remoteStream && (
                 <video
                   ref={(ref) => {
-                    if (ref && localStream && ref.srcObject !== localStream) {
-                      ref.srcObject = localStream;
+                    if (ref && ref.srcObject !== remoteStream) {
+                      ref.srcObject = remoteStream;
                     }
                   }}
                   autoPlay
-                  muted
                   playsInline
-                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                    zIndex: 0
+                  }}
                 />
-              </div>
-            )}
+              )}
 
-            {/* Call Controls Box */}
-            <div style={{
-              zIndex: 10,
-              background: 'rgba(255, 255, 255, 0.08)',
-              backdropFilter: 'blur(30px)',
-              padding: isCallMaximized ? '20px 40px' : '15px 25px',
-              borderRadius: '35px',
-              display: 'flex',
-              gap: isCallMaximized ? '25px' : '15px',
-              alignItems: 'center',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              marginBottom: isCallMaximized ? '20px' : '10px'
-            }}>
-              <button
-                onClick={() => setIsMuted(!isMuted)}
-                title={isMuted ? "Unmute" : "Mute"}
-                style={{
-                  width: isCallMaximized ? '55px' : '45px',
-                  height: isCallMaximized ? '55px' : '45px',
+              {/* Header Controls */}
+              <div style={{
+                width: '100%',
+                display: 'flex',
+                justifyContent: 'flex-end',
+                zIndex: 10,
+                position: 'absolute',
+                top: isCallMaximized ? '30px' : '15px',
+                right: isCallMaximized ? '30px' : '15px'
+              }}>
+                <button
+                  onClick={() => setIsCallMaximized(!isCallMaximized)}
+                  style={{
+                    padding: '8px',
+                    borderRadius: '12px',
+                    background: 'rgba(255,255,255,0.1)',
+                    border: 'none',
+                    color: '#fff',
+                    cursor: 'pointer',
+                    backdropFilter: 'blur(10px)'
+                  }}
+                >
+                  {isCallMaximized ? <Minimize2 size={20} /> : <Maximize2 size={20} />}
+                </button>
+              </div>
+
+              {/* Contact Info (Visible when no video or maximized) */}
+              <div style={{
+                textAlign: 'center',
+                zIndex: 1,
+                marginTop: isCallMaximized ? '2vh' : '40px',
+                display: (callType === 'video' && remoteStream && !isCallMaximized) ? 'none' : 'block'
+              }}>
+                <div style={{
+                  width: isCallMaximized ? '140px' : '80px',
+                  height: isCallMaximized ? '140px' : '80px',
+                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                   borderRadius: '50%',
-                  background: isMuted ? '#fff' : 'rgba(255,255,255,0.1)',
-                  border: 'none',
-                  color: isMuted ? '#000' : '#fff',
-                  cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  transition: 'all 0.2s'
-                }}
-              >
-                {isMuted ? <Mic size={isCallMaximized ? 24 : 20} strokeWidth={2} /> : <Mic size={isCallMaximized ? 24 : 20} />}
-              </button>
+                  margin: '0 auto 20px',
+                  boxShadow: '0 20px 40px rgba(0,0,0,0.3)',
+                  fontSize: isCallMaximized ? '56px' : '32px',
+                  fontWeight: '800',
+                  border: '4px solid rgba(255,255,255,0.1)'
+                }}>
+                  {selectedChat ? (conversations.find(c => c.id === selectedChat)?.otherUser?.firstName?.charAt(0) || 'U') : '?'}
+                </div>
+                <h2 style={{ fontSize: isCallMaximized ? '32px' : '20px', marginBottom: '8px', textShadow: '0 2px 10px rgba(0,0,0,0.5)' }}>
+                  {selectedChat ? getConversationName(conversations.find(c => c.id === selectedChat)) : 'Unknown'}
+                </h2>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  color: '#818cf8',
+                  fontSize: isCallMaximized ? '18px' : '14px',
+                  fontWeight: '600'
+                }}>
+                  {callStatus === 'ringing' ? (
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#818cf8', animation: 'pulse 1.5s infinite' }} />
+                      Ringing...
+                    </span>
+                  ) : (
+                    <span>{formatDuration(callDuration)}</span>
+                  )}
+                </div>
+              </div>
 
-              {callType === 'video' && (
+              {/* Local Video Overlay (Always PIP) */}
+              {callType === 'video' && !isVideoOff && (
+                <div style={{
+                  position: 'absolute',
+                  top: isCallMaximized ? 'auto' : '20px',
+                  bottom: isCallMaximized ? '180px' : 'auto',
+                  right: '25px',
+                  width: isCallMaximized ? '150px' : '100px',
+                  height: isCallMaximized ? '220px' : '140px',
+                  borderRadius: '20px',
+                  overflow: 'hidden',
+                  zIndex: 5,
+                  border: '2px solid rgba(255,255,255,0.2)',
+                  boxShadow: '0 10px 30px rgba(0,0,0,0.4)',
+                  background: '#111'
+                }}>
+                  <video
+                    ref={(ref) => {
+                      if (ref && localStream && ref.srcObject !== localStream) {
+                        ref.srcObject = localStream;
+                      }
+                    }}
+                    autoPlay
+                    muted
+                    playsInline
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  />
+                </div>
+              )}
+
+              {/* Call Controls Box */}
+              <div style={{
+                zIndex: 10,
+                background: 'rgba(255, 255, 255, 0.08)',
+                backdropFilter: 'blur(30px)',
+                padding: isCallMaximized ? '20px 40px' : '15px 25px',
+                borderRadius: '35px',
+                display: 'flex',
+                gap: isCallMaximized ? '25px' : '15px',
+                alignItems: 'center',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                marginBottom: isCallMaximized ? '20px' : '10px'
+              }}>
                 <button
-                  onClick={() => setIsVideoOff(!isVideoOff)}
-                  title={isVideoOff ? "Start Video" : "Stop Video"}
+                  onClick={() => setIsMuted(!isMuted)}
+                  title={isMuted ? "Unmute" : "Mute"}
                   style={{
                     width: isCallMaximized ? '55px' : '45px',
                     height: isCallMaximized ? '55px' : '45px',
                     borderRadius: '50%',
-                    background: isVideoOff ? '#fff' : 'rgba(255,255,255,0.1)',
+                    background: isMuted ? '#fff' : 'rgba(255,255,255,0.1)',
                     border: 'none',
-                    color: isVideoOff ? '#000' : '#fff',
+                    color: isMuted ? '#000' : '#fff',
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
@@ -2628,255 +2646,276 @@ export default function UserHomePage() {
                     transition: 'all 0.2s'
                   }}
                 >
-                  <Video size={isCallMaximized ? 24 : 20} />
+                  {isMuted ? <Mic size={isCallMaximized ? 24 : 20} strokeWidth={2} /> : <Mic size={isCallMaximized ? 24 : 20} />}
                 </button>
-              )}
 
-              <button
-                onClick={async () => {
-                  const chatId = selectedChat;
-                  setShowCallModal(false);
-                  setCallStatus('idle');
-                  stopStream();
-                  stopRingtone();
-                  if (chatId) socketService.sendHangUp(chatId);
-                }}
-                title="End Call"
-                style={{
-                  width: isCallMaximized ? '65px' : '55px',
-                  height: isCallMaximized ? '65px' : '55px',
-                  borderRadius: '50%',
-                  background: '#ef4444',
-                  border: 'none',
-                  color: '#fff',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  boxShadow: '0 10px 30px rgba(239, 68, 68, 0.4)',
-                  transition: 'all 0.2s'
-                }}
-              >
-                <Phone size={isCallMaximized ? 28 : 24} style={{ transform: 'rotate(135deg)' }} />
-              </button>
+                {callType === 'video' && (
+                  <button
+                    onClick={() => setIsVideoOff(!isVideoOff)}
+                    title={isVideoOff ? "Start Video" : "Stop Video"}
+                    style={{
+                      width: isCallMaximized ? '55px' : '45px',
+                      height: isCallMaximized ? '55px' : '45px',
+                      borderRadius: '50%',
+                      background: isVideoOff ? '#fff' : 'rgba(255,255,255,0.1)',
+                      border: 'none',
+                      color: isVideoOff ? '#000' : '#fff',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    <Video size={isCallMaximized ? 24 : 20} />
+                  </button>
+                )}
+
+                <button
+                  onClick={async () => {
+                    const chatId = selectedChat;
+                    setShowCallModal(false);
+                    setCallStatus('idle');
+                    stopStream();
+                    stopRingtone();
+                    if (chatId) socketService.sendHangUp(chatId);
+                  }}
+                  title="End Call"
+                  style={{
+                    width: isCallMaximized ? '65px' : '55px',
+                    height: isCallMaximized ? '65px' : '55px',
+                    borderRadius: '50%',
+                    background: '#ef4444',
+                    border: 'none',
+                    color: '#fff',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: '0 10px 30px rgba(239, 68, 68, 0.4)',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  <Phone size={isCallMaximized ? 28 : 24} style={{ transform: 'rotate(135deg)' }} />
+                </button>
+              </div>
             </div>
-          </div>
-        )
-      }
+          )
+        }
 
-      {/* Incoming Call UI */}
-      {
-        incomingCall && (
-          <div style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(10, 15, 25, 0.95)',
-            backdropFilter: 'blur(40px)',
-            zIndex: 8000,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            overflow: 'hidden'
-          }} className="calling-overlay">
-            {/* Background Avatar Blur */}
+        {/* Incoming Call UI */}
+        {
+          incomingCall && (
             <div style={{
-              position: 'absolute',
-              inset: '-20px',
-              background: `url(${incomingCall.from?.avatarUrl || 'https://images.unsplash.com/photo-1614850523296-d8c1af93d400?w=800'})`,
-              backgroundSize: 'cover',
-              backgroundPosition: 'center',
-              filter: 'blur(80px) brightness(0.4)',
-              zIndex: -1,
-              opacity: 0.8
-            }} />
-
-            <div style={{
-              width: '160px',
-              height: '160px',
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              borderRadius: '55px',
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(10, 15, 25, 0.95)',
+              backdropFilter: 'blur(40px)',
+              zIndex: 8000,
               display: 'flex',
+              flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              marginBottom: '35px',
-              boxShadow: '0 0 80px rgba(102, 126, 234, 0.4)',
-              border: '6px solid rgba(255,255,255,0.05)',
-              animation: 'callPulse 2s infinite cubic-bezier(0.4, 0, 0.2, 1)'
-            }}>
-              <span style={{ fontSize: '64px', color: '#fff', fontWeight: '800' }}>
-                {incomingCall.from?.firstName?.charAt(0) || '?'}
-              </span>
-            </div>
-            <h2 style={{ color: '#fff', fontSize: '36px', margin: '0 0 10px 0', fontWeight: '800', textShadow: '0 4px 20px rgba(0,0,0,0.5)' }}>
-              {incomingCall.from?.firstName} {incomingCall.from?.lastName}
-            </h2>
-            <div style={{
-              background: 'rgba(102, 126, 234, 0.15)',
-              padding: '8px 20px',
-              borderRadius: '20px',
-              color: '#818cf8',
-              fontSize: '18px',
-              fontWeight: '700',
-              textTransform: 'uppercase',
-              letterSpacing: '4px',
-              border: '1px solid rgba(102, 126, 234, 0.3)'
-            }}>
-              Incoming {incomingCall.type}...
-            </div>
+              overflow: 'hidden'
+            }} className="calling-overlay">
+              {/* Background Avatar Blur */}
+              <div style={{
+                position: 'absolute',
+                inset: '-20px',
+                background: `url(${incomingCall.from?.avatarUrl || 'https://images.unsplash.com/photo-1614850523296-d8c1af93d400?w=800'})`,
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+                filter: 'blur(80px) brightness(0.4)',
+                zIndex: -1,
+                opacity: 0.8
+              }} />
 
-            <div style={{ marginTop: '100px', display: 'flex', gap: '50px' }}>
-              {/* Reject Button */}
-              <button
-                onClick={() => {
-                  stopRingtone();
-                  if (incomingCall.conversationId) socketService.sendCallResponse(incomingCall.conversationId, null, false);
-                  setIncomingCall(null);
-                }}
-                style={{
-                  width: '85px',
-                  height: '85px',
-                  borderRadius: '50%',
-                  background: '#ef4444',
-                  border: 'none',
-                  color: '#fff',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexDirection: 'column',
-                  boxShadow: '0 20px 40px rgba(239, 68, 68, 0.3)',
-                  transition: 'all 0.2s'
-                }}
-              >
-                <X size={32} />
-                <span style={{ fontSize: '13px', marginTop: '6px', fontWeight: '700' }}>Decline</span>
-              </button>
+              <div style={{
+                width: '160px',
+                height: '160px',
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                borderRadius: '55px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: '35px',
+                boxShadow: '0 0 80px rgba(102, 126, 234, 0.4)',
+                border: '6px solid rgba(255,255,255,0.05)',
+                animation: 'callPulse 2s infinite cubic-bezier(0.4, 0, 0.2, 1)'
+              }}>
+                <span style={{ fontSize: '64px', color: '#fff', fontWeight: '800' }}>
+                  {incomingCall.from?.firstName?.charAt(0) || '?'}
+                </span>
+              </div>
+              <h2 style={{ color: '#fff', fontSize: '36px', margin: '0 0 10px 0', fontWeight: '800', textShadow: '0 4px 20px rgba(0,0,0,0.5)' }}>
+                {incomingCall.from?.firstName} {incomingCall.from?.lastName}
+              </h2>
+              <div style={{
+                background: 'rgba(102, 126, 234, 0.15)',
+                padding: '8px 20px',
+                borderRadius: '20px',
+                color: '#818cf8',
+                fontSize: '18px',
+                fontWeight: '700',
+                textTransform: 'uppercase',
+                letterSpacing: '4px',
+                border: '1px solid rgba(102, 126, 234, 0.3)'
+              }}>
+                Incoming {incomingCall.type}...
+              </div>
 
-              {/* Accept Button */}
-              <button
-                onClick={() => acceptIncomingCall()}
-                style={{
-                  width: '85px',
-                  height: '85px',
-                  borderRadius: '50%',
-                  background: '#10b981',
-                  border: 'none',
-                  color: '#fff',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexDirection: 'column',
-                  boxShadow: '0 20px 40px rgba(16, 185, 129, 0.3)',
-                  transition: 'all 0.2s',
-                  animation: 'incomingPulse 2s infinite ease-in-out'
-                }}
-              >
-                {incomingCall.type === 'video' ? <Video size={32} /> : <Phone size={32} />}
-                <span style={{ fontSize: '13px', marginTop: '6px', fontWeight: '700' }}>Accept</span>
-              </button>
-            </div>
-          </div>
-        )
-      }
-
-      {/* Forward Message Modal */}
-      {
-        showForwardModal && (
-          <Modal title="Forward Message" onClose={() => setShowForwardModal(false)}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {conversations.map(conv => (
-                <div
-                  key={conv.id}
-                  onClick={() => handleForwardMessage(conv.id)}
+              <div style={{ marginTop: '100px', display: 'flex', gap: '50px' }}>
+                {/* Reject Button */}
+                <button
+                  onClick={() => {
+                    stopRingtone();
+                    if (incomingCall.conversationId) socketService.sendCallResponse(incomingCall.conversationId, null, false);
+                    setIncomingCall(null);
+                  }}
                   style={{
-                    padding: '12px',
-                    background: '#1a2332',
-                    border: '1px solid #2a3441',
-                    borderRadius: '12px',
+                    width: '85px',
+                    height: '85px',
+                    borderRadius: '50%',
+                    background: '#ef4444',
+                    border: 'none',
+                    color: '#fff',
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '12px',
+                    justifyContent: 'center',
+                    flexDirection: 'column',
+                    boxShadow: '0 20px 40px rgba(239, 68, 68, 0.3)',
                     transition: 'all 0.2s'
                   }}
-                  onMouseEnter={(e) => e.currentTarget.style.background = '#2a3441'}
-                  onMouseLeave={(e) => e.currentTarget.style.background = '#1a2332'}
                 >
-                  <div style={{
-                    width: '40px',
-                    height: '40px',
-                    background: '#667eea',
-                    borderRadius: '10px',
+                  <X size={32} />
+                  <span style={{ fontSize: '13px', marginTop: '6px', fontWeight: '700' }}>Decline</span>
+                </button>
+
+                {/* Accept Button */}
+                <button
+                  onClick={() => acceptIncomingCall()}
+                  style={{
+                    width: '85px',
+                    height: '85px',
+                    borderRadius: '50%',
+                    background: '#10b981',
+                    border: 'none',
+                    color: '#fff',
+                    cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    fontWeight: '700',
-                    color: '#fff'
-                  }}>
-                    {getConversationAvatar(conv)}
-                  </div>
-                  <div style={{ color: '#fff', fontWeight: '600' }}>
-                    {getConversationName(conv)}
-                  </div>
-                </div>
-              ))}
+                    flexDirection: 'column',
+                    boxShadow: '0 20px 40px rgba(16, 185, 129, 0.3)',
+                    transition: 'all 0.2s',
+                    animation: 'incomingPulse 2s infinite ease-in-out'
+                  }}
+                >
+                  {incomingCall.type === 'video' ? <Video size={32} /> : <Phone size={32} />}
+                  <span style={{ fontSize: '13px', marginTop: '6px', fontWeight: '700' }}>Accept</span>
+                </button>
+              </div>
             </div>
-          </Modal>
-        )
-      }
+          )
+        }
 
-      {
-        showPollModal && (
-          <PollModal
-            onClose={() => setShowPollModal(false)}
-            onCreate={async (pollData) => {
-              try {
-                await api.sendMessage(selectedChat, `📊 Poll: ${pollData.question}\nOptions: ${pollData.options.join(', ')}`, 'poll');
-                loadMessages(selectedChat, true);
-              } catch (error) {
-                alert('Failed to create poll');
-              }
-            }}
-          />
-        )
-      }
+        {/* Forward Message Modal */}
+        {
+          showForwardModal && (
+            <Modal title="Forward Message" onClose={() => setShowForwardModal(false)}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {conversations.map(conv => (
+                  <div
+                    key={conv.id}
+                    onClick={() => handleForwardMessage(conv.id)}
+                    style={{
+                      padding: '12px',
+                      background: '#1a2332',
+                      border: '1px solid #2a3441',
+                      borderRadius: '12px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px',
+                      transition: 'all 0.2s'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = '#2a3441'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = '#1a2332'}
+                  >
+                    <div style={{
+                      width: '40px',
+                      height: '40px',
+                      background: '#667eea',
+                      borderRadius: '10px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontWeight: '700',
+                      color: '#fff'
+                    }}>
+                      {getConversationAvatar(conv)}
+                    </div>
+                    <div style={{ color: '#fff', fontWeight: '600' }}>
+                      {getConversationName(conv)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Modal>
+          )
+        }
 
-      {/* Context Menu */}
-      <ContextMenu
-        contextMenu={contextMenu}
-        onDelete={handleDeleteConversation}
-        pinnedChatIds={pinnedChatIds}
-        mutedChatIds={mutedChatIds}
-        onClose={(conv, action) => {
-          setContextMenu(null);
-          if (action === 'hide' && conv) {
-            setHiddenChatIds(prev => new Set([...prev, conv.id]));
-            alert('Conversation hidden. You can find it by searching.');
-          } else if (action === 'read' && conv) {
-            api.markAsRead(conv.id);
-            loadUnreadCount();
-          } else if (action === 'pin' && conv) {
-            setPinnedChatIds(prev => {
-              const next = new Set(prev);
-              if (next.has(conv.id)) next.delete(conv.id);
-              else next.add(conv.id);
-              return next;
-            });
-          } else if (action === 'mute' && conv) {
-            setMutedChatIds(prev => {
-              const next = new Set(prev);
-              if (next.has(conv.id)) next.delete(conv.id);
-              else next.add(conv.id);
-              return next;
-            });
-          }
-        }}
-      />
+        {
+          showPollModal && (
+            <PollModal
+              onClose={() => setShowPollModal(false)}
+              onCreate={async (pollData) => {
+                try {
+                  await api.sendMessage(selectedChat, `Poll: ${pollData.question}\nOptions: ${pollData.options.join(', ')}`, 'poll');
+                  loadMessages(selectedChat, true);
+                } catch (error) {
+                  alert('Failed to create poll');
+                }
+              }}
+            />
+          )
+        }
 
-      <style>
-        {`
+        {/* Context Menu */}
+        <ContextMenu
+          contextMenu={contextMenu}
+          onDelete={handleDeleteConversation}
+          pinnedChatIds={pinnedChatIds}
+          mutedChatIds={mutedChatIds}
+          onClose={(conv, action) => {
+            setContextMenu(null);
+            if (action === 'hide' && conv) {
+              setHiddenChatIds(prev => new Set([...prev, conv.id]));
+              alert('Conversation hidden. You can find it by searching.');
+            } else if (action === 'read' && conv) {
+              api.markAsRead(conv.id);
+              loadUnreadCount();
+            } else if (action === 'pin' && conv) {
+              setPinnedChatIds(prev => {
+                const next = new Set(prev);
+                if (next.has(conv.id)) next.delete(conv.id);
+                else next.add(conv.id);
+                return next;
+              });
+            } else if (action === 'mute' && conv) {
+              setMutedChatIds(prev => {
+                const next = new Set(prev);
+                if (next.has(conv.id)) next.delete(conv.id);
+                else next.add(conv.id);
+                return next;
+              });
+            }
+          }}
+        />
+
+        <style>
+          {`
           @keyframes pulse {
             0% { transform: scale(1); opacity: 0.8; }
             50% { transform: scale(1.5); opacity: 0.3; }
@@ -2888,7 +2927,8 @@ export default function UserHomePage() {
             100% { transform: scale(1); box-shadow: 0 0 60px rgba(102, 126, 234, 0.6); }
           }
         `}
-      </style>
+        </style>
+      </div >
     </div >
   );
 }
@@ -3254,6 +3294,13 @@ function SettingsContent({ user }) {
   const [isChangingPass, setIsChangingPass] = React.useState(false);
   const [passData, setPassData] = React.useState({ newPass: '', confirmPass: '' });
   const [isEditingProfile, setIsEditingProfile] = React.useState(false);
+
+  // MFA States
+  const [showMfaSetup, setShowMfaSetup] = React.useState(false);
+  const [mfaQrCode, setMfaQrCode] = React.useState('');
+  const [mfaBackupCodes, setMfaBackupCodes] = React.useState([]);
+  const [mfaVerifyToken, setMfaVerifyToken] = React.useState('');
+  const [isVerifyingMfa, setIsVerifyingMfa] = React.useState(false);
   const [profileData, setProfileData] = React.useState({
     firstName: user?.firstName || '',
     lastName: user?.lastName || '',
@@ -3310,6 +3357,36 @@ function SettingsContent({ user }) {
       await api.revokeSession(sid);
       loadSessions();
     } catch (err) { alert('Revoke failed'); }
+  };
+
+  const handleMfaInit = async () => {
+    try {
+      const data = await api.setupMfa();
+      setMfaQrCode(data.qrCode);
+      setMfaBackupCodes(data.backupCodes || []);
+      setShowMfaSetup(true);
+    } catch (err) {
+      alert('MFA setup failed');
+    }
+  };
+
+  const handleConfirmMfa = async () => {
+    if (mfaVerifyToken.length !== 6) return alert('Enter 6-digit code');
+    setIsVerifyingMfa(true);
+    try {
+      const { verified } = await api.verifyMfaSetup(mfaVerifyToken);
+      if (verified) {
+        alert('MFA Enabled Successfully!');
+        setShowMfaSetup(false);
+        window.location.reload();
+      } else {
+        alert('Invalid code. Please try again.');
+      }
+    } catch (err) {
+      alert('Verification error');
+    } finally {
+      setIsVerifyingMfa(false);
+    }
   };
 
   const handleAvatarClick = () => {
@@ -3471,18 +3548,129 @@ function SettingsContent({ user }) {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 0', borderBottom: '1px solid #2a3441' }}>
               <div>
                 <div style={{ fontWeight: '600' }}>Multi-Factor Authentication</div>
-                <div style={{ fontSize: '13px', color: '#8b98a5' }}>Currently {user?.mfaRequired ? 'Enabled' : 'Disabled'}</div>
+                <div style={{ fontSize: '13px', color: '#8b98a5' }}>{user?.mfaRequired ? 'Account is secured with 2FA' : 'Your account is less secure without 2FA'}</div>
               </div>
               <button
-                onClick={async () => {
-                  await api.updateProfile({ mfaRequired: !user?.mfaRequired });
-                  alert('MFA preference updated!');
-                  window.location.reload();
-                }}
+                onClick={user?.mfaRequired ?
+                  async () => {
+                    if (confirm('Disable 2FA?')) {
+                      await api.updateProfile({ mfaRequired: false });
+                      window.location.reload();
+                    }
+                  } : handleMfaInit
+                }
                 style={{ padding: '8px 16px', background: user?.mfaRequired ? 'rgba(239, 68, 68, 0.1)' : 'rgba(34, 197, 94, 0.1)', color: user?.mfaRequired ? '#ef4444' : '#22c55e', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>
-                {user?.mfaRequired ? 'Disable' : 'Enable'}
+                {user?.mfaRequired ? 'Disable' : 'Setup 2FA'}
               </button>
             </div>
+
+            {showMfaSetup && (
+              <Modal title="Secure Your Account with 2FA" onClose={() => setShowMfaSetup(false)}>
+                <div style={{ padding: '0 20px 20px 20px', textAlign: 'center' }}>
+                  <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '20px'
+                  }}>
+                    <p style={{ color: '#8b98a5', fontSize: '14px', lineHeight: '1.6', margin: 0 }}>
+                      1. Scan this QR code with a mobile authenticator app (e.g., Google Authenticator, Authy, or Microsoft Authenticator).
+                    </p>
+
+                    <div style={{
+                      background: '#fff',
+                      padding: '15px',
+                      borderRadius: '16px',
+                      boxShadow: '0 10px 30px rgba(0,0,0,0.2)',
+                      display: 'inline-block'
+                    }}>
+                      <img src={mfaQrCode} alt="MFA QR Code" style={{ width: '200px', height: '200px', display: 'block' }} />
+                    </div>
+
+                    <div style={{
+                      width: '100%',
+                      background: 'rgba(102, 126, 234, 0.05)',
+                      padding: '15px',
+                      borderRadius: '12px',
+                      border: '1px dashed rgba(102, 126, 234, 0.3)',
+                      textAlign: 'left'
+                    }}>
+                      <p style={{ color: '#667eea', fontSize: '13px', fontWeight: 'bold', margin: '0 0 10px 0' }}>
+                        2. Save your Backup Codes (Crucial!)
+                      </p>
+                      <p style={{ color: '#8b98a5', fontSize: '11px', margin: '0 0 12px 0' }}>
+                        If you lose access to your device, these codes will be the ONLY way to recover your account.
+                      </p>
+                      <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: '1fr 1fr',
+                        gap: '8px',
+                        fontSize: '11px',
+                        fontFamily: 'monospace'
+                      }}>
+                        {mfaBackupCodes.map((code, idx) => (
+                          <div key={idx} style={{ background: '#0e1621', padding: '6px 10px', borderRadius: '4px', border: '1px solid #2a3441', color: '#e2e8f0' }}>
+                            {code}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div style={{ width: '100%', textAlign: 'left' }}>
+                      <label style={{ display: 'block', color: '#fff', fontSize: '13px', fontWeight: '600', marginBottom: '10px' }}>
+                        3. Enter the 6-digit code from your app
+                      </label>
+                      <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                        <input
+                          type="text"
+                          maxLength="6"
+                          placeholder="000 000"
+                          value={mfaVerifyToken}
+                          onChange={(e) => {
+                            const val = e.target.value.replace(/\D/g, '');
+                            if (val.length <= 6) setMfaVerifyToken(val);
+                          }}
+                          style={{
+                            flex: 1,
+                            padding: '14px',
+                            background: '#0e1621',
+                            border: '1px solid #2a3441',
+                            borderRadius: '12px',
+                            color: '#fff',
+                            textAlign: 'center',
+                            fontSize: '24px',
+                            fontWeight: 'bold',
+                            letterSpacing: '5px',
+                            outline: 'none'
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    <button
+                      disabled={isVerifyingMfa || mfaVerifyToken.length !== 6}
+                      onClick={handleConfirmMfa}
+                      style={{
+                        width: '100%',
+                        padding: '16px',
+                        background: mfaVerifyToken.length === 6 ? '#667eea' : '#2a3441',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '12px',
+                        fontWeight: 'bold',
+                        fontSize: '16px',
+                        cursor: mfaVerifyToken.length === 6 ? 'pointer' : 'not-allowed',
+                        transition: 'all 0.2s',
+                        marginTop: '10px',
+                        boxShadow: mfaVerifyToken.length === 6 ? '0 4px 15px rgba(102, 126, 234, 0.4)' : 'none'
+                      }}
+                    >
+                      {isVerifyingMfa ? 'Securing Account...' : 'Verify and Activate 2FA'}
+                    </button>
+                  </div>
+                </div>
+              </Modal>
+            )}
 
             {/* Password */}
             <div style={{ padding: '20px 0' }}>

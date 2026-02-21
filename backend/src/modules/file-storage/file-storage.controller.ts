@@ -37,6 +37,11 @@ export class FileStorageController {
         res.end(buffer);
     }
 
+    @Post(':id/verify')
+    async verifyIntegrity(@Param('id') id: string, @Request() req) {
+        return this.fileStorageService.verifyFileIntegrity(id, req.user.userId);
+    }
+
     @Delete(':id')
     async deleteFile(@Param('id') id: string, @Request() req) {
         return this.fileStorageService.deleteFile(id, req.user.userId);
