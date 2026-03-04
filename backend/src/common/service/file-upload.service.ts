@@ -1,32 +1,55 @@
-// TODO: File Upload Service Implementation
-// 1. Configure Multer storage
-//    - Custom storage engine for encrypted files
-//    - Generate unique filenames
-//    - Organize files by date/user
-// 2. File validation
-//    - validateFileType(mimetype: string, allowedTypes: string[])
-//    - validateFileSize(size: number, maxSize: number)
-//    - scanForMaliciousContent(buffer: Buffer)
-// 3. Image processing (optional)
-//    - npm install sharp
-//    - generateThumbnail(imageBuffer: Buffer, width: number, height: number)
-//    - compressImage(imageBuffer: Buffer, quality: number)
-//    - extractImageMetadata(imageBuffer: Buffer)
-// 4. File metadata extraction
-//    - extractMetadata(file: Express.Multer.File)
-//    - Get file dimensions for images
-//    - Get duration for videos
-//    - Get page count for PDFs
-// 5. Temporary file cleanup
-//    - cleanupTempFiles(olderThanHours: number)
-//    - Remove uploaded files not saved to database
-// 6. File streaming
-//    - streamFile(filePath: string, response: Response)
-//    - Support range requests for video streaming
-// 7. Multi-part upload (for large files)
-//    - initializeMultipartUpload(filename: string, totalChunks: number)
-//    - uploadChunk(uploadId: string, chunkIndex: number, chunk: Buffer)
-//    - finalizeMultipartUpload(uploadId: string)
-// 8. Integration with EncryptionService
-//    - Encrypt files before saving
-//    - Store encryption metadata
+import { Injectable, BadRequestException, Logger } from '@nestjs/common';
+import { VirusScanService } from './virus-scan.service';
+import { IntegrityCheckService } from './integrity-check.service';
+import { EncryptionService } from './encryption.service';
+import { FileUtils } from '../../utils/file.utils';
+
+@Injectable()
+export class FileUploadService {
+    private readonly logger = new Logger('FileUpload');
+
+    constructor(
+        private readonly virusScanService: VirusScanService,
+        private readonly integrityCheckService: IntegrityCheckService,
+        private readonly encryptionService: EncryptionService,
+    ) { }
+
+    /**
+     * Process an uploaded file through security checks and encryption.
+     */
+    async processUpload(file: { buffer: Buffer; originalname: string; mimetype: string }): Promise<{
+        filename: string;
+        checksum: string;
+        encryptionMetadata: any;
+    }> {
+        // 1. Scan for virus
+        const scanResult = await this.virusScanService.scanFile(file.buffer, file.originalname);
+        if (!scanResult.isClean) {
+            await this.virusScanService.handleInfectedFile(file.originalname, scanResult.threat || 'Unknown');
+            throw new BadRequestException(`Security alert: file '${file.originalname}' contains malware (${scanResult.threat})`);
+        }
+
+        // 2. Integrity check: Calculate checksum using SHA-256
+        const checksum = this.encryptionService.hashSHA256(file.buffer);
+
+        // 3. Generate a secure, unique filename
+        const sanitizedFilename = FileUtils.generateUniqueFilename(file.originalname);
+
+        // 4. Encrypt the file data
+        // In a real scenario, we'd get a per-file key from KeyManagementService
+        const masterKey = Buffer.alloc(32, 'secure_key_123'); // Example key
+        const encryptedResult = this.encryptionService.encryptFile(file.buffer, masterKey);
+
+        this.logger.log(`File '${file.originalname}' processed and encrypted as '${sanitizedFilename}'`);
+
+        return {
+            filename: sanitizedFilename,
+            checksum,
+            encryptionMetadata: {
+                iv: encryptedResult.iv,
+                tag: encryptedResult.tag,
+                algorithm: 'aes-256-gcm',
+            }
+        };
+    }
+}

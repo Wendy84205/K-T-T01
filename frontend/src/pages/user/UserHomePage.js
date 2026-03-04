@@ -1,16 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Plus, MessageSquare, MoreHorizontal, Phone, Video, Info, Lock, Send, Mic, Image, Paperclip, Smile, Settings, Bell, BellOff, Clock, Shield, LogOut, ChevronLeft, User, File, Download, Trash2, ShieldCheck, CreditCard, HelpCircle, Key, Eye, EyeOff, Check, CheckCheck, Square, X, Forward, Reply, Edit2, Play, Pause, List, Pin, Star, Cloud, Heart, ChevronDown, Users, MoreVertical, FileText, Camera, MapPin, AlertTriangle, BarChart3, Folder, Maximize2, Minimize2 } from 'lucide-react';
+import { Search, Plus, MessageSquare, MoreHorizontal, Phone, Video, Info, Lock, Send, Mic, Image, Paperclip, Smile, Settings, Bell, BellOff, Clock, Shield, LogOut, ChevronLeft, ChevronRight, User, File, Download, Trash2, ShieldCheck, CreditCard, HelpCircle, Key, Eye, EyeOff, Check, CheckCheck, Square, X, Forward, Reply, Edit2, Play, Pause, List, Pin, Star, Cloud, Heart, ChevronDown, Users, MoreVertical, FileText, Camera, MapPin, AlertTriangle, BarChart3, Folder, Maximize2, Minimize2, Compass, Briefcase, Layers } from 'lucide-react';
 import api from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
 import { SearchBar, PinnedMessagesBanner, ConversationSidebar, PollModal } from '../../components/chat/ChatEnhancements';
-import { DiscoverContent } from '../../components/chat/ZaloStyleComponents';
+import { DiscoverContent, MiniAppsContent } from '../../components/chat/ZaloStyleComponents';
 import { EnhancedMessageBubble } from '../../components/chat/EnhancedMessage';
 import StickerPicker from '../../components/chat/StickerPicker';
 import socketService from '../../utils/socket';
 import '../../chat.css';
 
 export default function UserHomePage() {
-  const { user } = useAuth();
+  const { user, isAdmin, isManager } = useAuth();
 
   useEffect(() => {
     const token = localStorage.getItem('accessToken');
@@ -98,6 +98,7 @@ export default function UserHomePage() {
   const [isTyping, setIsTyping] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [showSidebarOnMobile, setShowSidebarOnMobile] = useState(true);
+  const [memberSearchQuery, setMemberSearchQuery] = useState('');
   const [files, setFiles] = useState([]);
   const [filesLoading, setFilesLoading] = useState(false);
   const [showVaultModal, setShowVaultModal] = useState(false);
@@ -1037,9 +1038,29 @@ export default function UserHomePage() {
           />
           <NavIcon
             icon={<Users size={24} />}
-            active={activeTab === 'contacts'}
+            active={activeTab === 'contacts' || activeTab === 'team'}
             onClick={() => setActiveTab('contacts')}
             label="Contacts"
+          />
+          <NavIcon
+            icon={<Briefcase size={24} />}
+            active={activeTab === 'projects'}
+            onClick={() => setActiveTab('projects')}
+            label="Projects"
+          />
+          {(isManager || isAdmin) && (
+            <NavIcon
+              icon={<BarChart3 size={24} />}
+              active={activeTab === 'team'}
+              onClick={() => setActiveTab('team')}
+              label="Team Management"
+            />
+          )}
+          <NavIcon
+            icon={<Compass size={24} />}
+            active={activeTab === 'discover'}
+            onClick={() => setActiveTab('discover')}
+            label="Discover"
           />
           <NavIcon
             icon={<Phone size={24} />}
@@ -1309,8 +1330,18 @@ export default function UserHomePage() {
             </div>
           </div>
         )}
+        {activeTab === 'projects' && <ProjectsTasksContent />}
         {activeTab === 'settings' && <SettingsContent user={user} />}
         {activeTab === 'contacts' && <ContactsContent users={availableUsers} onSelect={(id) => { setActiveTab('messages'); handleSelectUser(id); }} />}
+        {activeTab === 'team' && (isManager || isAdmin) && (
+          <TeamContent
+            users={availableUsers}
+            currentUser={user}
+            isAdmin={isAdmin}
+            onSelect={(id) => { setActiveTab('messages'); handleSelectUser(id); }}
+          />
+        )}
+        {activeTab === 'discover' && <DiscoverContent />}
         {activeTab === 'alerts' && <AlertsContent onUpdateCount={loadUnreadCount} />}
         {activeTab === 'calls' && <CallsContent />}
         {activeTab === 'vault' && !selectedChat && (
@@ -2135,11 +2166,13 @@ export default function UserHomePage() {
                       if (next.has(selectedChat)) next.delete(selectedChat);
                       else next.add(selectedChat);
                       return next;
-                    })
+                    }),
+                    onDelete: () => handleDeleteConversation({ id: selectedChat })
                   }}
                   onlineUserIds={onlineUserIds}
                   onClose={() => setShowRightSidebar(false)}
                   currentUserId={user.id}
+                  onConversationUpdated={() => loadConversations()}
                 />
               )
             }
@@ -2256,67 +2289,107 @@ export default function UserHomePage() {
                     color: '#fff',
                     fontSize: '14px',
                     outline: 'none',
-                    marginBottom: '20px'
+                    marginBottom: '15px'
                   }}
                 />
-                <div style={{ marginBottom: '20px' }}>
-                  <div style={{ color: '#8b98a5', fontSize: '12px', marginBottom: '12px' }}>
+                <div style={{ position: 'relative', marginBottom: '15px' }}>
+                  <Search size={16} style={{ position: 'absolute', left: '12px', top: '10px', color: '#8b98a5' }} />
+                  <input
+                    type="text"
+                    placeholder="Search members to add..."
+                    value={memberSearchQuery || ''}
+                    onChange={(e) => setMemberSearchQuery(e.target.value)}
+                    style={{
+                      width: '100%',
+                      background: '#0e1621',
+                      border: '1px solid #2a3441',
+                      borderRadius: '8px',
+                      padding: '8px 12px 8px 36px',
+                      color: '#fff',
+                      fontSize: '13px',
+                      outline: 'none'
+                    }}
+                  />
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                  <div style={{ color: '#8b98a5', fontSize: '12px' }}>
                     Selected: {selectedMembers.length} members
                   </div>
+                  {(isManager || isAdmin) && (
+                    <button
+                      onClick={() => {
+                        const teamIds = availableUsers
+                          .filter(u => isAdmin ? true : (u.managerId === user.id || u.department === user.department))
+                          .map(u => u.id);
+                        setSelectedMembers(prev => [...new Set([...prev, ...teamIds])]);
+                      }}
+                      style={{ background: 'transparent', border: 'none', color: '#667eea', fontSize: '11px', cursor: 'pointer', fontWeight: '700' }}
+                    >
+                      + Select My Team
+                    </button>
+                  )}
                 </div>
               </div>
               <div style={{ overflowY: 'auto', maxHeight: '300px' }}>
-                {availableUsers.map(u => (
-                  <div
-                    key={u.id}
-                    onClick={() => toggleMemberSelection(u.id)}
-                    style={{
-                      padding: '16px 20px',
-                      cursor: 'pointer',
-                      borderBottom: '1px solid #2a3441',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '12px',
-                      background: selectedMembers.includes(u.id) ? '#1a2332' : 'transparent',
-                      transition: 'background 0.2s'
-                    }}
-                  >
-                    <div style={{
-                      width: '24px',
-                      height: '24px',
-                      borderRadius: '6px',
-                      border: `2px solid ${selectedMembers.includes(u.id) ? '#667eea' : '#2a3441'}`,
-                      background: selectedMembers.includes(u.id) ? '#667eea' : 'transparent',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: '#fff'
-                    }}>
-                      {selectedMembers.includes(u.id) && 'Selected'}
-                    </div>
-                    <div style={{
-                      width: '40px',
-                      height: '40px',
-                      borderRadius: '10px',
-                      background: '#667eea',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: '#fff',
-                      fontWeight: '700'
-                    }}>
-                      {u.firstName?.charAt(0) || '?'}
-                    </div>
-                    <div>
-                      <div style={{ color: '#fff', fontWeight: '600', fontSize: '14px' }}>
-                        {u.firstName} {u.lastName}
+                {availableUsers
+                  .filter(u => {
+                    const q = (memberSearchQuery || '').toLowerCase();
+                    return u.firstName?.toLowerCase().includes(q) || u.lastName?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q);
+                  })
+                  .map(u => (
+                    <div
+                      key={u.id}
+                      onClick={() => toggleMemberSelection(u.id)}
+                      style={{
+                        padding: '12px 20px',
+                        cursor: 'pointer',
+                        borderBottom: '1px solid #2a3441',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px',
+                        background: selectedMembers.includes(u.id) ? 'rgba(102, 126, 234, 0.1)' : 'transparent',
+                        transition: 'all 0.2s'
+                      }}
+                    >
+                      <div style={{
+                        width: '20px',
+                        height: '20px',
+                        borderRadius: '6px',
+                        border: `2px solid ${selectedMembers.includes(u.id) ? '#667eea' : '#2a3441'}`,
+                        background: selectedMembers.includes(u.id) ? '#667eea' : 'transparent',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#fff',
+                        flexShrink: 0
+                      }}>
+                        {selectedMembers.includes(u.id) && <Check size={14} />}
                       </div>
-                      <div style={{ color: '#8b98a5', fontSize: '12px' }}>
-                        {u.email}
+                      <div style={{
+                        width: '36px',
+                        height: '36px',
+                        borderRadius: '8px',
+                        background: '#2a3441',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#fff',
+                        fontWeight: '700',
+                        fontSize: '14px',
+                        flexShrink: 0
+                      }}>
+                        {u.firstName?.charAt(0) || '?'}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ color: '#fff', fontWeight: '600', fontSize: '13px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {u.firstName} {u.lastName}
+                        </div>
+                        <div style={{ color: '#8b98a5', fontSize: '11px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {u.email}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
               </div>
               <div style={{ padding: '20px', borderTop: '1px solid #2a3441' }}>
                 <button
@@ -3553,7 +3626,7 @@ function SettingsContent({ user }) {
               <button
                 onClick={user?.mfaRequired ?
                   async () => {
-                    if (confirm('Disable 2FA?')) {
+                    if (window.confirm('Disable 2FA?')) {
                       await api.updateProfile({ mfaRequired: false });
                       window.location.reload();
                     }
@@ -3811,44 +3884,232 @@ function SettingsContent({ user }) {
 
 function ContactsContent({ users, onSelect }) {
   const [term, setTerm] = React.useState('');
-  const filtered = users?.filter(u =>
-    u.firstName?.toLowerCase().includes(term.toLowerCase()) ||
-    u.lastName?.toLowerCase().includes(term.toLowerCase()) ||
-    u.email?.toLowerCase().includes(term.toLowerCase())
-  ) || [];
+  const [filter, setFilter] = useState('all'); // all, online
+
+  const filtered = users?.filter(u => {
+    const matchSearch = u.firstName?.toLowerCase().includes(term.toLowerCase()) ||
+      u.lastName?.toLowerCase().includes(term.toLowerCase()) ||
+      u.email?.toLowerCase().includes(term.toLowerCase());
+    return matchSearch;
+  }) || [];
 
   return (
-    <div style={{ padding: '30px', color: '#fff', height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <h2 style={{ fontSize: '28px', marginBottom: '20px' }}>Contacts</h2>
-      <div style={{ marginBottom: '20px', position: 'relative' }}>
-        <Search size={20} style={{ position: 'absolute', left: '15px', top: '12px', color: '#8b98a5' }} />
+    <div style={{ padding: '30px', color: '#fff', height: '100%', display: 'flex', flexDirection: 'column', maxWidth: '1200px', margin: '0 auto' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
+        <div>
+          <h2 style={{ fontSize: '32px', margin: 0, fontWeight: '700' }}>Directory</h2>
+          <p style={{ color: '#8b98a5', marginTop: '8px' }}>Connect with your colleagues securely</p>
+        </div>
+      </div>
+
+      <div style={{ marginBottom: '30px', position: 'relative' }}>
+        <Search size={20} style={{ position: 'absolute', left: '20px', top: '15px', color: '#667eea' }} />
         <input
           value={term}
           onChange={e => setTerm(e.target.value)}
-          placeholder="Search contacts..."
+          placeholder="Search by name, email or department..."
           style={{
             width: '100%',
-            padding: '12px 12px 12px 45px',
+            padding: '16px 16px 16px 55px',
             background: '#151f2e',
             border: '1px solid #2a3441',
-            borderRadius: '12px',
+            borderRadius: '16px',
             color: '#fff',
-            outline: 'none'
+            outline: 'none',
+            fontSize: '15px',
+            transition: 'all 0.2s',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
           }}
         />
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '20px', overflowY: 'auto' }}>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px', overflowY: 'auto' }}>
         {filtered.map(u => (
-          <div key={u.id} onClick={() => onSelect(u.id)} style={{ background: '#151f2e', padding: '20px', borderRadius: '15px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '15px', transition: 'transform 0.2s' }} onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'} onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}>
-            <div style={{ width: '50px', height: '50px', borderRadius: '12px', background: '#2a3441', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>
+          <div
+            key={u.id}
+            onClick={() => onSelect(u.id)}
+            style={{
+              background: '#151f2e',
+              padding: '24px',
+              borderRadius: '24px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '18px',
+              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+              border: '1px solid #2a3441'
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.transform = 'translateY(-5px) scale(1.02)';
+              e.currentTarget.style.borderColor = '#667eea';
+              e.currentTarget.style.boxShadow = '0 10px 30px rgba(0,0,0,0.3)';
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.transform = 'translateY(0) scale(1)';
+              e.currentTarget.style.borderColor = '#2a3441';
+              e.currentTarget.style.boxShadow = 'none';
+            }}
+          >
+            <div style={{
+              width: '60px',
+              height: '60px',
+              borderRadius: '20px',
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '24px',
+              fontWeight: '800',
+              color: '#fff',
+              boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)'
+            }}>
               {u.firstName?.charAt(0)}
             </div>
-            <div>
-              <div style={{ fontWeight: '600' }}>{u.firstName} {u.lastName}</div>
-              <div style={{ fontSize: '12px', color: '#8b98a5' }}>{u.email}</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: '700', fontSize: '17px', color: '#fff', marginBottom: '2px' }}>{u.firstName} {u.lastName}</div>
+              <div style={{ fontSize: '13px', color: '#667eea', fontWeight: '600', marginBottom: '4px' }}>{u.jobTitle || u.department || 'Team Member'}</div>
+              <div style={{ fontSize: '12px', color: '#8b98a5', overflow: 'hidden', textOverflow: 'ellipsis' }}>{u.email}</div>
             </div>
+            <div style={{
+              width: '10px',
+              height: '10px',
+              borderRadius: '50%',
+              background: '#4ade80', // In a real app check online status
+              boxShadow: '0 0 10px #4ade80'
+            }} />
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function TeamContent({ users, currentUser, onSelect, isAdmin }) {
+  const [broadcastSent, setBroadcastSent] = useState(false);
+  const [broadcastMsg, setBroadcastMsg] = useState('');
+  const [showBroadcast, setShowBroadcast] = useState(false);
+
+  const teamMembers = users?.filter(u => isAdmin ? true : (u.managerId === currentUser.id || u.department === currentUser.department)) || [];
+
+  const handleBroadcast = async () => {
+    if (!broadcastMsg.trim()) return;
+    try {
+      const promises = teamMembers.map(async (u) => {
+        const conv = await api.getOrCreateDirectConversation(u.id);
+        return api.sendMessage(conv.id, broadcastMsg, 'broadcast');
+      });
+      await Promise.all(promises);
+      setBroadcastSent(true);
+      setBroadcastMsg('');
+      setTimeout(() => setBroadcastSent(false), 3000);
+      setShowBroadcast(false);
+    } catch (err) {
+      alert('Failed to send broadcast');
+    }
+  };
+
+  return (
+    <div style={{ padding: '40px', color: '#fff', maxWidth: '1200px', margin: '0 auto', height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '40px' }}>
+        <div>
+          <h2 style={{ fontSize: '32px', margin: 0, fontWeight: '700' }}>Team Management</h2>
+          <p style={{ color: '#8b98a5', marginTop: '8px' }}>Manage and communicate with your direct reports</p>
+        </div>
+        <div style={{ display: 'flex', gap: '15px' }}>
+          <button
+            onClick={() => setShowBroadcast(!showBroadcast)}
+            style={{
+              background: '#667eea', border: 'none', color: '#fff',
+              padding: '12px 24px', borderRadius: '14px', cursor: 'pointer',
+              fontWeight: '700', display: 'flex', alignItems: 'center', gap: '10px',
+              boxShadow: '0 8px 16px rgba(102, 126, 234, 0.3)'
+            }}
+          >
+            <Send size={18} /> Team Broadcast
+          </button>
+        </div>
+      </div>
+
+      {showBroadcast && (
+        <div style={{ background: '#151f2e', padding: '24px', borderRadius: '24px', border: '1px solid #667eea', marginBottom: '30px', animation: 'fadeIn 0.3s ease' }}>
+          <h4 style={{ margin: '0 0 15px 0' }}>Send message to all {teamMembers.length} members</h4>
+          <textarea
+            value={broadcastMsg}
+            onChange={e => setBroadcastMsg(e.target.value)}
+            placeholder="Type your message here..."
+            style={{ width: '100%', background: '#0e1621', border: '1px solid #2a3441', borderRadius: '12px', padding: '15px', color: '#fff', height: '100px', outline: 'none', marginBottom: '15px' }}
+          />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+            <button onClick={() => setShowBroadcast(false)} style={{ background: 'transparent', border: 'none', color: '#8b98a5', padding: '10px 20px', cursor: 'pointer' }}>Cancel</button>
+            <button onClick={handleBroadcast} style={{ background: '#667eea', border: 'none', color: '#fff', padding: '10px 25px', borderRadius: '10px', cursor: 'pointer', fontWeight: '600' }}>Send Broadcast</button>
+          </div>
+        </div>
+      )}
+
+      {broadcastSent && (
+        <div style={{ background: '#10b981', color: '#fff', padding: '15px', borderRadius: '15px', marginBottom: '30px', textAlign: 'center', fontWeight: '700' }}>
+          Broadcast message sent successfully!
+        </div>
+      )}
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '25px', marginBottom: '40px' }}>
+        {[
+          { label: 'Team Size', val: teamMembers.length, color: '#667eea', icon: <Users /> },
+          { label: 'Online Now', val: teamMembers.filter(m => true).length, color: '#10b981', icon: <Clock /> },
+          { label: 'Files Shared', val: '42', color: '#f59e0b', icon: <File /> },
+          { label: 'Security Level', val: 'SECURED', color: '#ef4444', icon: <Shield /> },
+        ].map(s => (
+          <div key={s.label} style={{ background: '#151f2e', padding: '25px', borderRadius: '24px', border: '1px solid #2a3441' }}>
+            <div style={{ color: s.color, marginBottom: '15px' }}>{s.icon}</div>
+            <div style={{ fontSize: '28px', fontWeight: '800', marginBottom: '5px' }}>{s.val}</div>
+            <div style={{ color: '#8b98a5', fontSize: '13px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '1px' }}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ flex: 1, overflowY: 'auto' }}>
+        <h3 style={{ fontSize: '20px', marginBottom: '20px', fontWeight: '700' }}>Team Members</h3>
+        <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 12px' }}>
+          <thead>
+            <tr style={{ textAlign: 'left', color: '#8b98a5', fontSize: '13px' }}>
+              <th style={{ padding: '0 20px' }}>Name</th>
+              <th>Role</th>
+              <th>Department</th>
+              <th>Status</th>
+              <th style={{ textAlign: 'right', padding: '0 20px' }}>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {teamMembers.map(u => (
+              <tr key={u.id} style={{ background: '#151f2e', transition: 'all 0.2s' }}>
+                <td style={{ padding: '15px 20px', borderRadius: '16px 0 0 16px', borderLeft: '1px solid #2a3441', borderTop: '1px solid #2a3441', borderBottom: '1px solid #2a3441' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                    <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: '#2a3441', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {u.firstName?.charAt(0)}
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: '600' }}>{u.firstName} {u.lastName}</div>
+                      <div style={{ fontSize: '12px', color: '#8b98a5' }}>{u.email}</div>
+                    </div>
+                  </div>
+                </td>
+                <td style={{ borderTop: '1px solid #2a3441', borderBottom: '1px solid #2a3441', fontSize: '14px' }}>{u.jobTitle || 'Engineer'}</td>
+                <td style={{ borderTop: '1px solid #2a3441', borderBottom: '1px solid #2a3441', fontSize: '14px' }}>{u.department}</td>
+                <td style={{ borderTop: '1px solid #2a3441', borderBottom: '1px solid #2a3441' }}>
+                  <span style={{ padding: '4px 12px', borderRadius: '20px', background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', fontSize: '12px', fontWeight: '700' }}>Active</span>
+                </td>
+                <td style={{ padding: '15px 20px', borderRadius: '0 16px 16px 0', borderRight: '1px solid #2a3441', borderTop: '1px solid #2a3441', borderBottom: '1px solid #2a3441', textAlign: 'right' }}>
+                  <button
+                    onClick={() => onSelect(u.id)}
+                    style={{ background: 'rgba(102, 126, 234, 0.14)', border: 'none', color: '#667eea', padding: '8px 16px', borderRadius: '10px', cursor: 'pointer', fontWeight: '700', fontSize: '13px' }}
+                  >
+                    Quick Chat
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );
@@ -4191,6 +4452,105 @@ function AlertsContent({ onUpdateCount }) {
           ))
         )}
       </div>
+    </div>
+  );
+}
+
+function ProjectsTasksContent() {
+  const [projects, setProjects] = useState([]);
+  const [selectedProject, setSelectedProject] = useState(null);
+  const [tasks, setTasks] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [tasksLoading, setTasksLoading] = useState(false);
+
+  useEffect(() => {
+    const loadProjects = async () => {
+      try {
+        setLoading(true);
+        const res = await fetch('/api/v1/projects', {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` }
+        });
+        const data = await res.json();
+        setProjects(Array.isArray(data) ? data : []);
+      } catch (err) {
+        console.error('Failed to load projects:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadProjects();
+  }, []);
+
+  const loadTasks = async (projectId) => {
+    try {
+      setTasksLoading(true);
+      const res = await fetch(`/api/v1/projects/${projectId}/tasks`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` }
+      });
+      const data = await res.json();
+      setTasks(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Failed to load tasks:', err);
+    } finally {
+      setTasksLoading(false);
+    }
+  };
+
+  const handleProjectClick = (p) => {
+    setSelectedProject(p);
+    loadTasks(p.id);
+  };
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'active': case 'in_progress': return '#10b981';
+      case 'planned': return '#667eea';
+      case 'on_hold': return '#f59e0b';
+      case 'completed': return '#8b98a5';
+      default: return '#8b98a5';
+    }
+  };
+
+  return (
+    <div style={{ padding: '30px', color: '#fff', height: '100%', display: 'flex', gap: '30px', maxWidth: '1400px', margin: '0 auto', width: '100%' }}>
+      <div style={{ width: selectedProject ? '350px' : '100%', display: 'flex', flexDirection: 'column' }}>
+        <h2 style={{ fontSize: '32px', margin: '0 0 20px 0', fontWeight: '800' }}>Secure Projects</h2>
+        {loading ? <div style={{ color: '#8b98a5' }}>Loading...</div> : (
+          <div style={{ display: 'grid', gridTemplateColumns: selectedProject ? '1fr' : 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px', overflowY: 'auto' }}>
+            {projects.map(p => (
+              <div key={p.id} onClick={() => handleProjectClick(p)} style={{ background: '#151f2e', padding: '24px', borderRadius: '24px', border: `1px solid ${selectedProject?.id === p.id ? '#667eea' : '#2a3441'}`, cursor: 'pointer', transition: 'all 0.2s' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px' }}>
+                  <span style={{ fontSize: '10px', fontWeight: '800', textTransform: 'uppercase', color: getStatusColor(p.status), background: `${getStatusColor(p.status)}15`, padding: '4px 8px', borderRadius: '6px' }}>{p.status}</span>
+                  <Layers size={16} color="#8b98a5" />
+                </div>
+                <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '700' }}>{p.name}</h3>
+                <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', color: '#8b98a5' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Clock size={14} /> {p.deadline ? new Date(p.deadline).toLocaleDateString() : 'N/A'}</div>
+                  <ChevronRight size={16} />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      {selectedProject && (
+        <div style={{ flex: 1, background: '#151f2e', borderRadius: '24px', padding: '30px', border: '1px solid #2a3441', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
+            <h2 style={{ margin: 0 }}>{selectedProject.name}</h2>
+            <button onClick={() => setSelectedProject(null)} style={{ background: 'transparent', border: 'none', color: '#fff', cursor: 'pointer' }}><X size={24} /></button>
+          </div>
+          {tasksLoading ? <div style={{ color: '#8b98a5' }}>Loading...</div> : (
+            <div style={{ display: 'grid', gap: '12px' }}>
+              {tasks.length > 0 ? tasks.map(t => (
+                <div key={t.id} style={{ background: '#0e1621', padding: '16px', borderRadius: '14px', border: '1px solid #2a3441', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{ width: '18px', height: '18px', borderRadius: '50%', border: '2px solid #667eea', background: t.status === 'done' ? '#667eea' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{t.status === 'done' && <Check size={12} />}</div>
+                  <div>{t.title}</div>
+                </div>
+              )) : <div style={{ color: '#8b98a5' }}>No tasks found in archives.</div>}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

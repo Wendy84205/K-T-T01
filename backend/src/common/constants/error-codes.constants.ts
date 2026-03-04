@@ -1,32 +1,50 @@
-// TODO: Error Codes Constants
-// 1. Authentication error codes
-//    - AUTH_001 = 'INVALID_CREDENTIALS'
-//    - AUTH_002 = 'TOKEN_EXPIRED'
-//    - AUTH_003 = 'TOKEN_INVALID'
-//    - AUTH_004 = 'MFA_REQUIRED'
-//    - AUTH_005 = 'MFA_INVALID'
-//    - AUTH_006 = 'ACCOUNT_LOCKED'
-// 2. Authorization error codes
-//    - AUTHZ_001 = 'INSUFFICIENT_PERMISSIONS'
-//    - AUTHZ_002 = 'ROLE_REQUIRED'
-//    - AUTHZ_003 = 'ACCESS_DENIED'
-// 3. Validation error codes
-//    - VAL_001 = 'INVALID_INPUT'
-//    - VAL_002 = 'MISSING_REQUIRED_FIELD'
-//    - VAL_003 = 'INVALID_FORMAT'
-//    - VAL_004 = 'VALUE_OUT_OF_RANGE'
-// 4. File error codes
-//    - FILE_001 = 'FILE_TOO_LARGE'
-//    - FILE_002 = 'INVALID_FILE_TYPE'
-//    - FILE_003 = 'FILE_NOT_FOUND'
-//    - FILE_004 = 'ENCRYPTION_FAILED'
-//    - FILE_005 = 'VIRUS_DETECTED'
-// 5. Database error codes
-//    - DB_001 = 'DUPLICATE_ENTRY'
-//    - DB_002 = 'NOT_FOUND'
-//    - DB_003 = 'CONSTRAINT_VIOLATION'
-// 6. Security error codes
-//    - SEC_001 = 'SUSPICIOUS_ACTIVITY'
-//    - SEC_002 = 'RATE_LIMIT_EXCEEDED'
-//    - SEC_003 = 'IP_BLOCKED'
-//    - SEC_004 = 'SESSION_HIJACK_DETECTED'
+export const ERROR_CODES = {
+    // Authentication error codes
+    AUTH: {
+        INVALID_CREDENTIALS: 'AUTH_001',
+        TOKEN_EXPIRED: 'AUTH_002',
+        TOKEN_INVALID: 'AUTH_003',
+        MFA_REQUIRED: 'AUTH_004',
+        MFA_INVALID: 'AUTH_005',
+        ACCOUNT_LOCKED: 'AUTH_006',
+    },
+
+    // Authorization error codes
+    AUTHZ: {
+        INSUFFICIENT_PERMISSIONS: 'AUTHZ_001',
+        ROLE_REQUIRED: 'AUTHZ_002',
+        ACCESS_DENIED: 'AUTHZ_003',
+    },
+
+    // Validation error codes
+    VAL: {
+        INVALID_INPUT: 'VAL_001',
+        MISSING_REQUIRED_FIELD: 'VAL_002',
+        INVALID_FORMAT: 'VAL_003',
+        VALUE_OUT_OF_RANGE: 'VAL_004',
+    },
+
+    // File error codes
+    FILE: {
+        FILE_TOO_LARGE: 'FILE_001',
+        INVALID_FILE_TYPE: 'FILE_002',
+        FILE_NOT_FOUND: 'FILE_003',
+        ENCRYPTION_FAILED: 'FILE_004',
+        VIRUS_DETECTED: 'FILE_005',
+    },
+
+    // Database error codes
+    DB: {
+        DUPLICATE_ENTRY: 'DB_001',
+        NOT_FOUND: 'DB_002',
+        CONSTRAINT_VIOLATION: 'DB_003',
+    },
+
+    // Security error codes
+    SEC: {
+        SUSPICIOUS_ACTIVITY: 'SEC_001',
+        RATE_LIMIT_EXCEEDED: 'SEC_002',
+        IP_BLOCKED: 'SEC_003',
+        SESSION_HIJACK_DETECTED: 'SEC_004',
+    },
+};

@@ -79,6 +79,123 @@ export function EnhancedMessageBubble({ message, isOwn, showAvatar, currentUserI
 
     if (!message) return null;
 
+    if (message.messageType === 'system') {
+        return (
+            <div style={{
+                display: 'flex',
+                justifyContent: 'center',
+                margin: '16px 0',
+                width: '100%',
+                opacity: 0.8
+            }}>
+                <div style={{
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    padding: '6px 20px',
+                    borderRadius: '20px',
+                    fontSize: '12px',
+                    color: '#8b98a5',
+                    border: '1px solid rgba(255, 255, 255, 0.05)',
+                    textAlign: 'center',
+                    fontStyle: 'italic',
+                    backdropFilter: 'blur(10px)'
+                }}>
+                    {message.content}
+                </div>
+            </div>
+        );
+    }
+
+    if (message.messageType === 'poll') {
+        const lines = message.content.split('\n');
+        const question = lines[0]?.replace('Poll: ', '') || 'Untitled Poll';
+        const options = lines[1]?.replace('Options: ', '').split(', ') || [];
+
+        return (
+            <div style={{
+                display: 'flex',
+                justifyContent: isOwn ? 'flex-end' : 'flex-start',
+                width: '100%',
+                margin: '12px 0'
+            }}>
+                <div style={{
+                    background: '#151f2e',
+                    padding: '24px',
+                    borderRadius: '24px',
+                    border: '2px solid #667eea',
+                    width: '320px',
+                    boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
+                    position: 'relative'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+                        <div style={{ width: '32px', height: '32px', background: 'rgba(102, 126, 234, 0.1)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <span style={{ fontSize: '18px' }}>📊</span>
+                        </div>
+                        <h4 style={{ margin: 0, fontSize: '16px', fontWeight: '700', color: '#fff' }}>{question}</h4>
+                    </div>
+                    <div style={{ display: 'grid', gap: '8px' }}>
+                        {options.map((opt, i) => (
+                            <button
+                                key={i}
+                                style={{
+                                    background: 'rgba(102, 126, 234, 0.05)',
+                                    border: '1px solid #2a3441',
+                                    padding: '12px 16px',
+                                    borderRadius: '12px',
+                                    color: '#fff',
+                                    textAlign: 'left',
+                                    fontSize: '14px',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s',
+                                    fontWeight: '500'
+                                }}
+                                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(102, 126, 234, 0.15)'; e.currentTarget.style.borderColor = '#667eea'; }}
+                                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(102, 126, 234, 0.05)'; e.currentTarget.style.borderColor = '#2a3441'; }}
+                            >
+                                {opt}
+                            </button>
+                        ))}
+                    </div>
+                    <div style={{ marginTop: '15px', padding: '10px', background: 'rgba(0,0,0,0.2)', borderRadius: '12px', textAlign: 'center', fontSize: '11px', color: '#8b98a5' }}>
+                        Voting is anonymous • Results will be shared after closing
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    if (message.messageType === 'broadcast') {
+        return (
+            <div style={{
+                display: 'flex',
+                justifyContent: 'center',
+                width: '100%',
+                margin: '20px 0'
+            }}>
+                <div style={{
+                    background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
+                    padding: '24px',
+                    borderRadius: '24px',
+                    border: '1px solid #667eea',
+                    width: '90%',
+                    maxWidth: '500px',
+                    position: 'relative',
+                    textAlign: 'center',
+                    backdropFilter: 'blur(10px)'
+                }}>
+                    <div style={{ position: 'absolute', top: '-15px', left: '50%', transform: 'translateX(-50%)', background: '#667eea', padding: '4px 16px', borderRadius: '12px', color: '#fff', fontSize: '11px', fontWeight: '800', letterSpacing: '1px' }}>
+                        TEAM BROADCAST
+                    </div>
+                    <div style={{ color: '#fff', fontSize: '16px', fontWeight: '600', lineHeight: '1.6', marginBottom: '12px' }}>
+                        {message.content}
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#8b98a5' }}>
+                        Sent by {message.sender?.firstName || 'Manager'} • {new Date(message.createdAt).toLocaleTimeString()}
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     const handleReaction = async (emoji) => {
         console.log(`[Reactions] Clicked ${emoji} for message ${message.id}`);
         try {
