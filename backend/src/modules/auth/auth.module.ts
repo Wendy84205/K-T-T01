@@ -18,6 +18,8 @@ import { AuthService } from './auth.service';
 import { RegisterService } from './services/register.service';
 import { ValidationService } from './services/validation.service';
 import { EmployeeIdGeneratorService } from './services/employee-id-generator.service';
+import { TokenService } from './services/token.service';
+import { SessionService } from './services/session.service';
 
 // Strategies
 import { JwtStrategy } from './strategies/jwt.strategy';
@@ -52,6 +54,8 @@ import { UsersModule } from '../users/users.module';
     RegisterService,
     ValidationService,
     EmployeeIdGeneratorService,
+    TokenService,
+    SessionService,
     JwtStrategy,
     LocalStrategy
   ],

@@ -1,32 +1,60 @@
-// TODO: Anomaly Detection Service Implementation
-// 1. Install dependencies
-//    - npm install @nestjs/schedule (for periodic checks)
-// 2. Detect unusual login patterns
-//    - analyzeLoginPatterns(userId: string, hours: number)
-//    - Detect logins from new locations
-//    - Detect logins at unusual times
-//    - Detect multiple failed attempts followed by success
-// 3. Detect unusual file access patterns
-//    - analyzeFileAccessPatterns(userId: string, days: number)
-//    - Detect mass file downloads
-//    - Detect access to sensitive files outside work hours
-// 4. Detect brute force attacks
-//    - detectBruteForce(ipAddress: string, timeWindow: number)
-//    - Track failed login attempts per IP
-//    - Auto-block IPs with excessive failures
-// 5. Detect account takeover attempts
-//    - detectAccountTakeover(userId: string)
-//    - Check for password changes + unusual activity
-//    - Check for MFA disable attempts
-// 6. Machine learning integration (optional)
-//    - Build user behavior baseline
-//    - Detect deviations from normal behavior
-//    - Use clustering algorithms for anomaly detection
-// 7. Alert generation
-//    - createSecurityAlert(type: string, severity: string, details: any)
-//    - Integrate with NotificationService
-//    - Send alerts to admins
-// 8. Scheduled anomaly scans
-//    - @Cron('0 */6 * * *') // Every 6 hours
-//    - scanForAnomalies()
-//    - Generate daily anomaly report
+import { Injectable, Logger } from '@nestjs/common';
+import { AuditService } from './audit.service';
+
+@Injectable()
+export class AnomalyDetectionService {
+    private readonly logger = new Logger('AnomalyDetection');
+
+    constructor(private readonly auditService: AuditService) { }
+
+    /**
+     * Analyze login patterns for a user to detect suspicious activity
+     */
+    async analyzeLoginPatterns(userId: string): Promise<{ suspicious: boolean; reason?: string }> {
+        const recentLogs = await this.auditService.getUserLogs(userId, 50);
+        const logins = recentLogs.filter(log => log.eventType === 'LOGIN_SUCCESS' || log.eventType === 'LOGIN_FAILURE');
+
+        if (logins.length < 5) return { suspicious: false };
+
+        // 1. Detect multiple failures followed by a success (Brute force sign)
+        let failuresBeforeSuccess = 0;
+        for (const log of logins) {
+            if (log.eventType === 'LOGIN_FAILURE') {
+                failuresBeforeSuccess++;
+            } else if (log.eventType === 'LOGIN_SUCCESS') {
+                if (failuresBeforeSuccess >= 3) {
+                    return { suspicious: true, reason: 'Multiple failed logins followed by success (Potential brute force)' };
+                }
+                failuresBeforeSuccess = 0;
+            }
+        }
+
+        // 2. Detect logins from different IP addresses in short time
+        const distinctIps = new Set(logins.map(l => l.ipAddress));
+        if (distinctIps.size > 3) {
+            return { suspicious: true, reason: 'Logins from multiple distinct IP addresses recently' };
+        }
+
+        return { suspicious: false };
+    }
+
+    /**
+     * Detect mass file access (potential data exfiltration)
+     */
+    async detectMassFileAccess(userId: string): Promise<boolean> {
+        const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+        const logs = await this.auditService.getUserLogs(userId, 100);
+
+        const recentDownloads = logs.filter(log =>
+            log.eventType === 'FILE_DOWNLOAD' &&
+            new Date(log.createdAt) > oneHourAgo
+        );
+
+        if (recentDownloads.length > 50) {
+            this.logger.warn(`Massive file access detected for user ${userId}: ${recentDownloads.length} downloads in 1 hour`);
+            return true;
+        }
+
+        return false;
+    }
+}

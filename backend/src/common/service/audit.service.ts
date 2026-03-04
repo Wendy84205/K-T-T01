@@ -1,38 +1,95 @@
-// TODO: Audit Service Implementation
-// 1. Log all security events to database
-//    - createAuditLog(userId: string, eventType: string, entityType: string, entityId: string, action: string, metadata?: any)
-//    - Auto-capture IP address, user agent, timestamp
-//    - Store old and new values for updates
-// 2. Create audit trail for critical events
-//    - Login attempts (success/failure) with IP, location, device
-//    - File uploads/downloads with file metadata
-//    - MFA setup/usage events
-//    - Permission changes (role assignments, access grants)
-//    - Password changes
-//    - User creation/deletion
-//    - Sensitive data access
-//    - Configuration changes
-// 3. Search/filter audit logs
-//    - searchLogs(filters: { userId?, eventType?, entityType?, startDate?, endDate?, ipAddress? })
-//    - Full-text search in metadata
-//    - Advanced filtering by multiple criteria
-//    - Pagination support
-// 4. Export audit logs
-//    - exportToCSV(filters?: any): Promise<string>
-//    - exportToJSON(filters?: any): Promise<string>
-//    - exportToPDF(filters?: any): Promise<Buffer> (for compliance reports)
-//    - Support date range exports
-// 5. Audit log retention
-//    - archiveOldLogs(olderThanDays: number)
-//    - Compress archived logs
-//    - Move to cold storage
-// 6. Compliance reporting
-//    - generateComplianceReport(startDate: Date, endDate: Date)
-//    - Track data access for GDPR/HIPAA compliance
-//    - User activity summary
-// 7. Real-time audit streaming
-//    - Emit audit events via WebSocket for admin dashboard
-//    - Live activity monitoring
-// 8. Integration with SecurityService
-//    - Auto-create security events for suspicious activities
-//    - Trigger alerts based on audit patterns
+import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { AuditLog } from '../../database/entities/security/audit-log.entity';
+
+@Injectable()
+export class AuditService {
+    constructor(
+        @InjectRepository(AuditLog)
+        private readonly auditLogRepository: Repository<AuditLog>,
+    ) { }
+
+    /**
+     * Create a new audit log entry
+     */
+    async createAuditLog(data: {
+        userId?: string;
+        eventType: string;
+        entityType: string;
+        entityId?: string;
+        action?: string;
+        description?: string;
+        oldValues?: any;
+        newValues?: any;
+        ipAddress?: string;
+        userAgent?: string;
+        severity?: string;
+        metadata?: any;
+    }): Promise<AuditLog> {
+        const auditLog = this.auditLogRepository.create({
+            ...data,
+            severity: data.severity || 'INFO',
+        });
+
+        return await this.auditLogRepository.save(auditLog);
+    }
+
+    /**
+     * Get logs for a specific user
+     */
+    async getUserLogs(userId: string, limit: number = 50) {
+        return await this.auditLogRepository.find({
+            where: { userId },
+            order: { createdAt: 'DESC' },
+            take: limit,
+        });
+    }
+
+    /**
+     * Search and filter audit logs
+     */
+    async searchLogs(filters: any, page: number = 1, limit: number = 20) {
+        const query = this.auditLogRepository.createQueryBuilder('log');
+
+        if (filters.userId) query.andWhere('log.userId = :userId', { userId: filters.userId });
+        if (filters.eventType) query.andWhere('log.eventType = :eventType', { eventType: filters.eventType });
+        if (filters.entityType) query.andWhere('log.entityType = :entityType', { entityType: filters.entityType });
+        if (filters.severity) query.andWhere('log.severity = :severity', { severity: filters.severity });
+
+        if (filters.startDate && filters.endDate) {
+            query.andWhere('log.createdAt BETWEEN :start AND :end', {
+                start: filters.startDate,
+                end: filters.endDate
+            });
+        }
+
+        const [results, total] = await query
+            .orderBy('log.createdAt', 'DESC')
+            .skip((page - 1) * limit)
+            .take(limit)
+            .getManyAndCount();
+
+        return {
+            results,
+            total,
+            page,
+            limit,
+            totalPages: Math.ceil(total / limit),
+        };
+    }
+
+    /**
+     * Get recent critical security events
+     */
+    async getRecentCriticalEvents(limit: number = 10) {
+        return await this.auditLogRepository.find({
+            where: [
+                { severity: 'HIGH' },
+                { severity: 'CRITICAL' }
+            ],
+            order: { createdAt: 'DESC' },
+            take: limit,
+        });
+    }
+}

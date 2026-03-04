@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Delete, Body, Param, Query, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, Request } from '@nestjs/common';
 import { ChatService } from './chat.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ChatGateway } from './chat.gateway';
@@ -109,6 +109,50 @@ export class ChatController {
     @Post('conversations/:conversationId/leave')
     async leaveGroup(@Request() req, @Param('conversationId') conversationId: string) {
         return this.chatService.leaveGroup(conversationId, req.user.userId);
+    }
+
+    @Delete('conversations/:conversationId/members/:memberId')
+    async removeMemberFromGroup(
+        @Request() req,
+        @Param('conversationId') conversationId: string,
+        @Param('memberId') memberId: string,
+    ) {
+        return this.chatService.removeMemberFromGroup(conversationId, req.user.userId, memberId);
+    }
+
+    @Patch('conversations/:conversationId/name')
+    async renameGroup(
+        @Request() req,
+        @Param('conversationId') conversationId: string,
+        @Body('name') name: string,
+    ) {
+        return this.chatService.renameGroup(conversationId, req.user.userId, name);
+    }
+
+    @Post('conversations/:conversationId/members/:memberId/promote')
+    async promoteToAdmin(
+        @Request() req,
+        @Param('conversationId') conversationId: string,
+        @Param('memberId') memberId: string,
+    ) {
+        return this.chatService.changeGroupMemberRole(conversationId, req.user.userId, memberId, 'admin');
+    }
+
+    @Post('conversations/:conversationId/members/:memberId/demote')
+    async demoteToMember(
+        @Request() req,
+        @Param('conversationId') conversationId: string,
+        @Param('memberId') memberId: string,
+    ) {
+        return this.chatService.changeGroupMemberRole(conversationId, req.user.userId, memberId, 'member');
+    }
+
+    @Get('conversations/:conversationId/info')
+    async getConversationInfo(
+        @Request() req,
+        @Param('conversationId') conversationId: string,
+    ) {
+        return this.chatService.getConversationInfo(conversationId, req.user.userId);
     }
 
     @Delete('conversations/:conversationId')

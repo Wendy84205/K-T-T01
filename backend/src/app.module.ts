@@ -12,7 +12,11 @@ import { SystemSettingsModule } from './modules/system-settings/system-settings.
 import { ChatModule } from './modules/chat/chat.module';
 import { FileStorageModule } from './modules/file-storage/file-storage.module';
 import { NotificationModule } from './modules/notification/notification.module';
+import { ProjectModule } from './modules/project/project.module';
 import databaseConfig from './config/database.config';
+
+import { ScheduleModule } from '@nestjs/schedule';
+import { JobsModule } from './jobs/jobs.module';
 
 @Module({
   imports: [
@@ -22,6 +26,8 @@ import databaseConfig from './config/database.config';
       envFilePath: '.env',
       load: [databaseConfig],
     }),
+    // Schedule module
+    ScheduleModule.forRoot(),
     // Database configuration
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
@@ -56,7 +62,8 @@ import databaseConfig from './config/database.config';
     ChatModule,
     FileStorageModule,
     NotificationModule,
-    // ProjectModule,
+    ProjectModule,
+    JobsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

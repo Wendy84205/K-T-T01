@@ -1,24 +1,32 @@
-// TODO: User Decorator
-// 1. Create @CurrentUser() decorator
-//    - Extract user from request object
-//    - Usage: @CurrentUser() user: User
-// 2. Extract user ID
-//    - @UserId() decorator to get only user ID
-//    - Usage: @UserId() userId: string
-// 3. Extract user roles
-//    - @UserRoles() decorator to get user roles
-//    - Usage: @UserRoles() roles: string[]
-// 4. Optional user extraction
-//    - Support optional user (for public endpoints)
-//    - Return null if no user authenticated
-// 5. Implementation
-//    - Use createParamDecorator from @nestjs/common
-//    - Extract from request.user (set by JWT strategy)
-//
-// Example:
-// export const CurrentUser = createParamDecorator(
-//   (data: unknown, ctx: ExecutionContext) => {
-//     const request = ctx.switchToHttp().getRequest();
-//     return request.user;
-//   },
-// );
+import { createParamDecorator, ExecutionContext } from '@nestjs/common';
+
+/**
+ * Custom decorator to extract the full user object from the Request
+ * Requires an authentication guard (like JwtAuthGuard) to populate request.user
+ */
+export const CurrentUser = createParamDecorator(
+    (data: unknown, ctx: ExecutionContext) => {
+        const request = ctx.switchToHttp().getRequest();
+        return request.user;
+    },
+);
+
+/**
+ * Custom decorator to extract just the User ID from the Request
+ */
+export const UserId = createParamDecorator(
+    (data: unknown, ctx: ExecutionContext) => {
+        const request = ctx.switchToHttp().getRequest();
+        return request.user?.id || request.user?.sub;
+    },
+);
+
+/**
+ * Custom decorator to extract the roles list from the Request
+ */
+export const UserRolesList = createParamDecorator(
+    (data: unknown, ctx: ExecutionContext) => {
+        const request = ctx.switchToHttp().getRequest();
+        return request.user?.roles || [];
+    },
+);

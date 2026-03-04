@@ -1,43 +1,98 @@
-// TODO: Key Management Service Implementation
-// 1. Manage encryption keys in database
-//    - createEncryptionKey(purpose: string, algorithm: string): Promise<EncryptionKey>
-//    - getActiveKey(purpose: string): Promise<EncryptionKey>
-//    - getAllKeys(includeRevoked?: boolean): Promise<EncryptionKey[]>
-//    - Store keys in EncryptionKey entity
-//    - Support multiple key purposes (file encryption, message encryption, etc.)
-// 2. Key rotation schedule
-//    - rotateKey(keyId: string): Promise<EncryptionKey>
-//    - Auto-rotate keys based on age (e.g., every 90 days)
-//    - Generate new key version
-//    - Mark old key as deprecated (not revoked yet)
-//    - Re-encrypt data with new key (gradual migration)
-// 3. Key backup/restore
-//    - backupKeys(keyIds: string[]): Promise<string> // Encrypted backup
-//    - exportKeysSecurely(masterPassword: string): Promise<Buffer>
-//    - restoreKeys(backupData: string, masterPassword: string): Promise<void>
-//    - Store backups in secure location (encrypted)
-//    - Support key recovery for disaster scenarios
-// 4. Key revocation
-//    - revokeKey(keyId: string, reason: string): Promise<void>
-//    - Mark key as revoked in database
-//    - Prevent future use of revoked keys
-//    - Maintain revocation audit trail
-//    - Support emergency key revocation
-// 5. Key usage tracking
-//    - trackKeyUsage(keyId: string, operation: string, entityId: string)
-//    - Log every encryption/decryption operation
-//    - Monitor key usage patterns
-//    - Detect unusual key access
-//    - Generate key usage reports
-// 6. Key derivation
-//    - deriveKeyFromMaster(masterKey: Buffer, purpose: string, salt: Buffer): Buffer
-//    - Use PBKDF2 or HKDF for key derivation
-//    - Support hierarchical key structure
-// 7. Key security
-//    - Encrypt keys at rest using master key
-//    - Store master key in environment variable or KMS
-//    - Implement key access controls
-//    - Audit all key operations
-// 8. Integration with EncryptionService
-//    - Provide keys to EncryptionService on demand
-//    - Auto-select appropriate key for operation
+import { Injectable, Logger } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { EncryptionKey } from '../../database/entities/security/encryption-key.entity';
+import { EncryptionService } from './encryption.service';
+import { AuditService } from './audit.service';
+
+@Injectable()
+export class KeyManagementService {
+    private readonly logger = new Logger('KeyManagement');
+
+    constructor(
+        @InjectRepository(EncryptionKey)
+        private readonly keyRepository: Repository<EncryptionKey>,
+        private readonly encryptionService: EncryptionService,
+        private readonly auditService: AuditService,
+    ) { }
+
+    /**
+     * Create a new encryption key for a specific purpose
+     */
+    async createKey(purpose: string, algorithm: string = 'AES-256-GCM'): Promise<EncryptionKey> {
+        const rawKey = this.encryptionService.generateRandomKey();
+
+        const key = this.keyRepository.create({
+            keyType: purpose,
+            keyName: `${purpose}_v1`,
+            encryptedKey: rawKey.toString('base64'),
+            keyAlgorithm: algorithm,
+            keyVersion: 1,
+            isActive: true,
+            expiresAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000), // 90 days validity
+        });
+
+        const savedKey = await this.keyRepository.save(key);
+
+        await this.auditService.createAuditLog({
+            eventType: 'KEY_CREATED',
+            entityType: 'ENCRYPTION_KEY',
+            entityId: savedKey.id,
+            description: `New encryption key created for purpose: ${purpose}`,
+            severity: 'MEDIUM',
+        });
+
+        return savedKey;
+    }
+
+    /**
+     * Get the current active key for a purpose, or create one if none exists
+     */
+    async getActiveKey(purpose: string): Promise<EncryptionKey> {
+        let key = await this.keyRepository.findOne({
+            where: { keyType: purpose, isActive: true },
+            order: { keyVersion: 'DESC' }
+        });
+
+        if (!key) {
+            this.logger.log(`No active key found for purpose: ${purpose}. Creating one...`);
+            key = await this.createKey(purpose);
+        }
+
+        return key;
+    }
+
+    /**
+     * Revoke a key (e.g. if compromised)
+     */
+    async revokeKey(keyId: string, reason: string): Promise<void> {
+        const key = await this.keyRepository.findOne({ where: { id: keyId } });
+        if (key) {
+            key.isActive = false;
+            key.revokedAt = new Date();
+            await this.keyRepository.save(key);
+
+            await this.auditService.createAuditLog({
+                eventType: 'KEY_REVOKED',
+                entityType: 'ENCRYPTION_KEY',
+                entityId: keyId,
+                description: `Key revoked. Reason: ${reason}`,
+                severity: 'HIGH',
+            });
+        }
+    }
+
+    /**
+     * Rotate a key for a specific purpose
+     */
+    async rotateKey(purpose: string): Promise<EncryptionKey> {
+        // 1. Deactivate old keys
+        await this.keyRepository.update({ keyType: purpose, isActive: true }, { isActive: false });
+
+        // 2. Create new version
+        const newKey = await this.createKey(purpose);
+        this.logger.log(`Key rotated for purpose: ${purpose}`);
+
+        return newKey;
+    }
+}

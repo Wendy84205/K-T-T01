@@ -73,7 +73,7 @@ export function AuthProvider({ children }) {
 
   const isManager = Boolean(user?.roles?.length && user.roles.some(r => {
     const roleName = typeof r === 'string' ? r : r.name;
-    return roleName === 'Manager';
+    return roleName === 'Manager' || roleName === 'Admin';
   }));
 
   const value = {

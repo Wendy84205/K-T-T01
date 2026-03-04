@@ -6,6 +6,7 @@ import '../styles/admin.css';
 
 const navItems = [
   { to: '/admin/dashboard', icon: 'bx bxs-dashboard', label: 'Dashboard' },
+  { to: '/user/home', icon: 'bx bxs-message-square-detail', label: 'Secure Messenger' },
   { to: '/admin/logs', icon: 'bx bx-list-ul', label: 'System Logs' },
   { to: '/admin/users', icon: 'bx bxs-user-account', label: 'User Management' },
   { to: '/admin/network', icon: 'bx bx-pulse', label: 'Network Traffic' },

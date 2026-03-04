@@ -324,12 +324,14 @@ export class ChatService {
 
     // Send a message
     async sendMessage(conversationId: string, userId: string, content: string, messageType = 'text', fileId?: string, parentMessageId?: string) {
-        const membership = await this.conversationMemberRepository.findOne({
-            where: { conversationId, userId, leftAt: IsNull() },
-        });
+        if (messageType !== 'system') {
+            const membership = await this.conversationMemberRepository.findOne({
+                where: { conversationId, userId, leftAt: IsNull() },
+            });
 
-        if (!membership) {
-            throw new ForbiddenException('You are not a member of this conversation');
+            if (!membership) {
+                throw new ForbiddenException('You are not a member of this conversation');
+            }
         }
 
         // Encrypt message content
@@ -338,7 +340,7 @@ export class ChatService {
         const message = this.messageRepository.create({
             conversationId,
             senderId: userId,
-            content: `[Secure Message]`, // Fallback content
+            content: `[System Message]`, // Fallback content for DB
             encryptedContent: encrypted,
             initializationVector: iv,
             authTag: tag,
@@ -362,18 +364,27 @@ export class ChatService {
 
         return {
             id: completeMessage.id,
-            content: completeMessage.content,
+            content: content, // Return plain content for immediate UI feedback
             messageType: completeMessage.messageType,
             isEncrypted: completeMessage.isEncrypted,
             createdAt: completeMessage.createdAt,
             fileId: completeMessage.fileId,
-            sender: {
+            sender: completeMessage.sender ? {
                 id: completeMessage.sender.id,
                 firstName: completeMessage.sender.firstName,
                 lastName: completeMessage.sender.lastName,
+                email: completeMessage.sender.email,
                 avatarUrl: completeMessage.sender.avatarUrl,
-            },
+            } : null,
         };
+    }
+
+    private async createSystemMessage(conversationId: string, userId: string, content: string) {
+        try {
+            return await this.sendMessage(conversationId, userId, content, 'system');
+        } catch (e) {
+            console.error('[Chat] Failed to create system message:', e.message);
+        }
     }
 
     // Get all users
@@ -381,9 +392,8 @@ export class ChatService {
         const users = await this.userRepository.find({
             where: {
                 status: 'active',
-                isEmailVerified: true
             },
-            select: ['id', 'firstName', 'lastName', 'email', 'avatarUrl', 'department'],
+            select: ['id', 'firstName', 'lastName', 'email', 'avatarUrl', 'department', 'managerId', 'jobTitle'],
         });
 
         return users.filter(u => u.id !== currentUserId);
@@ -478,6 +488,14 @@ export class ChatService {
             role: 'member',
         });
 
+        // System message
+        const [requester, newMember] = await Promise.all([
+            this.userRepository.findOne({ where: { id: userId } }),
+            this.userRepository.findOne({ where: { id: newMemberId } })
+        ]);
+
+        await this.createSystemMessage(conversationId, userId, `${requester.firstName} added ${newMember.firstName} ${newMember.lastName} to the group`);
+
         return { success: true };
     }
 
@@ -494,7 +512,133 @@ export class ChatService {
         membership.leftAt = new Date();
         await this.conversationMemberRepository.save(membership);
 
+        // System message
+        const user = await this.userRepository.findOne({ where: { id: userId } });
+        await this.createSystemMessage(conversationId, userId, `${user.firstName} left the group`);
+
         return { success: true };
+    }
+
+    // Remove a member from group (admin only)
+    async removeMemberFromGroup(conversationId: string, requesterId: string, targetUserId: string) {
+        const requesterMembership = await this.conversationMemberRepository.findOne({
+            where: { conversationId, userId: requesterId, leftAt: IsNull() },
+        });
+        if (!requesterMembership || requesterMembership.role !== 'admin') {
+            throw new ForbiddenException('Only admins can remove members');
+        }
+        if (requesterId === targetUserId) {
+            throw new BadRequestException('You cannot remove yourself. Use leave group instead.');
+        }
+        const targetMembership = await this.conversationMemberRepository.findOne({
+            where: { conversationId, userId: targetUserId, leftAt: IsNull() },
+        });
+        if (!targetMembership) {
+            throw new NotFoundException('Member not found in this group');
+        }
+        targetMembership.leftAt = new Date();
+        await this.conversationMemberRepository.save(targetMembership);
+
+        // System message
+        const [requester, target] = await Promise.all([
+            this.userRepository.findOne({ where: { id: requesterId } }),
+            this.userRepository.findOne({ where: { id: targetUserId } })
+        ]);
+        await this.createSystemMessage(conversationId, requesterId, `${requester.firstName} removed ${target.firstName} from the group`);
+
+        return { success: true };
+    }
+
+    // Rename a group (admin only)
+    async renameGroup(conversationId: string, requesterId: string, newName: string) {
+        if (!newName || !newName.trim()) {
+            throw new BadRequestException('Group name cannot be empty');
+        }
+        const membership = await this.conversationMemberRepository.findOne({
+            where: { conversationId, userId: requesterId, leftAt: IsNull() },
+        });
+        if (!membership || membership.role !== 'admin') {
+            throw new ForbiddenException('Only admins can rename the group');
+        }
+        await this.conversationRepository.update({ id: conversationId }, { name: newName.trim() });
+
+        // System message
+        const user = await this.userRepository.findOne({ where: { id: requesterId } });
+        await this.createSystemMessage(conversationId, requesterId, `${user.firstName} renamed the group to "${newName.trim()}"`);
+
+        return { success: true, name: newName.trim() };
+    }
+
+    // Promote/demote group member role (admin only)
+    async changeGroupMemberRole(conversationId: string, requesterId: string, targetUserId: string, newRole: 'admin' | 'member') {
+        const requesterMembership = await this.conversationMemberRepository.findOne({
+            where: { conversationId, userId: requesterId, leftAt: IsNull() },
+        });
+        if (!requesterMembership || requesterMembership.role !== 'admin') {
+            throw new ForbiddenException('Only admins can change member roles');
+        }
+        const targetMembership = await this.conversationMemberRepository.findOne({
+            where: { conversationId, userId: targetUserId, leftAt: IsNull() },
+        });
+        if (!targetMembership) {
+            throw new NotFoundException('Member not found in this group');
+        }
+        targetMembership.role = newRole;
+        await this.conversationMemberRepository.save(targetMembership);
+
+        // System message
+        const [requester, target] = await Promise.all([
+            this.userRepository.findOne({ where: { id: requesterId } }),
+            this.userRepository.findOne({ where: { id: targetUserId } })
+        ]);
+        const action = newRole === 'admin' ? 'promoted to admin' : 'demoted to member';
+        await this.createSystemMessage(conversationId, requesterId, `${requester.firstName} ${action} ${target.firstName}`);
+
+        return { success: true, userId: targetUserId, role: newRole };
+    }
+
+    // Get full conversation info (for sidebar panel)
+    async getConversationInfo(conversationId: string, userId: string) {
+        const membership = await this.conversationMemberRepository.findOne({
+            where: { conversationId, userId, leftAt: IsNull() },
+        });
+        if (!membership) {
+            throw new ForbiddenException('You are not a member of this conversation');
+        }
+        const conversation = await this.conversationRepository.findOne({
+            where: { id: conversationId },
+            relations: ['creator'],
+        });
+        if (!conversation) {
+            throw new NotFoundException('Conversation not found');
+        }
+        const members = await this.conversationMemberRepository.find({
+            where: { conversationId, leftAt: IsNull() },
+            relations: ['user'],
+        });
+        const [mediaCount, fileCount] = await Promise.all([
+            this.messageRepository.count({ where: { conversationId, messageType: In(['image', 'video']), isDeleted: false } }),
+            this.messageRepository.count({ where: { conversationId, messageType: 'file', isDeleted: false } }),
+        ]);
+        return {
+            id: conversation.id,
+            name: conversation.name,
+            conversationType: conversation.conversationType,
+            isPrivate: conversation.isPrivate,
+            encryptionRequired: conversation.encryptionRequired,
+            createdAt: conversation.createdAt,
+            currentUserRole: membership.role,
+            members: members.map(m => ({
+                id: m.user.id,
+                firstName: m.user.firstName,
+                lastName: m.user.lastName,
+                email: m.user.email,
+                avatarUrl: m.user.avatarUrl,
+                role: m.role,
+                joinedAt: m.createdAt,
+            })),
+            stats: { mediaCount, fileCount },
+        };
     }
 
     // Delete Entire Conversation (for current user - leaves the chat)
