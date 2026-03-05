@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Search, Plus, MessageSquare, MoreHorizontal, Phone, Video, Info, Lock, Send, Mic, Image, Paperclip, Smile, Settings, Bell, BellOff, Clock, Shield, LogOut, ChevronLeft, ChevronRight, User, File, Download, Trash2, ShieldCheck, CreditCard, HelpCircle, Key, Eye, EyeOff, Check, CheckCheck, Square, X, Forward, Reply, Edit2, Play, Pause, List, Pin, Star, Cloud, Heart, ChevronDown, Users, MoreVertical, FileText, Camera, MapPin, AlertTriangle, BarChart3, Folder, Maximize2, Minimize2, Compass, Briefcase, Layers } from 'lucide-react';
 import api from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
+import { encryptContent, decryptContent } from "../../utils/crypto";
 import { SearchBar, PinnedMessagesBanner, ConversationSidebar, PollModal } from '../../components/chat/ChatEnhancements';
 import { DiscoverContent, MiniAppsContent } from '../../components/chat/ZaloStyleComponents';
 import { EnhancedMessageBubble } from '../../components/chat/EnhancedMessage';
@@ -382,7 +383,38 @@ export default function UserHomePage() {
     try {
       if (!silent) setMessagesLoading(true);
       const response = await api.getConversationMessages(conversationId);
-      const newMessages = response.data || response || [];
+      const rawMessages = response.data || response || [];
+
+      // E2EE Decryption Logic
+      const newMessages = await Promise.all(rawMessages.map(async msg => {
+        if (msg.content && msg.content.startsWith('[E2EE]:')) {
+          const rawContent = msg.content.substring(7);
+          const privateKey = localStorage.getItem(`e2ee_private_key_${user.id}`);
+
+          if (!privateKey) {
+            msg.content = "🔒 [E2EE: Thiếu khóa cá nhân]";
+          } else {
+            try {
+              // Try to parse as JSON (New Dual-Encryption format)
+              const encryptedData = JSON.parse(rawContent);
+              if (encryptedData[user.id]) {
+                msg.content = await decryptContent(encryptedData[user.id], privateKey);
+              } else {
+                msg.content = "🔒 [E2EE: Không có mã giải cho bạn]";
+              }
+            } catch (e) {
+              // Not JSON? Fallback (Old format: pure ciphertext)
+              try {
+                msg.content = await decryptContent(rawContent, privateKey);
+              } catch (decryptErr) {
+                console.error("[E2EE] Decryption failed:", decryptErr);
+                msg.content = "⚠️ [Không thể giải mã tin nhắn]";
+              }
+            }
+          }
+        }
+        return msg;
+      }));
 
       // Only update state if data actually changed to prevent UI flicker
       setMessages(prev => {
@@ -540,9 +572,35 @@ export default function UserHomePage() {
         await api.editMessage(editingMessage.id, messageInput.trim());
         setEditingMessage(null);
       } else {
+        let finalContent = messageInput.trim();
+
+        // E2EE Encryption for Direct Chat
+        const conv = conversations.find(c => c.id === selectedChat);
+        if (conv && conv.conversationType === 'direct' && conv.otherUser?.publicKey) {
+          console.log("[E2EE] Encrypting message for both parties...");
+          try {
+            const encryptedForRecipient = await encryptContent(finalContent, conv.otherUser.publicKey);
+            const myPublicKey = user.publicKey;
+
+            if (myPublicKey) {
+              const encryptedForMe = await encryptContent(finalContent, myPublicKey);
+              const dualPayload = {
+                [conv.otherUser.id]: encryptedForRecipient,
+                [user.id]: encryptedForMe
+              };
+              finalContent = `[E2EE]:${JSON.stringify(dualPayload)}`;
+            } else {
+              // Fallback if sender public key is missing
+              finalContent = `[E2EE]:${JSON.stringify({ [conv.otherUser.id]: encryptedForRecipient })}`;
+            }
+          } catch (e) {
+            console.error("[E2EE] Dual Encryption failed", e);
+          }
+        }
+
         const newMessage = await api.sendMessage(
           selectedChat,
-          messageInput.trim(),
+          finalContent,
           'text',
           null,
           replyingTo ? replyingTo.id : null,

@@ -445,7 +445,7 @@ export default function UsersPage() {
                         {user.status === 'banned' && (
                           <i className='bx bx-undo' style={{ cursor: 'pointer', fontSize: '18px', color: '#2f81f7' }} title="Restore User" onClick={() => handleApprove(user.id)}></i>
                         )}
-                        <i className='bx bx-trash' style={{ cursor: 'pointer', fontSize: '18px', color: '#ef4444' }} title="Deactivate Identity" onClick={() => handleDelete(user.id)}></i>
+                        <i className='bx bx-trash' style={{ cursor: 'pointer', fontSize: '18px', color: '#ef4444' }} title="Permanent Purge" onClick={() => handleDelete(user.id, true)}></i>
 
                         {/* THREE DOTS MENU */}
                         <div style={{ position: 'relative' }}>

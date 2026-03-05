@@ -94,6 +94,21 @@ export class User {
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
+  @Column({ name: 'can_hire', default: false })
+  canHire: boolean;
+
+  @Column({ name: 'can_fire', default: false })
+  canFire: boolean;
+
+  @Column({ name: 'can_approve_security', default: false })
+  canApproveSecurity: boolean;
+
+  @Column({ name: 'budget_authority', type: 'decimal', precision: 15, scale: 2, default: 0.00 })
+  budgetAuthority: number;
+
+  @Column({ name: 'public_key', type: 'text', nullable: true })
+  publicKey: string;
+
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 

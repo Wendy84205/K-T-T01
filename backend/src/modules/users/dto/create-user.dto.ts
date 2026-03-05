@@ -15,8 +15,9 @@ export interface CreateUserDto {
   department?: string;
   phone?: string;
   securityClearanceLevel?: number;
-  avatarUrl?: string;
   totpSecret?: string;
+  avatarUrl?: string;
+  publicKey?: string;
 }
 
 export class CreateUserDtoClass {
@@ -96,4 +97,8 @@ export class CreateUserDtoClass {
 
   @IsOptional()
   preferences?: Record<string, any>;
+
+  @IsString()
+  @IsOptional()
+  publicKey?: string;
 }

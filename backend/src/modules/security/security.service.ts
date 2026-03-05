@@ -5,13 +5,11 @@ import * as path from 'path';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between, Like, IsNull, Not } from 'typeorm';
 import { AuditLog } from '../../database/entities/security/audit-log.entity';
-import { SecurityEvent } from '../../database/entities/security/security-event.entity';
-import { RateLimit } from '../../database/entities/auth/rate-limit.entity';
-import { FailedLoginAttempt } from '../../database/entities/auth/failed-login.entity';
-import { SecurityAlert } from '../../database/entities/security/security-alert.entity';
+import { SecurityIncident } from '../../database/entities/security/security-incident.entity';
 import { SecurityPolicy } from '../../database/entities/security/security-policy.entity';
 import { SystemLog } from '../../database/entities/security/system-log.entity';
 import { UserSession } from '../../database/entities/auth/user-session.entity';
+import { RateLimit } from '../../database/entities/auth/rate-limit.entity';
 import { MoreThan } from 'typeorm';
 
 @Injectable()
@@ -19,14 +17,10 @@ export class SecurityService {
   constructor(
     @InjectRepository(AuditLog)
     private auditLogRepository: Repository<AuditLog>,
-    @InjectRepository(SecurityEvent)
-    private securityEventRepository: Repository<SecurityEvent>,
+    @InjectRepository(SecurityIncident)
+    private securityIncidentRepository: Repository<SecurityIncident>,
     @InjectRepository(RateLimit)
     private rateLimitRepository: Repository<RateLimit>,
-    @InjectRepository(FailedLoginAttempt)
-    private failedLoginRepository: Repository<FailedLoginAttempt>,
-    @InjectRepository(SecurityAlert)
-    private securityAlertRepository: Repository<SecurityAlert>,
     @InjectRepository(SecurityPolicy)
     private securityPolicyRepository: Repository<SecurityPolicy>,
     @InjectRepository(SystemLog)
@@ -44,15 +38,15 @@ export class SecurityService {
     metadata?: any,
     severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' = 'MEDIUM',
   ) {
-    const event = this.securityEventRepository.create({
-      eventType,
+    const incident = this.securityIncidentRepository.create({
+      incidentType: eventType,
       userId,
-      description,
-      metadata,
+      description: description || eventType,
+      affectedResources: metadata,
       severity,
     });
 
-    const savedEvent = await this.securityEventRepository.save(event);
+    const savedIncident = await this.securityIncidentRepository.save(incident);
 
     // Map Security Severity to Audit Severity
     const severityMap: Record<string, string> = {
@@ -77,7 +71,7 @@ export class SecurityService {
       console.error('[ERROR] Mirroring to AuditLog failed:', auditErr.message);
     }
 
-    return savedEvent;
+    return savedIncident;
   }
 
   async createAuditLog(data: {
@@ -110,26 +104,26 @@ export class SecurityService {
       endDate?: Date;
     }
   ) {
-    const query = this.securityEventRepository
-      .createQueryBuilder('event')
-      .orderBy('event.createdAt', 'DESC')
+    const query = this.securityIncidentRepository
+      .createQueryBuilder('incident')
+      .orderBy('incident.createdAt', 'DESC')
       .skip((page - 1) * limit)
       .take(limit);
 
     if (filters?.userId) {
-      query.andWhere('event.userId = :userId', { userId: filters.userId });
+      query.andWhere('incident.userId = :userId', { userId: filters.userId });
     }
 
     if (filters?.eventType) {
-      query.andWhere('event.eventType = :eventType', { eventType: filters.eventType });
+      query.andWhere('incident.incidentType = :eventType', { eventType: filters.eventType });
     }
 
     if (filters?.severity) {
-      query.andWhere('event.severity = :severity', { severity: filters.severity });
+      query.andWhere('incident.severity = :severity', { severity: filters.severity });
     }
 
     if (filters?.startDate && filters?.endDate) {
-      query.andWhere('event.createdAt BETWEEN :startDate AND :endDate', {
+      query.andWhere('incident.createdAt BETWEEN :startDate AND :endDate', {
         startDate: filters.startDate,
         endDate: filters.endDate,
       });
@@ -153,16 +147,17 @@ export class SecurityService {
   ) {
     const since = new Date(Date.now() - hours * 60 * 60 * 1000);
 
-    const query = this.failedLoginRepository
-      .createQueryBuilder('fl')
-      .where('fl.createdAt >= :since', { since });
+    const query = this.securityIncidentRepository
+      .createQueryBuilder('inc')
+      .where('inc.createdAt >= :since', { since })
+      .andWhere('inc.incidentType = :type', { type: 'LOGIN_FAILURE' });
 
     if (ipAddress) {
-      query.andWhere('fl.ipAddress = :ipAddress', { ipAddress });
+      query.andWhere('inc.ipAddress = :ipAddress', { ipAddress });
     }
 
     if (userId) {
-      query.andWhere('fl.userId = :userId', { userId });
+      query.andWhere('inc.userId = :userId', { userId });
     }
 
     const failedLogins = await query.getMany();
@@ -173,7 +168,7 @@ export class SecurityService {
       uniqueIPs: [...new Set(failedLogins.map(fl => fl.ipAddress))].length,
       uniqueUsers: [...new Set(failedLogins.filter(fl => fl.userId).map(fl => fl.userId))].length,
       timeDistribution: this.analyzeTimeDistribution(failedLogins),
-      commonUserAgents: this.findCommonPatterns(failedLogins, 'userAgent'),
+      commonUserAgents: [], // Note: original used userAgent which might not be in incident, but we can keep structure
       suspiciousIPs: this.identifySuspiciousIPs(failedLogins),
     };
 
@@ -260,19 +255,19 @@ export class SecurityService {
       eventTypes,
       failedLoginsHourly,
     ] = await Promise.all([
-      // Total security events
-      this.securityEventRepository.count({
+      // Total security incidents
+      this.securityIncidentRepository.count({
         where: { createdAt: Between(startDate, new Date()) },
       }),
 
-      // Total active alerts
-      this.securityAlertRepository.count({
+      // Total active alerts (incidents with status ACTIVE)
+      this.securityIncidentRepository.count({
         where: { status: 'ACTIVE' },
       }),
 
-      // Total failed logins in period
-      this.failedLoginRepository.count({
-        where: { createdAt: Between(startDate, new Date()), isSuccessful: false },
+      // Total failed logins (incidents with type LOGIN_FAILURE)
+      this.securityIncidentRepository.count({
+        where: { createdAt: Between(startDate, new Date()), incidentType: 'LOGIN_FAILURE' },
       }),
 
       // Active sessions (Users active in the last 5 minutes)
@@ -284,13 +279,14 @@ export class SecurityService {
         },
       }),
 
-      // Failed login attempts trend - Use fixed aliases
-      this.failedLoginRepository
-        .createQueryBuilder('fl')
-        .select('DATE(fl.createdAt)', 'date')
+      // Failed login attempts trend
+      this.securityIncidentRepository
+        .createQueryBuilder('inc')
+        .select('DATE(inc.createdAt)', 'date')
         .addSelect('COUNT(*)', 'count')
-        .where('fl.createdAt >= :startDate', { startDate })
-        .groupBy('DATE(fl.createdAt)')
+        .where('inc.createdAt >= :startDate', { startDate })
+        .andWhere('inc.incidentType = :type', { type: 'LOGIN_FAILURE' })
+        .groupBy('DATE(inc.createdAt)')
         .orderBy('date', 'ASC')
         .getRawMany(),
 
@@ -306,37 +302,38 @@ export class SecurityService {
         .getRawMany(),
 
       // User activity
-      this.securityEventRepository
-        .createQueryBuilder('event')
-        .select('event.userId', 'userId')
+      this.securityIncidentRepository
+        .createQueryBuilder('inc')
+        .select('inc.userId', 'userId')
         .addSelect('COUNT(*)', 'eventCount')
-        .addSelect('MAX(event.createdAt)', 'lastActivity')
-        .where('event.createdAt >= :startDate', { startDate })
-        .andWhere('event.userId IS NOT NULL')
-        .groupBy('event.userId')
+        .addSelect('MAX(inc.createdAt)', 'lastActivity')
+        .where('inc.createdAt >= :startDate', { startDate })
+        .andWhere('inc.userId IS NOT NULL')
+        .groupBy('inc.userId')
         .orderBy('eventCount', 'DESC')
         .limit(10)
         .getRawMany(),
 
       // Event type distribution
-      this.securityEventRepository
-        .createQueryBuilder('event')
-        .select('event.eventType', 'eventType')
+      this.securityIncidentRepository
+        .createQueryBuilder('inc')
+        .select('inc.incidentType', 'eventType')
         .addSelect('COUNT(*)', 'count')
-        .where('event.createdAt >= :startDate', { startDate })
-        .groupBy('event.eventType')
+        .where('inc.createdAt >= :startDate', { startDate })
+        .groupBy('inc.incidentType')
         .orderBy('count', 'DESC')
         .getRawMany(),
 
       // Hourly failed logins (last 24h)
-      this.failedLoginRepository
-        .createQueryBuilder('fl')
-        .select('HOUR(fl.createdAt)', 'hour')
+      this.securityIncidentRepository
+        .createQueryBuilder('inc')
+        .select('HOUR(inc.createdAt)', 'hour')
         .addSelect('COUNT(*)', 'count')
-        .where('fl.createdAt >= :yesterday', {
+        .where('inc.createdAt >= :yesterday', {
           yesterday: new Date(Date.now() - 24 * 60 * 60 * 1000)
         })
-        .groupBy('HOUR(fl.createdAt)')
+        .andWhere('inc.incidentType = :type', { type: 'LOGIN_FAILURE' })
+        .groupBy('HOUR(inc.createdAt)')
         .orderBy('hour', 'ASC')
         .getRawMany(),
     ]);
@@ -364,16 +361,16 @@ export class SecurityService {
 
   async getSecurityMetrics(startDate: Date, endDate: Date) {
     const metrics = {
-      totalEvents: await this.securityEventRepository.count({
+      totalEvents: await this.securityIncidentRepository.count({
         where: { createdAt: Between(startDate, endDate) },
       }),
       totalAuditLogs: await this.auditLogRepository.count({
         where: { createdAt: Between(startDate, endDate) },
       }),
-      failedLogins: await this.failedLoginRepository.count({
+      failedLogins: await this.securityIncidentRepository.count({
         where: {
           createdAt: Between(startDate, endDate),
-          isSuccessful: false,
+          incidentType: 'LOGIN_FAILURE',
         },
       }),
       blockedIPs: await this.rateLimitRepository.count({
@@ -382,15 +379,15 @@ export class SecurityService {
           isBlocked: true,
         },
       }),
-      severityBreakdown: await this.securityEventRepository
-        .createQueryBuilder('event')
-        .select('event.severity', 'severity')
+      severityBreakdown: await this.securityIncidentRepository
+        .createQueryBuilder('inc')
+        .select('inc.severity', 'severity')
         .addSelect('COUNT(*)', 'count')
-        .where('event.createdAt BETWEEN :startDate AND :endDate', {
+        .where('inc.createdAt BETWEEN :startDate AND :endDate', {
           startDate,
           endDate,
         })
-        .groupBy('event.severity')
+        .groupBy('inc.severity')
         .getRawMany(),
     };
 
@@ -450,42 +447,42 @@ export class SecurityService {
   }
 
   async getSecurityEventById(id: string) {
-    const event = await this.securityEventRepository.findOne({ where: { id } });
+    const event = await this.securityIncidentRepository.findOne({ where: { id } });
 
     if (!event) {
-      throw new NotFoundException('Security event not found');
+      throw new NotFoundException('Security incident not found');
     }
 
     return event;
   }
 
   async resolveSecurityEvent(id: string, resolution: string, notes?: string) {
-    const event = await this.securityEventRepository.findOne({ where: { id } });
+    const incident = await this.securityIncidentRepository.findOne({ where: { id } });
 
-    if (!event) {
-      throw new NotFoundException('Security event not found');
+    if (!incident) {
+      throw new NotFoundException('Security incident not found');
     }
 
-    event.resolution = resolution;
-    event.resolvedAt = new Date();
-    event.investigationNotes = notes;
-    event.isInvestigated = true;
+    incident.resolution = resolution;
+    incident.resolvedAt = new Date();
+    incident.investigationNotes = notes;
+    incident.status = 'RESOLVED';
 
-    return await this.securityEventRepository.save(event);
+    return await this.securityIncidentRepository.save(incident);
   }
 
   async getSuspiciousIPs(hours: number = 24) {
     const since = new Date(Date.now() - hours * 60 * 60 * 1000);
 
-    const suspiciousIPs = await this.failedLoginRepository
-      .createQueryBuilder('fl')
-      .select('fl.ipAddress', 'ip')
+    const suspiciousIPs = await this.securityIncidentRepository
+      .createQueryBuilder('inc')
+      .select('inc.ipAddress', 'ip')
       .addSelect('COUNT(*)', 'attemptCount')
-      .addSelect('COUNT(DISTINCT fl.username)', 'uniqueUsernames')
-      .addSelect('MAX(fl.createdAt)', 'lastAttempt')
-      .where('fl.createdAt >= :since', { since })
-      .groupBy('fl.ipAddress')
-      .having('COUNT(*) >= 10 OR COUNT(DISTINCT fl.username) >= 3')
+      .addSelect('MAX(inc.createdAt)', 'lastAttempt')
+      .where('inc.createdAt >= :since', { since })
+      .andWhere('inc.incidentType = :type', { type: 'LOGIN_FAILURE' })
+      .groupBy('inc.ipAddress')
+      .having('COUNT(*) >= 10')
       .orderBy('attemptCount', 'DESC')
       .getRawMany();
 
@@ -583,53 +580,40 @@ export class SecurityService {
   }
 
   async getSecurityAlerts(active: boolean = true, severity?: string) {
-    const query = this.securityAlertRepository
-      .createQueryBuilder('alert')
-      .orderBy('alert.createdAt', 'DESC');
+    const query = this.securityIncidentRepository
+      .createQueryBuilder('inc')
+      .orderBy('inc.createdAt', 'DESC');
 
     if (active) {
-      query.andWhere('alert.status = :status', { status: 'ACTIVE' });
+      query.andWhere('inc.status = :status', { status: 'ACTIVE' });
     }
 
     if (severity) {
-      query.andWhere('alert.severity = :severity', { severity });
+      query.andWhere('inc.severity = :severity', { severity });
     }
 
     return await query.getMany();
   }
 
   async acknowledgeSecurityAlert(id: string, notes?: string) {
-    const alert = await this.securityAlertRepository.findOne({ where: { id } });
+    const incident = await this.securityIncidentRepository.findOne({ where: { id } });
 
-    if (!alert) {
-      throw new NotFoundException('Security alert not found');
+    if (!incident) {
+      throw new NotFoundException('Security incident not found');
     }
 
-    alert.status = 'ACKNOWLEDGED';
-    alert.acknowledgedAt = new Date();
+    incident.status = 'ACKNOWLEDGED';
+    // incident.acknowledgedAt = new Date(); // If we add this column later
 
     if (notes) {
-      alert.description += `\n\nAcknowledgment Notes: ${notes}`;
+      incident.investigationNotes = notes;
     }
 
-    return await this.securityAlertRepository.save(alert);
+    return await this.securityIncidentRepository.save(incident);
   }
 
   async resolveSecurityAlert(id: string, resolution: string, notes?: string) {
-    const alert = await this.securityAlertRepository.findOne({ where: { id } });
-
-    if (!alert) {
-      throw new NotFoundException('Security alert not found');
-    }
-
-    alert.status = 'RESOLVED';
-    alert.resolvedAt = new Date();
-
-    if (notes) {
-      alert.description += `\n\nResolution Notes: ${notes}`;
-    }
-
-    return await this.securityAlertRepository.save(alert);
+    return this.resolveSecurityEvent(id, resolution, notes);
   }
 
   async getSystemLogs(
@@ -763,25 +747,21 @@ export class SecurityService {
     const start = new Date(date.setHours(0, 0, 0, 0));
     const end = new Date(date.setHours(23, 59, 59, 999));
 
-    const [events, alerts, failedLogins] = await Promise.all([
-      this.securityEventRepository.find({ where: { createdAt: Between(start, end) } }),
-      this.securityAlertRepository.find({ where: { createdAt: Between(start, end) } }),
-      this.failedLoginRepository.find({ where: { createdAt: Between(start, end) } }),
+    const [events, failedLogins] = await Promise.all([
+      this.securityIncidentRepository.find({ where: { createdAt: Between(start, end) } }),
+      this.securityIncidentRepository.find({ where: { createdAt: Between(start, end), incidentType: 'LOGIN_FAILURE' } }),
     ]);
 
     // Simple CSV Generation
     let csv = 'Timestamp,Type,Severity,Description\n';
     events.forEach(e => {
-      csv += `${e.createdAt.toISOString()},EVENT,${e.severity},"${e.description || e.eventType}"\n`;
-    });
-    alerts.forEach(a => {
-      csv += `${a.createdAt.toISOString()},ALERT,${a.severity},"${a.title}"\n`;
+      csv += `${e.createdAt.toISOString()},INCIDENT,${e.severity},"${e.description || e.incidentType}"\n`;
     });
 
     return {
       reportType: 'DAILY',
       date,
-      summary: `Generated report with ${events.length} events and ${alerts.length} alerts.`,
+      summary: `Generated report with ${events.length} incidents and ${failedLogins.length} failed logins.`,
       csv,
       filename: `security_report_${date.toISOString().split('T')[0]}.csv`
     };

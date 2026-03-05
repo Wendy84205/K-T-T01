@@ -6,7 +6,7 @@ import { User } from '../database/entities/core/user.entity';
 import { SecurityService } from '../modules/security/security.service';
 import { AuditService } from '../common/service/audit.service';
 import { EmailService } from '../common/service/email.service';
-import { SecurityAlert } from '../database/entities/security/security-alert.entity';
+import { SecurityIncident } from '../database/entities/security/security-incident.entity';
 
 @Injectable()
 export class SecurityScanJob {
@@ -15,8 +15,8 @@ export class SecurityScanJob {
     constructor(
         @InjectRepository(User)
         private readonly userRepository: Repository<User>,
-        @InjectRepository(SecurityAlert)
-        private readonly securityAlertRepository: Repository<SecurityAlert>,
+        @InjectRepository(SecurityIncident)
+        private readonly securityIncidentRepository: Repository<SecurityIncident>,
         private readonly securityService: SecurityService,
         private readonly auditService: AuditService,
         private readonly emailService: EmailService,
@@ -64,29 +64,30 @@ export class SecurityScanJob {
             if (suspiciousIPs && suspiciousIPs.length > 0) {
                 this.logger.warn(`Found ${suspiciousIPs.length} suspicious IPs with repeated failed logins.`);
                 for (const s of suspiciousIPs) {
-                    // Check if alert already exists for this IP in the last 24h
-                    const existingAlert = await this.securityAlertRepository.findOne({
+                    // Check if incident already exists for this IP in the last 24h
+                    const existingIncident = await this.securityIncidentRepository.findOne({
                         where: {
                             ipAddress: s.ip,
                             status: 'ACTIVE',
+                            incidentType: 'BRUTE_FORCE',
                             createdAt: Between(new Date(Date.now() - 24 * 60 * 60 * 1000), new Date()),
                         },
                     });
 
-                    if (!existingAlert) {
-                        const alert = this.securityAlertRepository.create({
+                    if (!existingIncident) {
+                        const incident = this.securityIncidentRepository.create({
                             title: `Brute Force Attempt: ${s.ip}`,
-                            alertType: 'BRUTE_FORCE',
-                            description: `Multiple failed login attempts detected from IP ${s.ip}. Attempts: ${s.attemptCount}, Unique usernames: ${s.uniqueUsernames}`,
+                            incidentType: 'BRUTE_FORCE',
+                            description: `Multiple failed login attempts detected from IP ${s.ip}. Attempts: ${s.attemptCount}`,
                             severity: s.attemptCount > 50 ? 'HIGH' : 'MEDIUM',
                             status: 'ACTIVE',
                             ipAddress: s.ip,
                             affectedResources: { analysis: s },
                         });
-                        await this.securityAlertRepository.save(alert);
+                        await this.securityIncidentRepository.save(incident);
 
                         // Notify admins of high severity alerts
-                        if (alert.severity === 'HIGH') {
+                        if (incident.severity === 'HIGH') {
                             await this.emailService.sendSecurityAlert(
                                 'admin@cybersecure.local',
                                 `CRITICAL: Brute Force Attempt - ${s.ip}`,

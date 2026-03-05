@@ -12,7 +12,6 @@ import { SystemSettingsModule } from './modules/system-settings/system-settings.
 import { ChatModule } from './modules/chat/chat.module';
 import { FileStorageModule } from './modules/file-storage/file-storage.module';
 import { NotificationModule } from './modules/notification/notification.module';
-import { ProjectModule } from './modules/project/project.module';
 import databaseConfig from './config/database.config';
 
 import { ScheduleModule } from '@nestjs/schedule';
@@ -62,7 +61,6 @@ import { JobsModule } from './jobs/jobs.module';
     ChatModule,
     FileStorageModule,
     NotificationModule,
-    ProjectModule,
     JobsModule,
   ],
   controllers: [AppController],

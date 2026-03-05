@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../../utils/api";
 import { useAuth } from "../../context/AuthContext";
+import { generateKeyPair } from "../../utils/crypto";
 
 import AccessDenied from "./AccessDenied";
 
@@ -73,12 +74,12 @@ function SecureLogin() {
     }, [mfaRequired]);
 
     const handleLogin = async (e) => {
-        e.preventDefault();
-        setError("");
-        setLoading(true);
+        e.preventDefault(); // ngăn chặn trang web tải trang khi nhấn nút submit
+        setError(""); // xóa lỗi    
+        setLoading(true); // bật loading 
 
         try {
-            const response = await api.login(identifier, password);
+            const response = await api.login(identifier, password); // gửi thông tin định danh (email, username) và mật khẩu đến api 
 
             if (response.requiresMfa) {
                 setMfaRequired(true);
@@ -86,6 +87,9 @@ function SecureLogin() {
                 setMfaMethods(response.mfaMethods);
             } else {
                 login(response);
+
+                // E2EE Key Management
+                await ensureE2EEKeys(response.user);
 
                 // ROLE-BASED REDIRECTION
                 const roles = response.user?.roles || [];
@@ -131,6 +135,9 @@ function SecureLogin() {
             const response = await api.verifyMfa(finalOtp, tempToken);
             login(response);
 
+            // E2EE Key Management
+            await ensureE2EEKeys(response.user);
+
             // ROLE-BASED REDIRECTION
             const roles = response.user?.roles || [];
             const roleNames = roles.map(r => typeof r === 'string' ? r : r.name);
@@ -175,6 +182,28 @@ function SecureLogin() {
     const handleOtpKeyDown = (e, index) => {
         if (e.key === "Backspace" && !mfaOtp[index] && index > 0) {
             mfaInputRefs.current[index - 1].focus();
+        }
+    };
+
+    const ensureE2EEKeys = async (user) => {
+        try {
+            const privateKey = localStorage.getItem(`e2ee_private_key_${user.id}`);
+
+            // If no private key locally OR user has no public key on server, (re)generate
+            if (!privateKey || !user.publicKey) {
+                console.log("[E2EE] Generating secure key pair...");
+                const { publicKey, privateKey: newPrivateKey } = await generateKeyPair();
+
+                // Save private key locally
+                localStorage.setItem(`e2ee_private_key_${user.id}`, newPrivateKey);
+
+                // Upload public key to server
+                await api.updateProfile({ publicKey });
+                console.log("[E2EE] Keys synchronized with server cluster.");
+            }
+        } catch (err) {
+            console.error("[E2EE] Key stabilization failed:", err);
+            // Non-blocking error for login, but might affect chat later
         }
     };
 
