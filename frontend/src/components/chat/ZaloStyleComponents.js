@@ -65,24 +65,24 @@ export function DiscoverContent() {
             flex: 1,
             display: 'flex',
             flexDirection: 'column',
-            background: '#0e1621',
+            background: 'var(--bg-main)',
             overflow: 'hidden'
         }}>
             {/* Header */}
             <div style={{
                 padding: '30px',
-                borderBottom: '1px solid #2a3441',
-                background: '#151f2e'
+                borderBottom: '1px solid var(--border-color)',
+                background: 'var(--bg-panel)'
             }}>
                 <h2 style={{
-                    color: '#fff',
+                    color: 'var(--text-main)',
                     margin: '0 0 10px 0',
                     fontSize: '28px',
                     fontWeight: '800'
                 }}>
                     Discover
                 </h2>
-                <p style={{ color: '#8b98a5', margin: 0, fontSize: '14px' }}>
+                <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: '14px' }}>
                     Explore trending groups and connect with new people
                 </p>
 
@@ -90,9 +90,9 @@ export function DiscoverContent() {
                 <div style={{
                     marginTop: '20px',
                     position: 'relative',
-                    background: '#1a2332',
+                    background: 'var(--bg-main)',
                     borderRadius: '12px',
-                    border: '1px solid #2a3441',
+                    border: '1px solid var(--border-color)',
                     padding: '12px 15px',
                     display: 'flex',
                     alignItems: 'center',
@@ -108,7 +108,7 @@ export function DiscoverContent() {
                             background: 'transparent',
                             border: 'none',
                             outline: 'none',
-                            color: '#fff',
+                            color: 'var(--text-main)',
                             width: '100%',
                             fontSize: '14px'
                         }}
@@ -121,8 +121,8 @@ export function DiscoverContent() {
                 display: 'flex',
                 gap: '8px',
                 padding: '20px 30px',
-                borderBottom: '1px solid #2a3441',
-                background: '#151f2e'
+                borderBottom: '1px solid var(--border-color)',
+                background: 'var(--bg-panel)'
             }}>
                 {['trending', 'groups', 'people'].map(tab => (
                     <button
@@ -130,8 +130,8 @@ export function DiscoverContent() {
                         onClick={() => setActiveDiscoverTab(tab)}
                         style={{
                             background: activeDiscoverTab === tab ? '#667eea' : 'transparent',
-                            border: activeDiscoverTab === tab ? 'none' : '1px solid #2a3441',
-                            color: activeDiscoverTab === tab ? '#fff' : '#8b98a5',
+                            border: activeDiscoverTab === tab ? 'none' : '1px solid var(--border-color)',
+                            color: activeDiscoverTab === tab ? '#fff' : 'var(--text-muted)',
                             padding: '10px 20px',
                             borderRadius: '10px',
                             cursor: 'pointer',
@@ -173,8 +173,8 @@ export function DiscoverContent() {
                                             <div
                                                 key={group.id}
                                                 style={{
-                                                    background: '#151f2e',
-                                                    border: '1px solid #2a3441',
+                                                    background: 'var(--bg-panel)',
+                                                    border: '1px solid var(--border-color)',
                                                     borderRadius: '16px',
                                                     padding: '20px',
                                                     transition: 'all 0.2s',
@@ -185,7 +185,7 @@ export function DiscoverContent() {
                                                     e.currentTarget.style.transform = 'translateY(-2px)';
                                                 }}
                                                 onMouseLeave={(e) => {
-                                                    e.currentTarget.style.borderColor = '#2a3441';
+                                                    e.currentTarget.style.borderColor = 'var(--border-color)';
                                                     e.currentTarget.style.transform = 'translateY(0)';
                                                 }}
                                             >
@@ -207,7 +207,7 @@ export function DiscoverContent() {
                                                     </div>
                                                     <div style={{ flex: 1 }}>
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '5px' }}>
-                                                            <h4 style={{ color: '#fff', margin: 0, fontSize: '16px', fontWeight: '700' }}>
+                                                            <h4 style={{ color: 'var(--text-main)', margin: 0, fontSize: '16px', fontWeight: '700' }}>
                                                                 {group.name}
                                                             </h4>
                                                             {group.verified && (
@@ -217,7 +217,7 @@ export function DiscoverContent() {
                                                                 <span style={{ fontSize: '11px', background: '#10b98122', color: '#10b981', padding: '2px 6px', borderRadius: '4px' }}>Member</span>
                                                             )}
                                                         </div>
-                                                        <p style={{ color: '#8b98a5', margin: '5px 0', fontSize: '13px' }}>
+                                                        <p style={{ color: 'var(--text-muted)', margin: '5px 0', fontSize: '13px' }}>
                                                             {group.description || 'No description available'}
                                                         </p>
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginTop: '10px' }}>
@@ -233,7 +233,7 @@ export function DiscoverContent() {
                                                                     {group.category}
                                                                 </span>
                                                             )}
-                                                            <span style={{ color: '#8b98a5', fontSize: '12px' }}>
+                                                            <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
                                                                 <Users size={12} style={{ display: 'inline', marginRight: '4px' }} />
                                                                 {group.members || 0} members
                                                             </span>
@@ -243,7 +243,7 @@ export function DiscoverContent() {
                                                         onClick={() => group.isMember ? alert('You are already a member') : handleJoinGroup(group.id)}
                                                         style={{
                                                             background: group.isMember ? 'transparent' : '#667eea',
-                                                            border: group.isMember ? '1px solid #2a3441' : 'none',
+                                                            border: group.isMember ? '1px solid var(--border-color)' : 'none',
                                                             color: group.isMember ? '#8b98a5' : '#fff',
                                                             padding: '8px 16px',
                                                             borderRadius: '8px',
@@ -280,8 +280,8 @@ export function DiscoverContent() {
                                             <div
                                                 key={user.id}
                                                 style={{
-                                                    background: '#151f2e',
-                                                    border: '1px solid #2a3441',
+                                                    background: 'var(--bg-panel)',
+                                                    border: '1px solid var(--border-color)',
                                                     borderRadius: '12px',
                                                     padding: '16px',
                                                     display: 'flex',
@@ -290,7 +290,7 @@ export function DiscoverContent() {
                                                     transition: 'all 0.2s'
                                                 }}
                                                 onMouseEnter={(e) => e.currentTarget.style.borderColor = '#667eea'}
-                                                onMouseLeave={(e) => e.currentTarget.style.borderColor = '#2a3441'}
+                                                onMouseLeave={(e) => e.currentTarget.style.borderColor = 'var(--border-color)'}
                                             >
                                                 <div style={{
                                                     width: '50px',
@@ -308,12 +308,12 @@ export function DiscoverContent() {
                                                 </div>
                                                 <div style={{ flex: 1 }}>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                        <span style={{ color: '#fff', fontWeight: '600', fontSize: '15px' }}>
+                                                        <span style={{ color: 'var(--text-main)', fontWeight: '600', fontSize: '15px' }}>
                                                             {user.name}
                                                         </span>
                                                         {user.verified && <ShieldCheck size={14} color="#667eea" />}
                                                     </div>
-                                                    <div style={{ color: '#8b98a5', fontSize: '13px', marginTop: '2px' }}>
+                                                    <div style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '2px' }}>
                                                         {user.username}
                                                     </div>
                                                     {user.mutualFriends > 0 && (
@@ -424,24 +424,24 @@ export function MiniAppsContent() {
             flex: 1,
             display: 'flex',
             flexDirection: 'column',
-            background: '#0e1621',
+            background: 'var(--bg-main)',
             overflow: 'hidden'
         }}>
             {/* Header */}
             <div style={{
                 padding: '30px',
-                borderBottom: '1px solid #2a3441',
-                background: '#151f2e'
+                borderBottom: '1px solid var(--border-color)',
+                background: 'var(--bg-panel)'
             }}>
                 <h2 style={{
-                    color: '#fff',
+                    color: 'var(--text-main)',
                     margin: '0 0 10px 0',
                     fontSize: '28px',
                     fontWeight: '800'
                 }}>
                     Mini Apps
                 </h2>
-                <p style={{ color: '#8b98a5', margin: 0, fontSize: '14px' }}>
+                <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: '14px' }}>
                     Enhance your messaging experience with powerful utilities
                 </p>
             </div>
@@ -463,8 +463,8 @@ export function MiniAppsContent() {
                         <div
                             key={app.id}
                             style={{
-                                background: '#151f2e',
-                                border: '1px solid #2a3441',
+                                background: 'var(--bg-panel)',
+                                border: '1px solid var(--border-color)',
                                 borderRadius: '16px',
                                 padding: '24px',
                                 transition: 'all 0.3s',
@@ -478,7 +478,7 @@ export function MiniAppsContent() {
                                 e.currentTarget.style.boxShadow = `0 8px 20px ${app.color}33`;
                             }}
                             onMouseLeave={(e) => {
-                                e.currentTarget.style.borderColor = '#2a3441';
+                                e.currentTarget.style.borderColor = 'var(--border-color)';
                                 e.currentTarget.style.transform = 'translateY(0)';
                                 e.currentTarget.style.boxShadow = 'none';
                             }}
@@ -509,7 +509,7 @@ export function MiniAppsContent() {
                             </div>
 
                             <h3 style={{
-                                color: '#fff',
+                                color: 'var(--text-main)',
                                 margin: '0 0 8px 0',
                                 fontSize: '18px',
                                 fontWeight: '700'
@@ -518,7 +518,7 @@ export function MiniAppsContent() {
                             </h3>
 
                             <p style={{
-                                color: '#8b98a5',
+                                color: 'var(--text-muted)',
                                 margin: '0 0 15px 0',
                                 fontSize: '13px',
                                 lineHeight: '1.5'
@@ -571,18 +571,18 @@ export function MiniAppsContent() {
                 <div style={{
                     marginTop: '40px',
                     padding: '30px',
-                    background: '#151f2e',
-                    border: '1px solid #2a3441',
+                    background: 'var(--bg-panel)',
+                    border: '1px solid var(--border-color)',
                     borderRadius: '16px',
                     textAlign: 'center',
                     maxWidth: '600px',
                     margin: '40px auto 0'
                 }}>
                     <div style={{ fontSize: '48px', marginBottom: '15px' }}>🚀</div>
-                    <h3 style={{ color: '#fff', margin: '0 0 10px 0', fontSize: '20px', fontWeight: '700' }}>
+                    <h3 style={{ color: 'var(--text-main)', margin: '0 0 10px 0', fontSize: '20px', fontWeight: '700' }}>
                         More Apps Coming Soon
                     </h3>
-                    <p style={{ color: '#8b98a5', margin: 0, fontSize: '14px' }}>
+                    <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: '14px' }}>
                         We're constantly adding new mini apps to enhance your experience. Stay tuned!
                     </p>
                 </div>

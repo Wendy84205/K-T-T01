@@ -5,7 +5,7 @@ import {
     FileText, Briefcase, MessageSquare, Send, Phone, Video, Info,
     Shield, Lock, ChevronDown, X, Bell, BellOff, Pin, Trash2,
     Paperclip, Smile, Settings, MoreHorizontal, Edit2, Reply,
-    Forward, Check, CheckCheck, UserPlus, LogOut, RefreshCw, Hash
+    Forward, Check, CheckCheck, UserPlus, LogOut, RefreshCw, Hash, Building2
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../utils/api';
@@ -19,21 +19,23 @@ function ManagerNavItem({ icon, label, active, onClick, badge }) {
             title={label}
             style={{
                 width: '100%', display: 'flex', alignItems: 'center', gap: '12px',
-                padding: '12px 16px', background: active ? 'rgba(102,126,234,0.15)' : 'transparent',
-                border: 'none', borderLeft: `3px solid ${active ? '#667eea' : 'transparent'}`,
-                color: active ? '#667eea' : '#8b98a5', borderRadius: '0 10px 10px 0',
-                cursor: 'pointer', fontSize: '14px', fontWeight: active ? '600' : '400',
-                transition: 'all 0.2s', position: 'relative',
+                padding: '12px 16px', background: active ? 'var(--active-bg)' : 'transparent',
+                border: 'none', borderLeft: `3px solid ${active ? 'var(--primary)' : 'transparent'}`,
+                color: active ? 'var(--primary)' : 'var(--text-muted)', borderRadius: '0 10px 10px 0',
+                cursor: 'pointer', fontSize: '13px', fontWeight: '800',
+                textTransform: 'uppercase', letterSpacing: '0.02em',
+                transition: 'all 0.15s ease', position: 'relative',
+                margin: '2px 0'
             }}
-            onMouseEnter={e => { if (!active) e.currentTarget.style.background = 'rgba(102,126,234,0.07)'; }}
+            onMouseEnter={e => { if (!active) e.currentTarget.style.background = 'var(--bg-panel)'; }}
             onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent'; }}
         >
             {icon}
             <span style={{ flex: 1, textAlign: 'left' }}>{label}</span>
             {badge > 0 && (
                 <span style={{
-                    background: '#ef4444', color: '#fff', fontSize: '11px', fontWeight: '700',
-                    padding: '2px 6px', borderRadius: '10px', minWidth: '18px', textAlign: 'center'
+                    background: '#ef4444', color: '#fff', fontSize: '10px', fontWeight: '900',
+                    padding: '2px 8px', borderRadius: '6px', minWidth: '20px', textAlign: 'center'
                 }}>{badge}</span>
             )}
         </button>
@@ -189,33 +191,33 @@ function ChatPanel({ currentUser }) {
     const isGroup = selectedConv?.conversationType === 'group';
 
     return (
-        <div style={{ display: 'flex', height: '100%', background: '#0e1621', overflow: 'hidden' }}>
+        <div style={{ display: 'flex', height: '100%', background: '#ffffff', overflow: 'hidden' }}>
             {/* Conversation list */}
             <div style={{
-                width: '280px', flexShrink: 0, borderRight: '1px solid #2a3441',
-                display: 'flex', flexDirection: 'column', background: '#151f2e'
+                width: '280px', flexShrink: 0, borderRight: '1px solid #dee2e6',
+                display: 'flex', flexDirection: 'column', background: '#f8f9fa'
             }}>
-                <div style={{ padding: '16px', borderBottom: '1px solid #2a3441' }}>
-                    <h3 style={{ margin: '0 0 12px 0', color: '#fff', fontSize: '18px', fontWeight: '700' }}>Team Chat</h3>
+                <div style={{ padding: '16px', borderBottom: '1px solid #dee2e6' }}>
+                    <h3 style={{ margin: '0 0 12px 0', color: '#1a1d21', fontSize: '16px', fontWeight: '800', uppercase: 'true' }}>Team Messaging</h3>
                     <div style={{
                         display: 'flex', alignItems: 'center', gap: '8px',
-                        background: '#0e1621', borderRadius: '10px', padding: '8px 12px', border: '1px solid #2a3441'
+                        background: '#ffffff', borderRadius: '8px', padding: '8px 12px', border: '1px solid #dee2e6'
                     }}>
-                        <Search size={15} color="#8b98a5" />
-                        <input placeholder="Search conversations..." style={{
+                        <Search size={14} color="#616061" />
+                        <input placeholder="Search..." style={{
                             background: 'transparent', border: 'none', outline: 'none',
-                            color: '#fff', fontSize: '13px', width: '100%'
+                            color: '#1a1d21', fontSize: '13px', width: '100%'
                         }} />
                     </div>
                 </div>
 
                 <div style={{ flex: 1, overflowY: 'auto' }}>
                     {loading ? (
-                        <div style={{ padding: '24px', textAlign: 'center', color: '#8b98a5' }}>Loading...</div>
+                        <div style={{ padding: '24px', textAlign: 'center', color: '#616061' }}>Loading...</div>
                     ) : conversations.length === 0 ? (
-                        <div style={{ padding: '24px', textAlign: 'center', color: '#8b98a5', fontSize: '13px' }}>
-                            <MessageSquare size={32} style={{ margin: '0 auto 8px', opacity: 0.3 }} />
-                            <p>No conversations yet</p>
+                        <div style={{ padding: '24px', textAlign: 'center', color: '#616061', fontSize: '13px' }}>
+                            <MessageSquare size={32} style={{ margin: '0 auto 8px', opacity: 0.1 }} />
+                            <p>No messages</p>
                         </div>
                     ) : (
                         conversations.map(conv => {
@@ -228,46 +230,46 @@ function ChatPanel({ currentUser }) {
                                     onClick={() => handleSelectConv(conv)}
                                     style={{
                                         padding: '12px 16px', cursor: 'pointer', display: 'flex', gap: '10px',
-                                        alignItems: 'center', borderBottom: '1px solid #1a2332',
-                                        background: isSelected ? 'rgba(102,126,234,0.12)' : 'transparent',
-                                        borderLeft: `3px solid ${isSelected ? '#667eea' : 'transparent'}`,
+                                        alignItems: 'center', borderBottom: '1px solid #f1f3f5',
+                                        background: isSelected ? '#007bff10' : 'transparent',
+                                        borderLeft: `3px solid ${isSelected ? '#007bff' : 'transparent'}`,
                                         transition: 'all 0.15s'
                                     }}
-                                    onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = 'rgba(102,126,234,0.06)'; }}
+                                    onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = '#f1f3f5'; }}
                                     onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = 'transparent'; }}
                                 >
                                     <div style={{ position: 'relative', flexShrink: 0 }}>
                                         <div style={{
-                                            width: '42px', height: '42px', borderRadius: conv.conversationType === 'group' ? '12px' : '50%',
-                                            background: isSelected ? '#667eea' : '#2a3441',
+                                            width: '38px', height: '38px', borderRadius: '8px',
+                                            background: isSelected ? '#007bff' : '#f1f3f5',
                                             display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                            color: '#fff', fontWeight: '700', fontSize: '16px'
+                                            color: isSelected ? '#fff' : '#1a1d21', fontWeight: '800', fontSize: '14px'
                                         }}>
                                             {getConvInitial(conv)}
                                         </div>
                                         {online && (
                                             <div style={{
-                                                position: 'absolute', bottom: 0, right: 0, width: '11px', height: '11px',
-                                                background: '#4ade80', border: '2px solid #151f2e', borderRadius: '50%'
+                                                position: 'absolute', bottom: '-1px', right: '-1px', width: '10px', height: '10px',
+                                                background: '#4ade80', border: '2px solid #f8f9fa', borderRadius: '50%'
                                             }} />
                                         )}
                                     </div>
                                     <div style={{ flex: 1, minWidth: 0 }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <span style={{ color: '#fff', fontWeight: unread > 0 ? '700' : '500', fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '140px' }}>
+                                            <span style={{ color: '#1a1d21', fontWeight: unread > 0 ? '800' : '500', fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                                 {getConvName(conv)}
                                             </span>
-                                            <span style={{ color: '#8b98a5', fontSize: '11px', flexShrink: 0 }}>
+                                            <span style={{ color: '#616061', fontSize: '11px', flexShrink: 0 }}>
                                                 {conv.lastMessageAt ? formatTime(conv.lastMessageAt) : ''}
                                             </span>
                                         </div>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2px' }}>
-                                            <span style={{ color: '#8b98a5', fontSize: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '155px' }}>
-                                                {conv.lastMessage?.content || (conv.conversationType === 'group' ? `${conv.members?.length || 0} members` : 'Start chatting')}
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1px' }}>
+                                            <span style={{ color: '#616061', fontSize: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                {conv.lastMessage?.content || (conv.conversationType === 'group' ? 'Group channel' : 'Personal chat')}
                                             </span>
                                             {unread > 0 && (
                                                 <span style={{
-                                                    background: '#667eea', color: '#fff', fontSize: '11px', fontWeight: '700',
+                                                    background: '#007bff', color: '#fff', fontSize: '10px', fontWeight: '800',
                                                     width: '18px', height: '18px', borderRadius: '50%', display: 'flex',
                                                     alignItems: 'center', justifyContent: 'center', flexShrink: 0
                                                 }}>{unread > 9 ? '9+' : unread}</span>
@@ -283,38 +285,37 @@ function ChatPanel({ currentUser }) {
 
             {/* Main chat area */}
             {!selectedChat ? (
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '16px' }}>
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '16px', background: '#ffffff' }}>
                     <div style={{
-                        width: '80px', height: '80px', background: 'rgba(102,126,234,0.1)',
-                        borderRadius: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center'
+                        width: '64px', height: '64px', background: '#007bff10',
+                        borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center'
                     }}>
-                        <MessageSquare size={40} color="#667eea" />
+                        <MessageSquare size={32} color="#007bff" />
                     </div>
                     <div style={{ textAlign: 'center' }}>
-                        <h3 style={{ color: '#fff', margin: '0 0 8px 0', fontSize: '20px', fontWeight: '700' }}>Team Communication Hub</h3>
-                        <p style={{ color: '#8b98a5', margin: 0, fontSize: '14px' }}>Select a conversation from the left to start chatting</p>
-                        <p style={{ color: '#667eea', fontSize: '12px', marginTop: '8px', opacity: 0.8 }}>🔒 End-to-end encrypted</p>
+                        <h3 style={{ color: '#1a1d21', margin: '0 0 6px 0', fontSize: '18px', fontWeight: '800' }}>Team Communication</h3>
+                        <p style={{ color: '#616061', margin: 0, fontSize: '13px' }}>Select a team thread to start collaborating</p>
                     </div>
                 </div>
             ) : (
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, background: '#fafafa' }}>
                     {/* Chat header */}
-                    <div style={{ padding: '12px 20px', background: '#151f2e', borderBottom: '1px solid #2a3441', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ padding: '12px 20px', background: '#ffffff', borderBottom: '1px solid #dee2e6', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                             <div style={{
-                                width: '40px', height: '40px', borderRadius: isGroup ? '10px' : '50%',
-                                background: '#667eea', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                color: '#fff', fontWeight: '700', fontSize: '16px'
+                                width: '38px', height: '38px', borderRadius: '8px',
+                                background: '#007bff', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                color: '#fff', fontWeight: '800', fontSize: '15px'
                             }}>
                                 {getConvInitial(selectedConv)}
                             </div>
                             <div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                    <span style={{ color: '#fff', fontWeight: '600', fontSize: '15px' }}>{getConvName(selectedConv)}</span>
-                                    <Lock size={12} color="#667eea" />
+                                    <span style={{ color: '#1a1d21', fontWeight: '700', fontSize: '14px' }}>{getConvName(selectedConv)}</span>
+                                    <Lock size={12} color="#007bff" />
                                 </div>
-                                <span style={{ color: '#8b98a5', fontSize: '12px' }}>
-                                    {isGroup ? `${selectedConv.members?.length || 0} members` : (isOnline(selectedConv) ? '🟢 Active now' : '⚫ Offline')}
+                                <span style={{ color: '#616061', fontSize: '11px' }}>
+                                    {isGroup ? `${selectedConv.members?.length || 0} participants` : (isOnline(selectedConv) ? 'Active' : 'Offline')}
                                 </span>
                             </div>
                         </div>
@@ -498,22 +499,22 @@ function TeamOverviewPanel({ users, onStartChat }) {
         return `${u.firstName} ${u.lastName} ${u.email} ${u.role}`.toLowerCase().includes(q);
     });
 
-    const getRoleColor = (role) => ({ admin: '#ef4444', manager: '#f59e0b', user: '#10b981' }[role] || '#8b98a5');
+    const getRoleColor = (role) => ({ admin: '#dc2626', manager: '#d97706', user: '#059669' }[role] || '#616061');
 
     return (
         <div style={{ padding: '28px', overflowY: 'auto', height: '100%' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
                 <div>
-                    <h2 style={{ color: '#fff', margin: '0 0 6px 0', fontSize: '24px', fontWeight: '800' }}>Team Overview</h2>
-                    <p style={{ color: '#8b98a5', margin: 0, fontSize: '14px' }}>{users.length} team members</p>
+                    <h2 style={{ color: '#1a1d21', margin: '0 0 6px 0', fontSize: '22px', fontWeight: '900', textTransform: 'uppercase', tracking: '-0.02em' }}>Directory</h2>
+                    <p style={{ color: '#616061', margin: 0, fontSize: '13px', fontWeight: '500' }}>{users.length} active staff members linked</p>
                 </div>
-                <div style={{ background: '#151f2e', border: '1px solid #2a3441', borderRadius: '12px', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Search size={16} color="#8b98a5" />
+                <div style={{ background: '#ffffff', border: '1px solid #dee2e6', borderRadius: '10px', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: '8px', width: '260px' }}>
+                    <Search size={14} color="#616061" />
                     <input
                         value={search}
                         onChange={e => setSearch(e.target.value)}
-                        placeholder="Search team..."
-                        style={{ background: 'transparent', border: 'none', outline: 'none', color: '#fff', width: '180px', fontSize: '14px' }}
+                        placeholder="Filter by name, email or role..."
+                        style={{ background: 'transparent', border: 'none', outline: 'none', color: '#1a1d21', width: '100%', fontSize: '13px' }}
                     />
                 </div>
             </div>
@@ -521,56 +522,55 @@ function TeamOverviewPanel({ users, onStartChat }) {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' }}>
                 {filtered.map(u => (
                     <div key={u.id} style={{
-                        background: '#151f2e', border: '1px solid #2a3441', borderRadius: '16px',
-                        padding: '20px', transition: 'all 0.2s', cursor: 'default'
+                        background: '#ffffff', border: '1px solid #dee2e6', borderRadius: '12px',
+                        padding: '24px', transition: 'all 0.2s', cursor: 'default',
+                        shadow: '0 4px 20px rgba(0,0,0,0.02)'
                     }}
-                        onMouseEnter={e => e.currentTarget.style.borderColor = '#667eea'}
-                        onMouseLeave={e => e.currentTarget.style.borderColor = '#2a3441'}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '16px' }}>
+                        onMouseEnter={e => { e.currentTarget.style.borderColor = '#007bff'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
+                        onMouseLeave={e => { e.currentTarget.style.borderColor = '#dee2e6'; e.currentTarget.style.transform = 'translateY(0)'; }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '20px' }}>
                             <div style={{
-                                width: '52px', height: '52px', borderRadius: '14px',
-                                background: 'linear-gradient(135deg, #667eea, #764ba2)',
+                                width: '48px', height: '48px', borderRadius: '10px',
+                                background: '#f8f9fa', border: '1px solid #dee2e6',
                                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                color: '#fff', fontWeight: '700', fontSize: '20px', flexShrink: 0
+                                color: '#007bff', fontWeight: '800', fontSize: '18px', flexShrink: 0
                             }}>
                                 {u.firstName?.charAt(0) || '?'}
                             </div>
                             <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ color: '#fff', fontWeight: '600', fontSize: '16px' }}>{u.firstName} {u.lastName}</div>
-                                <div style={{ color: '#8b98a5', fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.email}</div>
+                                <div style={{ color: '#1a1d21', fontWeight: '700', fontSize: '15px' }}>{u.firstName} {u.lastName}</div>
+                                <div style={{ color: '#616061', fontSize: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.email}</div>
                             </div>
-                            <span style={{
-                                background: `${getRoleColor(u.role)}20`, color: getRoleColor(u.role),
-                                fontSize: '11px', fontWeight: '700', padding: '3px 8px', borderRadius: '6px',
-                                textTransform: 'uppercase', flexShrink: 0
-                            }}>{u.role}</span>
                         </div>
 
-                        <div style={{ display: 'flex', gap: '8px' }}>
-                            <button
-                                onClick={() => onStartChat(u.id)}
-                                style={{
-                                    flex: 1, background: 'rgba(102,126,234,0.1)', border: '1px solid rgba(102,126,234,0.3)',
-                                    color: '#667eea', padding: '8px', borderRadius: '8px', cursor: 'pointer',
-                                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
-                                    fontSize: '13px', fontWeight: '600', transition: 'all 0.2s'
-                                }}
-                                onMouseEnter={e => e.currentTarget.style.background = 'rgba(102,126,234,0.2)'}
-                                onMouseLeave={e => e.currentTarget.style.background = 'rgba(102,126,234,0.1)'}
-                            >
-                                <MessageSquare size={14} /> Chat
-                            </button>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                             <span style={{
-                                padding: '8px 10px', borderRadius: '8px',
-                                background: u.status === 'active' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
-                                color: u.status === 'active' ? '#10b981' : '#ef4444',
-                                fontSize: '12px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '4px',
-                                border: `1px solid ${u.status === 'active' ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`
+                                background: `${getRoleColor(u.role)}10`, color: getRoleColor(u.role),
+                                fontSize: '10px', fontWeight: '900', padding: '4px 10px', borderRadius: '6px',
+                                textTransform: 'uppercase', flexShrink: 0, tracking: '0.05em'
+                            }}>{u.role}</span>
+                            <span style={{
+                                color: u.status === 'active' ? '#059669' : '#dc2626',
+                                fontSize: '11px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '4px'
                             }}>
                                 <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'currentColor' }} />
-                                {u.status === 'active' ? 'Active' : 'Inactive'}
+                                {u.status === 'active' ? 'Operational' : 'Restricted'}
                             </span>
                         </div>
+
+                        <button
+                            onClick={() => onStartChat(u.id)}
+                            style={{
+                                width: '100%', background: '#007bff', border: 'none',
+                                color: '#fff', padding: '10px', borderRadius: '8px', cursor: 'pointer',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                                fontSize: '12px', fontWeight: '900', transition: 'all 0.2s', textTransform: 'uppercase'
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.background = '#0069d9'}
+                            onMouseLeave={e => e.currentTarget.style.background = '#007bff'}
+                        >
+                            <MessageSquare size={14} /> Open Secure Channel
+                        </button>
                     </div>
                 ))}
             </div>
@@ -636,28 +636,29 @@ export default function ManageHomePage() {
     ];
 
     return (
-        <div style={{ display: 'flex', height: '100vh', background: '#0e1621', color: '#fff', fontFamily: "'Inter', sans-serif" }}>
+        <div style={{ display: 'flex', height: '100vh', background: '#f8f9fa', color: '#1a1d21', fontFamily: "'Inter', sans-serif" }}>
             {/* Sidebar nav */}
             <div style={{
-                width: '220px', flexShrink: 0, background: '#151f2e', borderRight: '1px solid #2a3441',
+                width: '240px', flexShrink: 0, background: '#ffffff', borderRight: '1px solid #dee2e6',
                 display: 'flex', flexDirection: 'column', paddingTop: '20px'
             }}>
-                <div style={{ padding: '0 16px 20px', borderBottom: '1px solid #2a3441' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ padding: '0 20px 24px', borderBottom: '1px solid #f1f3f5' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                         <div style={{
-                            width: '40px', height: '40px', background: 'linear-gradient(135deg, #667eea, #764ba2)',
-                            borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center'
+                            width: '42px', height: '42px', background: '#007bff',
+                            borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            shadow: '0 4px 10px rgba(0,123,255,0.2)'
                         }}>
-                            <Shield size={22} color="#fff" />
+                            <Building2 size={24} color="#fff" />
                         </div>
                         <div>
-                            <div style={{ color: '#fff', fontWeight: '700', fontSize: '14px' }}>Manager Hub</div>
-                            <div style={{ color: '#8b98a5', fontSize: '12px' }}>{user?.firstName} {user?.lastName}</div>
+                            <div style={{ color: '#1a1d21', fontWeight: '800', fontSize: '15px', tracking: '-0.02em' }}>TechCorp</div>
+                            <div style={{ color: '#616061', fontSize: '11px', fontWeight: '700', uppercase: 'true' }}>Management</div>
                         </div>
                     </div>
                 </div>
 
-                <div style={{ flex: 1, paddingTop: '12px' }}>
+                <div style={{ flex: 1, paddingTop: '16px' }}>
                     {navItems.map(item => (
                         <ManagerNavItem
                             key={item.id}
@@ -670,12 +671,14 @@ export default function ManageHomePage() {
                     ))}
                 </div>
 
-                <div style={{ padding: '16px', borderTop: '1px solid #2a3441' }}>
+                <div style={{ padding: '16px', borderTop: '1px solid #f1f3f5' }}>
                     <button
                         onClick={() => { if (window.confirm('Logout?')) { localStorage.clear(); window.location.href = '/login'; } }}
-                        style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '10px', color: '#ef4444', cursor: 'pointer', fontSize: '13px', fontWeight: '600' }}
+                        style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', background: '#f8f9fa', border: '1px solid #dee2e6', borderRadius: '8px', color: '#616061', cursor: 'pointer', fontSize: '13px', fontWeight: '700', transition: 'all 0.15s' }}
+                        onMouseEnter={e => e.currentTarget.style.color = '#ef4444'}
+                        onMouseLeave={e => e.currentTarget.style.color = '#616061'}
                     >
-                        <LogOut size={16} /> Logout
+                        <LogOut size={16} /> Logout Access
                     </button>
                 </div>
             </div>
@@ -683,25 +686,25 @@ export default function ManageHomePage() {
             {/* Main content */}
             <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
                 {/* Top bar */}
-                <div style={{ padding: '16px 28px', background: '#151f2e', borderBottom: '1px solid #2a3441', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ padding: '16px 28px', background: '#ffffff', borderBottom: '1px solid #dee2e6', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
-                        <h1 style={{ margin: 0, fontSize: '22px', fontWeight: '800', color: '#fff' }}>
-                            {navItems.find(i => i.id === activeTab)?.label || 'Management Hub'}
+                        <h1 style={{ margin: 0, fontSize: '20px', fontWeight: '900', color: '#1a1d21', tracking: '-0.02em', textTransform: 'uppercase' }}>
+                            {navItems.find(i => i.id === activeTab)?.label || 'Console'}
                         </h1>
-                        <p style={{ color: '#8b98a5', fontSize: '13px', margin: '3px 0 0 0' }}>
+                        <p style={{ color: '#616061', fontSize: '11px', fontWeight: '700', margin: '3px 0 0 0', uppercase: 'true' }}>
                             {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
                         </p>
                     </div>
                     <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                        <button onClick={loadData} style={{ background: 'rgba(102,126,234,0.1)', border: '1px solid rgba(102,126,234,0.3)', color: '#667eea', padding: '8px', borderRadius: '8px', cursor: 'pointer' }}>
+                        <button onClick={loadData} style={{ background: '#f8f9fa', border: '1px solid #dee2e6', color: '#616061', padding: '8px', borderRadius: '8px', cursor: 'pointer', transition: 'all 0.15s' }}>
                             <RefreshCw size={16} />
                         </button>
                         {activeTab === 'projects' && (
                             <button
                                 onClick={() => setShowCreateModal(true)}
-                                style={{ background: 'linear-gradient(135deg, #667eea, #764ba2)', color: '#fff', border: 'none', borderRadius: '10px', padding: '10px 18px', fontSize: '13px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', boxShadow: '0 4px 12px rgba(102,126,234,0.35)' }}
+                                style={{ background: '#007bff', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px 20px', fontSize: '12px', fontWeight: '900', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', shadow: '0 4px 12px rgba(0,123,255,0.2)', textTransform: 'uppercase' }}
                             >
-                                <Plus size={16} /> New Project
+                                <Plus size={16} /> New Asset
                             </button>
                         )}
                     </div>
@@ -711,57 +714,58 @@ export default function ManageHomePage() {
                 <div style={{ flex: 1, overflow: 'hidden' }}>
                     {/* ── Overview ── */}
                     {activeTab === 'overview' && (
-                        <div style={{ padding: '28px', overflowY: 'auto', height: '100%' }}>
+                        <div style={{ padding: '28px', overflowY: 'auto', height: '100%', background: '#f8f9fa' }}>
                             {/* Stats */}
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '28px' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px', marginBottom: '28px' }}>
                                 {[
-                                    { label: 'Active Projects', value: stats.totalProjects, icon: <Layers size={22} />, color: '#667eea' },
-                                    { label: 'Pending Tasks', value: stats.activeTasks, icon: <CheckCircle2 size={22} />, color: '#10b981' },
-                                    { label: 'Team Capacity', value: stats.teamCapacity, icon: <Users size={22} />, color: '#f59e0b' },
-                                    { label: 'Deadlines This Week', value: stats.upcomingDeadlines, icon: <Clock size={22} />, color: '#ef4444' },
+                                    { label: 'Active Projects', value: stats.totalProjects, icon: <Layers size={20} />, color: '#007bff' },
+                                    { label: 'Pending Tasks', value: stats.activeTasks, icon: <CheckCircle2 size={20} />, color: '#059669' },
+                                    { label: 'Team Capacity', value: stats.teamCapacity, icon: <Users size={20} />, color: '#d97706' },
+                                    { label: 'Security Alerts', value: stats.upcomingDeadlines, icon: <Clock size={20} />, color: '#dc2626' },
                                 ].map((s, i) => (
-                                    <div key={i} style={{ background: '#151f2e', border: '1px solid #2a3441', borderRadius: '18px', padding: '22px', position: 'relative', overflow: 'hidden' }}>
-                                        <div style={{ position: 'absolute', top: 0, left: 0, width: '4px', height: '100%', background: s.color, borderRadius: '18px 0 0 18px' }} />
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <div key={i} style={{ background: '#ffffff', border: '1px solid #dee2e6', borderRadius: '16px', padding: '24px', position: 'relative', overflow: 'hidden', shadow: '0 4px 12px rgba(0,0,0,0.03)' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                             <div>
-                                                <div style={{ color: '#8b98a5', fontSize: '12px', fontWeight: '500', marginBottom: '8px' }}>{s.label}</div>
-                                                <div style={{ fontSize: '30px', fontWeight: '800', color: '#fff' }}>{s.value}</div>
+                                                <div style={{ color: '#616061', fontSize: '11px', fontWeight: '800', marginBottom: '8px', textTransform: 'uppercase', tracking: '0.05em' }}>{s.label}</div>
+                                                <div style={{ fontSize: '28px', fontWeight: '900', color: '#1a1d21' }}>{s.value}</div>
                                             </div>
-                                            <div style={{ background: `${s.color}18`, padding: '12px', borderRadius: '12px', color: s.color }}>{s.icon}</div>
+                                            <div style={{ background: `${s.color}10`, padding: '10px', borderRadius: '10px', color: s.color }}>{s.icon}</div>
                                         </div>
                                     </div>
                                 ))}
                             </div>
 
                             {/* Recent Activity */}
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-                                <div style={{ background: '#151f2e', border: '1px solid #2a3441', borderRadius: '18px', padding: '22px' }}>
-                                    <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', fontWeight: '700', color: '#fff' }}>Recent Projects</h3>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+                                <div style={{ background: '#ffffff', border: '1px solid #dee2e6', borderRadius: '16px', padding: '24px' }}>
+                                    <h3 style={{ margin: '0 0 20px 0', fontSize: '15px', fontWeight: '900', color: '#1a1d21', textTransform: 'uppercase', tracking: '0.02em' }}>Recent Assets</h3>
                                     {projects.slice(0, 4).map(p => (
-                                        <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 0', borderBottom: '1px solid #1a2332' }}>
+                                        <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 0', borderBottom: '1px solid #f1f3f5' }}>
                                             <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: getStatusColor(p.status), flexShrink: 0 }} />
                                             <div style={{ flex: 1, minWidth: 0 }}>
-                                                <div style={{ color: '#fff', fontSize: '13px', fontWeight: '500', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div>
-                                                <div style={{ color: '#8b98a5', fontSize: '11px', textTransform: 'capitalize' }}>{p.status?.replace('_', ' ')}</div>
+                                                <div style={{ color: '#1a1d21', fontSize: '13px', fontWeight: '700', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div>
+                                                <div style={{ color: '#616061', fontSize: '11px', textTransform: 'uppercase', fontWeight: '600' }}>{p.status?.replace('_', ' ')}</div>
                                             </div>
                                         </div>
                                     ))}
-                                    {projects.length === 0 && <div style={{ color: '#8b98a5', fontSize: '13px', textAlign: 'center', padding: '20px' }}>No projects yet</div>}
+                                    {projects.length === 0 && <div style={{ color: '#616061', fontSize: '13px', textAlign: 'center', padding: '40px' }}>Empty repository</div>}
                                 </div>
 
-                                <div style={{ background: '#151f2e', border: '1px solid #2a3441', borderRadius: '18px', padding: '22px' }}>
-                                    <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', fontWeight: '700', color: '#fff' }}>Team Members</h3>
+                                <div style={{ background: '#ffffff', border: '1px solid #dee2e6', borderRadius: '16px', padding: '24px' }}>
+                                    <h3 style={{ margin: '0 0 20px 0', fontSize: '15px', fontWeight: '900', color: '#1a1d21', textTransform: 'uppercase', tracking: '0.02em' }}>Security Team</h3>
                                     {teamUsers.slice(0, 5).map(u => (
-                                        <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 0', borderBottom: '1px solid #1a2332', cursor: 'pointer' }}
+                                        <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 0', borderBottom: '1px solid #f1f3f5', cursor: 'pointer' }}
                                             onClick={() => handleStartChatWithUser(u.id)}>
-                                            <div style={{ width: '34px', height: '34px', borderRadius: '10px', background: '#667eea', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: '700', fontSize: '14px', flexShrink: 0 }}>
+                                            <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: '#f8f9fa', border: '1px solid #dee2e6', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#007bff', fontWeight: '800', fontSize: '14px', flexShrink: 0 }}>
                                                 {u.firstName?.charAt(0)}
                                             </div>
                                             <div style={{ flex: 1 }}>
-                                                <div style={{ color: '#fff', fontSize: '13px', fontWeight: '500' }}>{u.firstName} {u.lastName}</div>
-                                                <div style={{ color: '#8b98a5', fontSize: '11px', textTransform: 'capitalize' }}>{u.role}</div>
+                                                <div style={{ color: '#1a1d21', fontSize: '13px', fontWeight: '700' }}>{u.firstName} {u.lastName}</div>
+                                                <div style={{ color: '#616061', fontSize: '11px', textTransform: 'uppercase' }}>{u.role}</div>
                                             </div>
-                                            <MessageSquare size={14} color="#667eea" />
+                                            <div style={{ background: '#007bff10', padding: '6px', borderRadius: '6px' }}>
+                                                <MessageSquare size={14} color="#007bff" />
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
@@ -779,50 +783,55 @@ export default function ManageHomePage() {
 
                     {/* ── Projects ── */}
                     {activeTab === 'projects' && (
-                        <div style={{ padding: '28px', overflowY: 'auto', height: '100%' }}>
+                        <div style={{ padding: '28px', overflowY: 'auto', height: '100%', background: '#f8f9fa' }}>
                             {loading ? (
-                                <div style={{ textAlign: 'center', padding: '80px', color: '#8b98a5' }}>Loading projects...</div>
+                                <div style={{ textAlign: 'center', padding: '100px', color: '#616061' }}>
+                                    <RefreshCw className="animate-spin" size={32} style={{ margin: '0 auto 16px', opacity: 0.2 }} />
+                                    <p className="font-bold text-xs uppercase tracking-widest">Scanning Repository...</p>
+                                </div>
                             ) : (
                                 <>
-                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '18px' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '20px' }}>
                                         {projects.map(project => (
                                             <div key={project.id} style={{
-                                                background: '#151f2e', borderRadius: '18px', border: '1px solid #2a3441', padding: '22px', transition: 'all 0.2s', cursor: 'pointer'
+                                                background: '#ffffff', borderRadius: '16px', border: '1px solid #dee2e6', padding: '24px', transition: 'all 0.2s', cursor: 'pointer', shadow: '0 4px 15px rgba(0,0,0,0.02)'
                                             }}
-                                                onMouseEnter={e => { e.currentTarget.style.borderColor = '#667eea'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
-                                                onMouseLeave={e => { e.currentTarget.style.borderColor = '#2a3441'; e.currentTarget.style.transform = 'translateY(0)'; }}>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '14px' }}>
-                                                    <span style={{ background: `${getStatusColor(project.status)}20`, color: getStatusColor(project.status), fontSize: '11px', fontWeight: '700', textTransform: 'uppercase', padding: '4px 10px', borderRadius: '8px' }}>
+                                                onMouseEnter={e => { e.currentTarget.style.borderColor = '#007bff'; e.currentTarget.style.transform = 'translateY(-3px)'; }}
+                                                onMouseLeave={e => { e.currentTarget.style.borderColor = '#dee2e6'; e.currentTarget.style.transform = 'translateY(0)'; }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '18px' }}>
+                                                    <span style={{ background: `${getStatusColor(project.status)}15`, color: getStatusColor(project.status), fontSize: '10px', fontWeight: '900', textTransform: 'uppercase', padding: '5px 12px', borderRadius: '6px', tracking: '0.05em' }}>
                                                         {project.status?.replace('_', ' ')}
                                                     </span>
-                                                    <MoreVertical size={16} color="#8b98a5" />
+                                                    <button style={{ background: 'transparent', border: 'none', color: '#616061', cursor: 'pointer' }}><MoreHorizontal size={18} /></button>
                                                 </div>
-                                                <h3 style={{ fontSize: '17px', fontWeight: '700', marginBottom: '8px', color: '#fff' }}>{project.name}</h3>
-                                                <p style={{ color: '#8b98a5', fontSize: '13px', marginBottom: '16px', height: '36px', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
-                                                    {project.description || 'No description provided.'}
+                                                <h3 style={{ fontSize: '17px', fontWeight: '900', marginBottom: '10px', color: '#1a1d21' }}>{project.name}</h3>
+                                                <p style={{ color: '#616061', fontSize: '13px', marginBottom: '20px', height: '40px', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', lineHeight: '1.5' }}>
+                                                    {project.description || 'Enterprise grade initiative with designated oversight and security protocols.'}
                                                 </p>
-                                                <div style={{ display: 'flex', gap: '12px', color: '#8b98a5', fontSize: '12px', marginBottom: '14px' }}>
-                                                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><Calendar size={12} /> {project.deadline ? new Date(project.deadline).toLocaleDateString() : 'No deadline'}</span>
-                                                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><Users size={12} /> Team</span>
+                                                <div style={{ display: 'flex', gap: '16px', color: '#616061', fontSize: '11px', fontWeight: '700', marginBottom: '20px', textTransform: 'uppercase' }}>
+                                                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Calendar size={14} color="#007bff" /> {project.deadline ? new Date(project.deadline).toLocaleDateString() : 'Unscheduled'}</span>
+                                                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Users size={14} color="#007bff" /> Team Assigned</span>
                                                 </div>
                                                 <div>
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#8b98a5', fontSize: '12px', marginBottom: '5px' }}>
-                                                        <span>Progress</span><span style={{ color: '#fff', fontWeight: '600' }}>65%</span>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#616061', fontSize: '11px', fontWeight: '800', marginBottom: '8px', textTransform: 'uppercase' }}>
+                                                        <span>Sync Status</span><span style={{ color: '#1a1d21' }}>82%</span>
                                                     </div>
-                                                    <div style={{ height: '5px', background: '#1a2332', borderRadius: '3px', overflow: 'hidden' }}>
-                                                        <div style={{ width: '65%', height: '100%', background: 'linear-gradient(90deg, #667eea, #764ba2)', borderRadius: '3px', transition: 'width 0.8s ease' }} />
+                                                    <div style={{ height: '6px', background: '#f1f3f5', borderRadius: '10px', overflow: 'hidden', border: '1px solid #dee2e6' }}>
+                                                        <div style={{ width: '82%', height: '100%', background: '#007bff', borderRadius: '10px', transition: 'width 1s ease-in-out' }} />
                                                     </div>
                                                 </div>
                                             </div>
                                         ))}
 
                                         {projects.length === 0 && (
-                                            <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '80px', background: '#151f2e', borderRadius: '18px', border: '1px dashed #2a3441' }}>
-                                                <Briefcase size={48} style={{ color: '#2a3441', margin: '0 auto 16px' }} />
-                                                <h3 style={{ color: '#fff', marginBottom: '8px' }}>No Projects Yet</h3>
-                                                <p style={{ color: '#8b98a5', marginBottom: '20px' }}>Create your first project to get started.</p>
-                                                <button onClick={() => setShowCreateModal(true)} style={{ background: '#667eea', color: '#fff', border: 'none', borderRadius: '10px', padding: '10px 24px', fontWeight: '600', cursor: 'pointer' }}>
-                                                    Create Project
+                                            <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '100px', background: '#ffffff', borderRadius: '24px', border: '2px dashed #dee2e6', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                                <div style={{ width: '80px', height: '80px', background: '#f8f9fa', borderRadius: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '24px' }}>
+                                                    <Briefcase size={32} style={{ color: '#dee2e6' }} />
+                                                </div>
+                                                <h3 style={{ color: '#1a1d21', marginBottom: '10px', fontSize: '20px', fontWeight: '900' }}>Active Assets: 0</h3>
+                                                <p style={{ color: '#616061', marginBottom: '28px', maxWidth: '300px', fontSize: '14px' }}>Deployment repository is currently empty. Initialize a new project to start managing resources.</p>
+                                                <button onClick={() => setShowCreateModal(true)} style={{ background: '#007bff', color: '#fff', border: 'none', borderRadius: '10px', padding: '14px 32px', fontWeight: '900', cursor: 'pointer', shadow: '0 4px 15px rgba(0,123,255,0.2)', textTransform: 'uppercase', fontSize: '12px' }}>
+                                                    Initialize Project
                                                 </button>
                                             </div>
                                         )}
@@ -836,7 +845,7 @@ export default function ManageHomePage() {
 
             {/* Create Project Modal */}
             {showCreateModal && (
-                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, backdropFilter: 'blur(6px)' }}>
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(26,29,33,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, backdropFilter: 'blur(8px)' }}>
                     <form
                         onSubmit={async (e) => {
                             e.preventDefault();
@@ -847,36 +856,35 @@ export default function ManageHomePage() {
                                 loadData();
                             } catch (err) { alert('Error: ' + err.message); }
                         }}
-                        style={{ background: '#151f2e', border: '1px solid #2a3441', borderRadius: '24px', padding: '32px', width: '100%', maxWidth: '480px' }}
+                        style={{ background: '#ffffff', border: '1px solid #dee2e6', borderRadius: '24px', padding: '40px', width: '100%', maxWidth: '440px', shadow: '0 20px 40px rgba(0,0,0,0.1)' }}
                     >
-                        <h2 style={{ fontSize: '22px', fontWeight: '800', marginBottom: '6px' }}>New Project</h2>
-                        <p style={{ color: '#8b98a5', fontSize: '13px', marginBottom: '24px' }}>Establish a new secure workspace for your team.</p>
-                        <div style={{ display: 'grid', gap: '18px' }}>
-                            {[
-                                { label: 'Project Name', name: 'name', type: 'text', placeholder: 'e.g. Secure Infrastructure Overhaul', required: true },
-                                { label: 'Description', name: 'description', type: 'textarea', placeholder: 'Core objectives and scope...' },
-                            ].map(f => (
-                                <div key={f.name}>
-                                    <label style={{ display: 'block', color: '#8b98a5', fontSize: '12px', marginBottom: '6px', fontWeight: '600' }}>{f.label}</label>
-                                    {f.type === 'textarea'
-                                        ? <textarea name={f.name} rows="3" placeholder={f.placeholder} style={{ width: '100%', background: '#0e1621', border: '1px solid #2a3441', borderRadius: '10px', padding: '12px', color: '#fff', outline: 'none', resize: 'none', fontSize: '14px', boxSizing: 'border-box' }} />
-                                        : <input name={f.name} type={f.type} required={f.required} placeholder={f.placeholder} style={{ width: '100%', background: '#0e1621', border: '1px solid #2a3441', borderRadius: '10px', padding: '12px', color: '#fff', outline: 'none', fontSize: '14px', boxSizing: 'border-box' }} />
-                                    }
-                                </div>
-                            ))}
+                        <div style={{ width: '48px', height: '48px', background: '#007bff10', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '24px' }}>
+                            <Layers size={24} color="#007bff" />
+                        </div>
+                        <h2 style={{ fontSize: '20px', fontWeight: '900', marginBottom: '8px', color: '#1a1d21', textTransform: 'uppercase', tracking: '-0.02em' }}>Initialize Asset</h2>
+                        <p style={{ color: '#616061', fontSize: '13px', marginBottom: '32px' }}>Define project parameters and security classifications.</p>
+                        <div style={{ display: 'grid', gap: '20px' }}>
                             <div>
-                                <label style={{ display: 'block', color: '#8b98a5', fontSize: '12px', marginBottom: '6px', fontWeight: '600' }}>Security Classification</label>
-                                <select name="securityLevel" style={{ width: '100%', background: '#0e1621', border: '1px solid #2a3441', borderRadius: '10px', padding: '12px', color: '#fff', outline: 'none', fontSize: '14px' }}>
-                                    <option value="1">Standard (L1)</option>
-                                    <option value="2">Restricted (L2)</option>
-                                    <option value="3">Confidential (L3)</option>
-                                    <option value="4">Secret (L4)</option>
-                                    <option value="5">Top Secret (L5)</option>
+                                <label style={{ display: 'block', color: '#616061', fontSize: '11px', marginBottom: '8px', fontWeight: '800', textTransform: 'uppercase' }}>Identification</label>
+                                <input name="name" type="text" required placeholder="Project Name" style={{ width: '100%', background: '#f8f9fa', border: '1px solid #dee2e6', borderRadius: '8px', padding: '14px', color: '#1a1d21', outline: 'none', fontSize: '14px', boxSizing: 'border-box' }} />
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', color: '#616061', fontSize: '11px', marginBottom: '8px', fontWeight: '800', textTransform: 'uppercase' }}>Scope Analysis</label>
+                                <textarea name="description" rows="3" placeholder="Core objectives..." style={{ width: '100%', background: '#f8f9fa', border: '1px solid #dee2e6', borderRadius: '8px', padding: '14px', color: '#1a1d21', outline: 'none', resize: 'none', fontSize: '14px', boxSizing: 'border-box' }} />
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', color: '#616061', fontSize: '11px', marginBottom: '8px', fontWeight: '800', textTransform: 'uppercase' }}>Classification Level</label>
+                                <select name="securityLevel" style={{ width: '100%', background: '#f8f9fa', border: '1px solid #dee2e6', borderRadius: '8px', padding: '14px', color: '#1a1d21', outline: 'none', fontSize: '14px' }}>
+                                    <option value="1">L1: Standard Tier</option>
+                                    <option value="2">L2: Restricted Access</option>
+                                    <option value="3">L3: Confidential Stream</option>
+                                    <option value="4">L4: Secret Protocol</option>
+                                    <option value="5">L5: Top Secret / Sovereign</option>
                                 </select>
                             </div>
-                            <div style={{ display: 'flex', gap: '12px', marginTop: '4px' }}>
-                                <button type="button" onClick={() => setShowCreateModal(false)} style={{ flex: 1, padding: '13px', borderRadius: '10px', border: '1px solid #2a3441', background: 'transparent', color: '#fff', fontWeight: '600', cursor: 'pointer' }}>Cancel</button>
-                                <button type="submit" style={{ flex: 1, padding: '13px', borderRadius: '10px', border: 'none', background: 'linear-gradient(135deg, #667eea, #764ba2)', color: '#fff', fontWeight: '600', cursor: 'pointer' }}>Create</button>
+                            <div style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
+                                <button type="button" onClick={() => setShowCreateModal(false)} style={{ flex: 1, padding: '14px', borderRadius: '8px', border: '1px solid #dee2e6', background: 'transparent', color: '#616061', fontWeight: '800', cursor: 'pointer', fontSize: '12px', textTransform: 'uppercase' }}>Cancel</button>
+                                <button type="submit" style={{ flex: 1, padding: '14px', borderRadius: '8px', border: 'none', background: '#007bff', color: '#fff', fontWeight: '800', cursor: 'pointer', fontSize: '12px', textTransform: 'uppercase' }}>Authorize</button>
                             </div>
                         </div>
                     </form>

@@ -89,15 +89,16 @@ export function EnhancedMessageBubble({ message, isOwn, showAvatar, currentUserI
                 opacity: 0.8
             }}>
                 <div style={{
-                    background: 'rgba(255, 255, 255, 0.05)',
-                    padding: '6px 20px',
+                    background: '#f8f9fa',
+                    padding: '8px 24px',
                     borderRadius: '20px',
-                    fontSize: '12px',
-                    color: '#8b98a5',
-                    border: '1px solid rgba(255, 255, 255, 0.05)',
+                    fontSize: '11px',
+                    color: '#616061',
+                    border: '1px solid #dee2e6',
                     textAlign: 'center',
-                    fontStyle: 'italic',
-                    backdropFilter: 'blur(10px)'
+                    fontWeight: '800',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em'
                 }}>
                     {message.content}
                 </div>
@@ -118,45 +119,45 @@ export function EnhancedMessageBubble({ message, isOwn, showAvatar, currentUserI
                 margin: '12px 0'
             }}>
                 <div style={{
-                    background: '#151f2e',
+                    background: '#ffffff',
                     padding: '24px',
                     borderRadius: '24px',
-                    border: '2px solid #667eea',
+                    border: '2px solid #007bff',
                     width: '320px',
-                    boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
+                    boxShadow: '0 10px 30px rgba(0,0,0,0.05)',
                     position: 'relative'
                 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-                        <div style={{ width: '32px', height: '32px', background: 'rgba(102, 126, 234, 0.1)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <div style={{ width: '32px', height: '32px', background: '#007bff0a', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                             <span style={{ fontSize: '18px' }}>📊</span>
                         </div>
-                        <h4 style={{ margin: 0, fontSize: '16px', fontWeight: '700', color: '#fff' }}>{question}</h4>
+                        <h4 style={{ margin: 0, fontSize: '16px', fontWeight: '900', color: '#1a1d21', textTransform: 'uppercase', tracking: '-0.02em' }}>{question}</h4>
                     </div>
                     <div style={{ display: 'grid', gap: '8px' }}>
                         {options.map((opt, i) => (
                             <button
                                 key={i}
                                 style={{
-                                    background: 'rgba(102, 126, 234, 0.05)',
-                                    border: '1px solid #2a3441',
+                                    background: '#f8f9fa',
+                                    border: '1px solid #dee2e6',
                                     padding: '12px 16px',
                                     borderRadius: '12px',
-                                    color: '#fff',
+                                    color: '#1a1d21',
                                     textAlign: 'left',
                                     fontSize: '14px',
                                     cursor: 'pointer',
                                     transition: 'all 0.2s',
-                                    fontWeight: '500'
+                                    fontWeight: '700'
                                 }}
-                                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(102, 126, 234, 0.15)'; e.currentTarget.style.borderColor = '#667eea'; }}
-                                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(102, 126, 234, 0.05)'; e.currentTarget.style.borderColor = '#2a3441'; }}
+                                onMouseEnter={e => { e.currentTarget.style.background = '#007bff0a'; e.currentTarget.style.borderColor = '#007bff'; }}
+                                onMouseLeave={e => { e.currentTarget.style.background = '#f8f9fa'; e.currentTarget.style.borderColor = '#dee2e6'; }}
                             >
                                 {opt}
                             </button>
                         ))}
                     </div>
-                    <div style={{ marginTop: '15px', padding: '10px', background: 'rgba(0,0,0,0.2)', borderRadius: '12px', textAlign: 'center', fontSize: '11px', color: '#8b98a5' }}>
-                        Voting is anonymous • Results will be shared after closing
+                    <div style={{ marginTop: '15px', padding: '10px', background: '#f8f9fa', borderRadius: '12px', textAlign: 'center', fontSize: '11px', color: '#616061', fontWeight: '600' }}>
+                        Secured Voting Process • Authorized Respondents Only
                     </div>
                 </div>
             </div>
@@ -172,24 +173,24 @@ export function EnhancedMessageBubble({ message, isOwn, showAvatar, currentUserI
                 margin: '20px 0'
             }}>
                 <div style={{
-                    background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
-                    padding: '24px',
+                    background: '#ffffff',
+                    padding: '32px',
                     borderRadius: '24px',
-                    border: '1px solid #667eea',
+                    border: '1px solid #007bff',
                     width: '90%',
                     maxWidth: '500px',
                     position: 'relative',
                     textAlign: 'center',
-                    backdropFilter: 'blur(10px)'
+                    boxShadow: '0 4px 20px rgba(0,123,255,0.05)'
                 }}>
-                    <div style={{ position: 'absolute', top: '-15px', left: '50%', transform: 'translateX(-50%)', background: '#667eea', padding: '4px 16px', borderRadius: '12px', color: '#fff', fontSize: '11px', fontWeight: '800', letterSpacing: '1px' }}>
-                        TEAM BROADCAST
+                    <div style={{ position: 'absolute', top: '-15px', left: '50%', transform: 'translateX(-50%)', background: '#007bff', padding: '4px 20px', borderRadius: '12px', color: '#fff', fontSize: '10px', fontWeight: '900', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                        Official Protocol Directive
                     </div>
-                    <div style={{ color: '#fff', fontSize: '16px', fontWeight: '600', lineHeight: '1.6', marginBottom: '12px' }}>
+                    <div style={{ color: '#1a1d21', fontSize: '16px', fontWeight: '800', lineHeight: '1.6', marginBottom: '16px' }}>
                         {message.content}
                     </div>
-                    <div style={{ fontSize: '12px', color: '#8b98a5' }}>
-                        Sent by {message.sender?.firstName || 'Manager'} • {new Date(message.createdAt).toLocaleTimeString()}
+                    <div style={{ fontSize: '12px', color: '#616061', fontWeight: '600' }}>
+                        Broadcast by {message.sender?.firstName || 'Command'} • {new Date(message.createdAt).toLocaleTimeString()}
                     </div>
                 </div>
             </div>
@@ -249,75 +250,83 @@ export function EnhancedMessageBubble({ message, isOwn, showAvatar, currentUserI
     return (
         <div style={{
             display: 'flex',
-            justifyContent: isOwn ? 'flex-end' : 'flex-start',
-            gap: '12px',
-            alignItems: 'flex-end',
-            position: 'relative',
-            marginBottom: '4px'
+            flexDirection: 'column',
+            alignItems: isOwn ? 'flex-end' : 'flex-start',
+            marginBottom: '4px',
+            width: '100%'
         }}>
-            {!isOwn && (
+            {!isOwn && showAvatar && (
                 <div style={{
-                    width: '32px',
-                    height: '32px',
-                    borderRadius: '10px',
-                    background: '#667eea',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '14px',
+                    fontSize: '13px',
                     fontWeight: '700',
-                    color: '#fff',
-                    flexShrink: 0,
-                    visibility: showAvatar ? 'visible' : 'hidden'
+                    color: 'var(--text-muted)',
+                    marginBottom: '4px',
+                    paddingLeft: '44px' /* 34px avatar + 10px gap */
                 }}>
-                    {message.sender?.firstName?.charAt(0) || message.sender?.username?.charAt(0) || '?'}
+                    {message.sender?.firstName || message.sender?.username || 'User'}
                 </div>
             )}
 
-            <div style={{ maxWidth: '75%', position: 'relative' }}>
-                {!isOwn && showAvatar && (
+            <div style={{
+                display: 'flex',
+                justifyContent: isOwn ? 'flex-end' : 'flex-start',
+                gap: '10px',
+                alignItems: 'flex-start',
+                position: 'relative',
+                width: '100%'
+            }}>
+                {/* Other user avatar - left side */}
+                {!isOwn && (
                     <div style={{
-                        fontSize: '12px',
-                        color: '#8b98a5',
-                        marginBottom: '4px',
-                        marginLeft: '12px'
+                        width: '34px',
+                        height: '34px',
+                        borderRadius: '8px',
+                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '13px',
+                        fontWeight: '800',
+                        color: '#fff',
+                        flexShrink: 0,
+                        visibility: showAvatar ? 'visible' : 'hidden'
                     }}>
-                        {message.sender?.firstName || message.sender?.username || 'User'} {message.sender?.lastName || ''}
+                        {message.sender?.firstName?.charAt(0) || message.sender?.username?.charAt(0) || '?'}
                     </div>
                 )}
 
-                <div
+                <div style={{ maxWidth: '72%', position: 'relative' }}>                <div
                     onMouseEnter={() => setShowReactions(true)}
                     onMouseLeave={() => setShowReactions(false)}
                     style={{ position: 'relative' }}
                 >
                     <div style={{
-                        background: isOwn ? '#667eea' : '#1a2332',
-                        color: '#fff',
-                        padding: '12px 16px',
-                        borderRadius: isOwn ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
+                        background: isOwn ? '#667eea' : 'var(--bg-panel)',
+                        color: isOwn ? '#ffffff' : 'var(--text-main)',
+                        padding: '10px 16px',
+                        borderRadius: isOwn ? '16px 4px 16px 16px' : '4px 16px 16px 16px',
                         fontSize: '14px',
                         lineHeight: '1.5',
                         wordBreak: 'break-word',
                         position: 'relative',
-                        boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                        border: isOwn ? 'none' : '1px solid var(--border-color)',
+                        boxShadow: '0 1px 2px rgba(0,0,0,0.06)'
                     }}>
                         {message.messageType === 'file' ? (
                             <div style={{
                                 display: 'flex',
                                 alignItems: 'center',
                                 gap: '12px',
-                                background: 'rgba(0,0,0,0.2)',
-                                padding: '10px',
-                                borderRadius: '10px',
-                                marginTop: '4px',
-                                border: '1px solid rgba(255,255,255,0.05)'
+                                background: isOwn ? 'rgba(255,255,255,0.1)' : '#f8f9fa',
+                                padding: '12px',
+                                borderRadius: '8px',
+                                border: isOwn ? 'none' : '1px solid #dee2e6'
                             }}>
                                 <div style={{
                                     width: '36px',
                                     height: '36px',
-                                    borderRadius: '8px',
-                                    background: '#667eea',
+                                    borderRadius: '6px',
+                                    background: '#007bff',
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
@@ -327,45 +336,28 @@ export function EnhancedMessageBubble({ message, isOwn, showAvatar, currentUserI
                                 </div>
                                 <div style={{ flex: 1, minWidth: 0 }}>
                                     <div style={{
-                                        fontSize: '13px',
-                                        fontWeight: '600',
-                                        color: '#fff',
+                                        fontSize: '14px',
+                                        fontWeight: '700',
+                                        color: isOwn ? '#fff' : '#1a1d21',
                                         whiteSpace: 'nowrap',
                                         overflow: 'hidden',
                                         textOverflow: 'ellipsis'
                                     }}>
                                         {message.content?.replace('📎 Shared a file: ', '') || 'Shared File'}
                                     </div>
-                                    <div style={{ fontSize: '11px', color: '#8b98a5' }}>Encrypted Attachment</div>
+                                    <div style={{ fontSize: '11px', color: isOwn ? 'rgba(255,255,255,0.7)' : '#616061' }}>E2EE Encrypted</div>
                                 </div>
                                 <button
                                     onClick={() => {
                                         const filename = message.content?.replace('📎 Shared a file: ', '') || 'file';
-                                        if (message.fileId) {
-                                            api.downloadFile(message.fileId, filename);
-                                        } else {
-                                            alert('File ID not found for this message.');
-                                        }
+                                        if (message.fileId) api.downloadFile(message.fileId, filename);
                                     }}
-                                    style={{
-                                        background: 'transparent',
-                                        border: 'none',
-                                        color: '#667eea',
-                                        cursor: 'pointer',
-                                        padding: '4px',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center'
-                                    }}
-                                    title="Download File"
-                                >
-                                    <Download size={18} />
-                                </button>
+                                    style={{ background: 'transparent', border: 'none', color: isOwn ? '#fff' : '#007bff', cursor: 'pointer' }}
+                                ><Download size={18} /></button>
                             </div>
                         ) : message.messageType === 'voice' ? (
                             <div style={{ marginTop: '4px' }}>
                                 <VoiceMessage fileId={message.fileId} />
-                                <div style={{ fontSize: '11px', color: '#8b98a5', marginTop: '2px' }}>Voice Message</div>
                             </div>
                         ) : (
                             message.content
@@ -376,226 +368,130 @@ export function EnhancedMessageBubble({ message, isOwn, showAvatar, currentUserI
                             onClick={() => setShowMenu(!showMenu)}
                             style={{
                                 position: 'absolute',
-                                top: '4px',
-                                right: '4px',
+                                top: '8px',
+                                right: '-30px',
                                 cursor: 'pointer',
                                 opacity: showReactions ? 1 : 0,
-                                transition: 'opacity 0.2s',
-                                padding: '4px',
-                                borderRadius: '4px',
-                                background: 'rgba(0,0,0,0.1)'
+                                color: '#616061'
                             }}
                         >
-                            <MoreVertical size={14} />
+                            <MoreVertical size={16} />
                         </div>
 
                         {/* Context menu */}
                         {showMenu && (
                             <div style={{
                                 position: 'absolute',
-                                top: '100%',
-                                right: isOwn ? 0 : 'auto',
-                                left: isOwn ? 'auto' : 0,
-                                marginTop: '4px',
-                                background: '#1a2332',
-                                border: '1px solid #2a3441',
+                                top: '0',
+                                right: isOwn ? 'calc(100% + 10px)' : 'auto',
+                                left: isOwn ? 'auto' : 'calc(100% + 10px)',
+                                background: '#ffffff',
+                                border: '1px solid #dee2e6',
                                 borderRadius: '8px',
-                                boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                                boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
                                 zIndex: 100,
-                                minWidth: '120px'
+                                minWidth: '150px'
                             }}>
-                                <div
-                                    onClick={handlePin}
-                                    style={{
-                                        padding: '10px 16px',
-                                        cursor: 'pointer',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '8px',
-                                        fontSize: '13px',
-                                        color: '#fff',
-                                        borderRadius: '8px'
-                                    }}
-                                    onMouseEnter={(e) => e.currentTarget.style.background = '#2a3441'}
-                                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                                >
-                                    <Pin size={14} />
-                                    Pin Message
-                                </div>
-                                <div
-                                    onClick={() => { onReply && onReply(message); setShowMenu(false); }}
-                                    style={{
-                                        padding: '10px 16px',
-                                        cursor: 'pointer',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '8px',
-                                        fontSize: '13px',
-                                        color: '#fff'
-                                    }}
-                                    onMouseEnter={(e) => e.currentTarget.style.background = '#2a3441'}
-                                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                                >
-                                    <Reply size={14} />
-                                    Reply
-                                </div>
-                                <div
-                                    onClick={() => { onForward && onForward(message); setShowMenu(false); }}
-                                    style={{
-                                        padding: '10px 16px',
-                                        cursor: 'pointer',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '8px',
-                                        fontSize: '13px',
-                                        color: '#fff'
-                                    }}
-                                    onMouseEnter={(e) => e.currentTarget.style.background = '#2a3441'}
-                                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                                >
-                                    <Forward size={14} />
-                                    Forward
-                                </div>
-                                {isOwn && (
+                                {[
+                                    { icon: Pin, text: 'Pin', action: handlePin },
+                                    { icon: Reply, text: 'Reply', action: () => { onReply && onReply(message); setShowMenu(false); } },
+                                    { icon: Forward, text: 'Forward', action: () => { onForward && onForward(message); setShowMenu(false); } },
+                                    ...(isOwn ? [
+                                        { icon: Edit2, text: 'Edit', action: () => { onEdit && onEdit(message); setShowMenu(false); } },
+                                        { icon: Trash2, text: 'Delete', action: handleDelete, color: '#e01e5a' }
+                                    ] : [])
+                                ].map((item, i) => (
                                     <div
-                                        onClick={() => { onEdit && onEdit(message); setShowMenu(false); }}
+                                        key={i}
+                                        onClick={item.action}
                                         style={{
-                                            padding: '10px 16px',
+                                            padding: '8px 16px',
                                             cursor: 'pointer',
                                             display: 'flex',
                                             alignItems: 'center',
-                                            gap: '8px',
+                                            gap: '10px',
                                             fontSize: '13px',
-                                            color: '#fff'
+                                            color: item.color || '#1a1d21'
                                         }}
-                                        onMouseEnter={(e) => e.currentTarget.style.background = '#2a3441'}
+                                        onMouseEnter={(e) => e.currentTarget.style.background = '#f8f9fa'}
                                         onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                                     >
-                                        <Edit2 size={14} />
-                                        Edit Message
+                                        <item.icon size={14} /> {item.text}
                                     </div>
-                                )}
-                                {isOwn && (
-                                    <div
-                                        onClick={handleDelete}
-                                        style={{
-                                            padding: '10px 16px',
-                                            cursor: 'pointer',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '8px',
-                                            fontSize: '13px',
-                                            color: '#ef4444'
-                                        }}
-                                        onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)'}
-                                        onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                                    >
-                                        <Trash2 size={14} />
-                                        Delete Message
-                                    </div>
-                                )}
+                                ))}
                             </div>
                         )}
                     </div>
 
                     {/* Reaction picker */}
-                    {showReactions && (
+                    {showReactions && !showMenu && (
                         <div style={{
                             position: 'absolute',
-                            top: '-40px',
+                            top: '-45px',
                             right: isOwn ? 0 : 'auto',
                             left: isOwn ? 'auto' : 0,
-                            background: '#1a2332',
-                            borderRadius: '20px',
+                            background: '#ffffff',
+                            borderRadius: '24px',
                             padding: '6px 12px',
                             display: 'flex',
-                            gap: '8px',
-                            border: '1px solid #2a3441',
-                            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                            gap: '10px',
+                            border: '1px solid #dee2e6',
+                            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
                             zIndex: 50
                         }}>
                             {reactionEmojis.map(emoji => (
-                                <span
-                                    key={emoji}
-                                    onClick={() => handleReaction(emoji)}
-                                    style={{
-                                        cursor: 'pointer',
-                                        fontSize: '18px',
-                                        transition: 'transform 0.2s',
-                                        display: 'inline-block'
-                                    }}
-                                    onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.3)'}
-                                    onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
-                                >
-                                    {emoji}
-                                </span>
+                                <span key={emoji} onClick={() => handleReaction(emoji)} style={{ cursor: 'pointer', fontSize: '20px' }}>{emoji}</span>
                             ))}
                         </div>
                     )}
                 </div>
 
-                {/* Display reactions */}
-                {totalReactions > 0 && (
-                    <div style={{
-                        display: 'flex',
-                        gap: '4px',
-                        marginTop: '6px',
-                        flexWrap: 'wrap',
-                        justifyContent: isOwn ? 'flex-end' : 'flex-start',
-                        paddingLeft: isOwn ? 0 : '12px',
-                        paddingRight: isOwn ? '12px' : 0
-                    }}>
-                        {reactions && Object.entries(reactions).map(([emoji, users]) => (
-                            <div
-                                key={emoji}
-                                onClick={() => handleReaction(emoji)}
-                                style={{
-                                    background: Array.isArray(users) && users.some(u => u.userId === currentUserId)
-                                        ? 'rgba(102, 126, 234, 0.2)'
-                                        : '#1a2332',
-                                    border: Array.isArray(users) && users.some(u => u.userId === currentUserId)
-                                        ? '1px solid #667eea'
-                                        : '1px solid #2a3441',
-                                    borderRadius: '12px',
-                                    padding: '4px 8px',
-                                    fontSize: '12px',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '4px',
-                                    cursor: 'pointer',
-                                    transition: 'all 0.2s'
-                                }}
-                                title={Array.isArray(users) ? users.map(u => `${u.firstName || ''} ${u.lastName || ''}`).join(', ') : ''}
-                            >
-                                <span>{emoji}</span>
-                                <span style={{ color: '#8b98a5', fontSize: '11px' }}>
-                                    {users?.length || 0}
-                                </span>
-                            </div>
-                        ))}
-                    </div>
-                )}
-
-                <div style={{
-                    fontSize: '11px',
-                    color: '#8b98a5',
-                    marginTop: '4px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    justifyContent: isOwn ? 'flex-end' : 'flex-start',
-                    paddingLeft: isOwn ? 0 : '12px',
-                    paddingRight: isOwn ? '12px' : 0
-                }}>
-                    {message.createdAt ? new Date(message.createdAt).toLocaleTimeString('en-US', {
-                        hour: '2-digit',
-                        minute: '2-digit'
-                    }) : ''}
-                    {message.isEdited && <span style={{ fontSize: '10px', fontStyle: 'italic' }}>edited</span>}
-                    {message.isEncrypted && <Lock size={10} color="#667eea" />}
-                    {isOwn && (
-                        isRead ? <CheckCheck size={14} color="#667eea" /> : <Check size={14} color="#8b98a5" />
+                    {/* Display reactions */}
+                    {totalReactions > 0 && (
+                        <div style={{
+                            display: 'flex',
+                            gap: '4px',
+                            marginTop: '-10px',
+                            position: 'relative',
+                            zIndex: 2,
+                            justifyContent: isOwn ? 'flex-end' : 'flex-start'
+                        }}>
+                            {reactions && Object.entries(reactions).map(([emoji, users]) => (
+                                <div
+                                    key={emoji}
+                                    onClick={() => handleReaction(emoji)}
+                                    style={{
+                                        background: '#ffffff',
+                                        border: '1px solid #dee2e6',
+                                        borderRadius: '12px',
+                                        padding: '2px 8px',
+                                        fontSize: '12px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '4px',
+                                        cursor: 'pointer',
+                                        boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                                    }}
+                                >
+                                    <span>{emoji} {users?.length}</span>
+                                </div>
+                            ))}
+                        </div>
                     )}
+
+                    <div style={{
+                        fontSize: '12px',
+                        color: '#616061',
+                        marginTop: '4px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        justifyContent: isOwn ? 'flex-end' : 'flex-start'
+                    }}>
+                        {message.createdAt ? new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                        {message.isEdited && <span style={{ fontSize: '11px' }}>(edited)</span>}
+                        {isOwn && (isRead ? <CheckCheck size={14} color="#007bff" /> : <Check size={14} color="#616061" />)}
+                    </div>
                 </div>
             </div>
         </div>

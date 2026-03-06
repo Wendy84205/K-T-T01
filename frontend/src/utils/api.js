@@ -1,4 +1,4 @@
-const API_BASE_URL = 'https://sells-paintball-interstate-desirable.trycloudflare.com/api/v1';
+const API_BASE_URL = 'https://herein-tuning-porcelain-sarah.trycloudflare.com/api/v1';
 
 class ApiClient {
   constructor() {
