@@ -12,7 +12,10 @@ import {
     LogOut,
     Settings,
     Shield,
-    Bell
+    Bell,
+    Building2,
+    Sun,
+    Moon
 } from 'lucide-react';
 
 const navItems = [
@@ -24,7 +27,7 @@ const navItems = [
 
 export default function ManageLayout() {
     const [sidebarOpen, setSidebarOpen] = useState(true);
-    const { user, logout } = useAuth();
+    const { user, logout, darkMode, toggleDarkMode } = useAuth();
     const navigate = useNavigate();
 
     const handleLogout = () => {
@@ -33,42 +36,49 @@ export default function ManageLayout() {
     };
 
     return (
-        <div style={{ minHeight: '100vh', background: '#0e1621', display: 'flex', color: '#fff' }}>
+        <div style={{ minHeight: '100vh', background: 'var(--bg-panel)', display: 'flex', color: 'var(--text-main)', transition: 'all 0.3s ease' }}>
             <MfaSetupBanner user={user} />
 
             {/* Sidebar */}
             <aside
                 style={{
-                    width: sidebarOpen ? '250px' : '80px',
-                    background: '#151f2e',
-                    borderRight: '1px solid #2a3441',
+                    width: sidebarOpen ? '260px' : '80px',
+                    background: 'var(--bg-main)',
+                    borderRight: '1px solid var(--border-color)',
                     display: 'flex',
                     flexDirection: 'column',
                     transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                     position: 'relative',
-                    zIndex: 50
+                    zIndex: 50,
+                    boxShadow: 'var(--shadow)'
                 }}
             >
                 {/* Logo Area */}
                 <div style={{
-                    padding: '24px',
-                    borderBottom: '1px solid #2a3441',
+                    padding: '24px 20px',
+                    borderBottom: '1px solid var(--border-color)',
                     display: 'flex',
                     alignItems: 'center',
                     gap: '12px',
                     overflow: 'hidden'
                 }}>
                     <div style={{
-                        minWidth: '32px', height: '32px', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                        borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center'
+                        minWidth: '38px', height: '38px', background: 'var(--primary)',
+                        borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        boxShadow: '0 4px 10px rgba(0,123,255,0.2)'
                     }}>
-                        <Shield size={18} color="#fff" />
+                        <Building2 size={20} color="#fff" />
                     </div>
-                    {sidebarOpen && <span style={{ fontWeight: '800', fontSize: '18px', letterSpacing: '-0.5px' }}>SAFECORE</span>}
+                    {sidebarOpen && (
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            <span style={{ fontWeight: '900', fontSize: '16px', letterSpacing: '-0.02em', color: 'var(--text-main)', textTransform: 'uppercase' }}>TECHCORP</span>
+                            <span style={{ fontSize: '10px', fontWeight: '800', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Management</span>
+                        </div>
+                    )}
                 </div>
 
                 {/* Nav items */}
-                <nav style={{ flex: 1, padding: '24px 12px' }}>
+                <nav style={{ flex: 1, padding: '20px 12px' }}>
                     {navItems.map((item) => (
                         <NavLink
                             key={item.to}
@@ -79,45 +89,75 @@ export default function ManageLayout() {
                                 alignItems: 'center',
                                 gap: '12px',
                                 padding: '12px 14px',
-                                borderRadius: '12px',
-                                color: isActive ? '#fff' : '#8b98a5',
-                                background: isActive ? 'rgba(102, 126, 234, 0.15)' : 'transparent',
+                                borderRadius: '10px',
+                                color: isActive ? 'var(--primary)' : 'var(--text-muted)',
+                                background: isActive ? 'var(--active-bg)' : 'transparent',
                                 textDecoration: 'none',
-                                marginBottom: '8px',
-                                transition: 'all 0.2s',
-                                border: isActive ? '1px solid rgba(102, 126, 234, 0.3)' : '1px solid transparent'
+                                marginBottom: '4px',
+                                transition: 'all 0.15s ease',
+                                border: isActive ? '1px solid var(--active-bg)' : '1px solid transparent'
                             })}
                         >
                             <span style={{ color: 'inherit' }}>{item.icon}</span>
-                            {sidebarOpen && <span style={{ fontSize: '14px', fontWeight: '600' }}>{item.label}</span>}
+                            {sidebarOpen && <span style={{ fontSize: '13px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.02em' }}>{item.label}</span>}
                         </NavLink>
                     ))}
                 </nav>
 
+                {/* Theme Toggle in Sidebar */}
+                <div style={{ padding: '0 12px 12px' }}>
+                    <button
+                        onClick={toggleDarkMode}
+                        style={{
+                            width: '100%',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '12px',
+                            padding: '12px 14px',
+                            borderRadius: '10px',
+                            background: 'var(--bg-panel)',
+                            border: '1px solid var(--border-color)',
+                            color: 'var(--text-muted)',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s'
+                        }}
+                    >
+                        {darkMode ? <Sun size={20} /> : <Moon size={20} />}
+                        {sidebarOpen && <span style={{ fontSize: '13px', fontWeight: '800', textTransform: 'uppercase' }}>{darkMode ? 'Light mode' : 'Dark mode'}</span>}
+                    </button>
+                </div>
+
                 {/* User Area */}
-                <div style={{ padding: '24px 12px', borderTop: '1px solid #2a3441' }}>
+                <div style={{ padding: '20px 12px', borderTop: '1px solid var(--border-color)' }}>
                     <div style={{
                         display: 'flex', alignItems: 'center', gap: '12px',
-                        padding: '12px', borderRadius: '12px', background: 'rgba(255,255,255,0.03)'
+                        padding: '10px', borderRadius: '10px', background: 'var(--bg-panel)', border: '1px solid var(--border-color)'
                     }}>
                         <div style={{
-                            width: '32px', height: '32px', background: '#667eea',
-                            borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: '14px', fontWeight: '700'
+                            width: '32px', height: '32px', background: 'var(--primary)',
+                            borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: '14px', fontWeight: '900', color: '#fff'
                         }}>
                             {user?.firstName?.charAt(0)}
                         </div>
                         {sidebarOpen && (
                             <div style={{ flex: 1, overflow: 'hidden' }}>
-                                <div style={{ fontSize: '13px', fontWeight: '600', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                <div style={{ fontSize: '13px', fontWeight: '900', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--text-main)' }}>
                                     {user?.firstName}
                                 </div>
-                                <div style={{ fontSize: '11px', color: '#8b98a5', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                <div style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: '800', textTransform: 'uppercase', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                     {user?.role}
                                 </div>
                             </div>
                         )}
-                        {sidebarOpen && <LogOut size={16} color="#8b98a5" style={{ cursor: 'pointer' }} onClick={handleLogout} />}
+                        {sidebarOpen && (
+                            <button
+                                onClick={handleLogout}
+                                style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px', borderRadius: '6px' }}
+                            >
+                                <LogOut size={16} color="#dc2626" />
+                            </button>
+                        )}
                     </div>
                 </div>
 
@@ -125,11 +165,12 @@ export default function ManageLayout() {
                 <button
                     onClick={() => setSidebarOpen(!sidebarOpen)}
                     style={{
-                        position: 'absolute', right: '-12px', top: '76px',
-                        width: '24px', height: '24px', background: '#667eea',
-                        borderRadius: '50%', border: 'none', color: '#fff',
+                        position: 'absolute', right: '-12px', top: '32px',
+                        width: '24px', height: '24px', background: 'var(--bg-main)',
+                        borderRadius: '50%', border: '1px solid var(--border-color)', color: 'var(--text-muted)',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        cursor: 'pointer', boxShadow: '0 4px 10px rgba(0,0,0,0.3)'
+                        cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                        zIndex: 100
                     }}
                 >
                     {sidebarOpen ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
@@ -139,21 +180,26 @@ export default function ManageLayout() {
             {/* Main Content */}
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
                 <header style={{
-                    height: '70px', background: '#151f2e', borderBottom: '1px solid #2a3441',
+                    height: '86px', background: 'var(--bg-main)', borderBottom: '1px solid var(--border-color)',
                     display: 'flex', alignItems: 'center', justifySelf: 'stretch', padding: '0 32px',
                     justifyContent: 'space-between'
                 }}>
-                    <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#fff' }}>Manager Workspace</h2>
+                    <div>
+                        <h2 style={{ fontSize: '18px', fontWeight: '900', color: 'var(--text-main)', textTransform: 'uppercase', letterSpacing: '-0.02em', margin: 0 }}>Executive Control</h2>
+                        <span style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Manager Authorization Required</span>
+                    </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-                        <div style={{ position: 'relative', cursor: 'pointer' }}>
-                            <Bell size={20} color="#8b98a5" />
-                            <div style={{ position: 'absolute', top: '-2px', right: '-2px', width: '8px', height: '8px', background: '#ef4444', borderRadius: '50%', border: '2px solid #151f2e' }} />
+                        <div style={{ position: 'relative', cursor: 'pointer', padding: '10px', borderRadius: '12px', background: 'var(--bg-panel)', border: '1px solid var(--border-color)' }}>
+                            <Bell size={18} color="var(--text-muted)" />
+                            <div style={{ position: 'absolute', top: '8px', right: '8px', width: '8px', height: '8px', background: '#ef4444', borderRadius: '50%', border: '2px solid var(--bg-main)' }} />
                         </div>
-                        <Settings size={20} color="#8b98a5" style={{ cursor: 'pointer' }} />
+                        <div style={{ padding: '10px', borderRadius: '12px', background: 'var(--bg-panel)', border: '1px solid var(--border-color)', cursor: 'pointer' }}>
+                            <Settings size={18} color="var(--text-muted)" />
+                        </div>
                     </div>
                 </header>
 
-                <main style={{ flex: 1, overflowY: 'auto', background: '#0e1621' }}>
+                <main style={{ flex: 1, overflowY: 'auto', background: 'var(--bg-panel)' }}>
                     <Outlet />
                 </main>
             </div>

@@ -5,10 +5,8 @@ import { SecurityService } from './security.service';
 
 // Entities
 import { AuditLog } from '../../database/entities/security/audit-log.entity';
-import { SecurityEvent } from '../../database/entities/security/security-event.entity';
 import { RateLimit } from '../../database/entities/auth/rate-limit.entity';
-import { FailedLoginAttempt } from '../../database/entities/auth/failed-login.entity';
-import { SecurityAlert } from '../../database/entities/security/security-alert.entity';
+import { SecurityIncident } from '../../database/entities/security/security-incident.entity';
 import { SecurityPolicy } from '../../database/entities/security/security-policy.entity';
 import { SystemLog } from '../../database/entities/security/system-log.entity';
 import { UserSession } from '../../database/entities/auth/user-session.entity';
@@ -30,10 +28,8 @@ import { FileUploadService } from '../../common/service/file-upload.service';
   imports: [
     TypeOrmModule.forFeature([
       AuditLog,
-      SecurityEvent,
       RateLimit,
-      FailedLoginAttempt,
-      SecurityAlert,
+      SecurityIncident,
       SecurityPolicy,
       SystemLog,
       UserSession,

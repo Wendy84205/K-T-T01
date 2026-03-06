@@ -132,6 +132,7 @@ export class ChatService {
                 lastName: m.user.lastName,
                 email: m.user.email,
                 avatarUrl: m.user.avatarUrl,
+                publicKey: m.user.publicKey,
                 role: m.role,
                 lastReadAt: m.lastReadAt,
             })),
@@ -141,6 +142,7 @@ export class ChatService {
                 lastName: otherUser.lastName,
                 email: otherUser.email,
                 avatarUrl: otherUser.avatarUrl,
+                publicKey: otherUser.publicKey,
             } : null,
             unreadCount,
         };

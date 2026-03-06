@@ -5,7 +5,7 @@ import { SecurityScanJob } from './security-scan.job';
 import { EncryptionKey } from '../database/entities/security/encryption-key.entity';
 import { AuditLog } from '../database/entities/security/audit-log.entity';
 import { User } from '../database/entities/core/user.entity';
-import { SecurityAlert } from '../database/entities/security/security-alert.entity';
+import { SecurityIncident } from '../database/entities/security/security-incident.entity';
 
 @Module({
     imports: [
@@ -13,7 +13,7 @@ import { SecurityAlert } from '../database/entities/security/security-alert.enti
             EncryptionKey,
             AuditLog,
             User,
-            SecurityAlert,
+            SecurityIncident,
         ]),
     ],
     providers: [

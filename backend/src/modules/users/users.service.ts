@@ -408,31 +408,44 @@ export class UsersService {
   async hardDelete(id: string): Promise<void> {
     // Delete from all potential related tables to avoid FK issues
     const tables = [
-      'user_roles',
-      'team_members',
-      'audit_logs',
-      'security_events',
-      'user_sessions',
-      'mfa_settings'
+      { name: 'user_roles', col: 'user_id' },
+      { name: 'team_members', col: 'user_id' },
+      { name: 'audit_logs', col: 'user_id' },
+      { name: 'security_events', col: 'user_id' },
+      { name: 'user_sessions', col: 'user_id' },
+      { name: 'mfa_settings', col: 'user_id' },
+      { name: 'messages', col: 'sender_id' },
+      { name: 'files', col: 'owner_id' },
+      { name: 'folders', col: 'owner_id' },
+      { name: 'conversation_members', col: 'user_id' },
+      { name: 'notifications', col: 'user_id' },
+      { name: 'message_reactions', col: 'user_id' },
+      { name: 'message_read_receipts', col: 'user_id' },
+      { name: 'pinned_messages', col: 'pinned_by' },
+      { name: 'file_shares', col: 'from_user_id' },
+      { name: 'file_versions', col: 'created_by' },
+      { name: 'access_requests', col: 'requester_id' },
+      { name: 'tasks', col: 'assigned_to' }
     ];
 
     for (const table of tables) {
       try {
-        await this.userRepository.query(`DELETE FROM ${table} WHERE user_id = ?`, [id]);
+        await this.userRepository.query(`DELETE FROM ${table.name} WHERE ${table.col} = ?`, [id]);
       } catch (e) {
-        // Table might not have user_id or other issue, skip
+        // Table might not exist or column name mismatch, skip silently
+        console.warn(`[CLEANUP] Could not delete from ${table.name}: ${e.message}`);
       }
     }
 
     await this.userRepository.delete(id);
 
-    // LOGGING
+    // LOGGING (Cannot use user_id here as it's gone, using system log or audit with null user)
     await this.securityService.createAuditLog({
-      eventType: 'USER_PURGED',
+      eventType: 'USER_PURGED_PERMANENTLY',
       entityType: 'User',
       entityId: id,
-      description: `User identity PERMANENTLY PURGED from system cluster.`,
-      severity: 'ERROR'
+      description: `User identity ${id} PERMANENTLY PURGED from system cluster.`,
+      severity: 'CRITICAL'
     });
   }
 

@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Plus, MessageSquare, MoreHorizontal, Phone, Video, Info, Lock, Send, Mic, Image, Paperclip, Smile, Settings, Bell, BellOff, Clock, Shield, LogOut, ChevronLeft, ChevronRight, User, File, Download, Trash2, ShieldCheck, CreditCard, HelpCircle, Key, Eye, EyeOff, Check, CheckCheck, Square, X, Forward, Reply, Edit2, Play, Pause, List, Pin, Star, Cloud, Heart, ChevronDown, Users, MoreVertical, FileText, Camera, MapPin, AlertTriangle, BarChart3, Folder, Maximize2, Minimize2, Compass, Briefcase, Layers } from 'lucide-react';
+import { Search, Plus, MessageSquare, MoreHorizontal, Phone, Video, Info, Lock, Send, Mic, Image, Paperclip, Smile, Settings, Bell, BellOff, Clock, Shield, LogOut, ChevronLeft, ChevronRight, User, File, Download, Trash2, ShieldCheck, CreditCard, HelpCircle, Key, Eye, EyeOff, Check, CheckCheck, Square, X, Forward, Reply, Edit2, Play, Pause, List, Pin, Star, Cloud, Heart, ChevronDown, Users, MoreVertical, FileText, Camera, MapPin, AlertTriangle, BarChart3, Folder, Maximize2, Minimize2, Compass, Briefcase, Layers, Building2, Bold, Italic, Link, Code, AtSign, Hash } from 'lucide-react';
 import api from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
+import { encryptContent, decryptContent } from "../../utils/crypto";
 import { SearchBar, PinnedMessagesBanner, ConversationSidebar, PollModal } from '../../components/chat/ChatEnhancements';
 import { DiscoverContent, MiniAppsContent } from '../../components/chat/ZaloStyleComponents';
 import { EnhancedMessageBubble } from '../../components/chat/EnhancedMessage';
@@ -10,7 +11,7 @@ import socketService from '../../utils/socket';
 import '../../chat.css';
 
 export default function UserHomePage() {
-  const { user, isAdmin, isManager } = useAuth();
+  const { user, isAdmin, isManager, darkMode, toggleDarkMode } = useAuth();
 
   useEffect(() => {
     const token = localStorage.getItem('accessToken');
@@ -131,7 +132,6 @@ export default function UserHomePage() {
   const [isRecording, setIsRecording] = useState(false);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
-  const [isDarkMode, setIsDarkMode] = useState(true);
   const [hiddenChatIds, setHiddenChatIds] = useState(new Set());
   const [selectedSticker, setSelectedSticker] = useState(null);
   const [showStickerPicker, setShowStickerPicker] = useState(false);
@@ -144,7 +144,7 @@ export default function UserHomePage() {
   const [chatSearchQuery, setChatSearchQuery] = useState('');
   const [showChatOptionsMenu, setShowChatOptionsMenu] = useState(false);
   const [isCallMaximized, setIsCallMaximized] = useState(true);
-  const [onlineUserIds, setOnlineUserIds] = useState(new Set());
+  const [onlineUserIds, setOnlineUserIds] = new useState(new Set());
   const [selfDestructTime, setSelfDestructTime] = useState(null); // null, 10, 60, 3600
 
   const peerConnectionRef = useRef(null);
@@ -382,7 +382,38 @@ export default function UserHomePage() {
     try {
       if (!silent) setMessagesLoading(true);
       const response = await api.getConversationMessages(conversationId);
-      const newMessages = response.data || response || [];
+      const rawMessages = response.data || response || [];
+
+      // E2EE Decryption Logic
+      const newMessages = await Promise.all(rawMessages.map(async msg => {
+        if (msg.content && msg.content.startsWith('[E2EE]:')) { // Check xem có phải tin nhắn mã hóa không có phải là bắt đầu bằng E2EE không ?
+          const rawContent = msg.content.substring(7); // Lấy nội dung mã hóa
+          const privateKey = localStorage.getItem(`e2ee_private_key_${user.id}`); // Lấy private key của người dùng từ localstorage để cb giải mã 
+
+          if (!privateKey) {
+            msg.content = " [E2EE: Thiếu khóa cá nhân]";
+          } else {
+            try {
+              // Try to parse as JSON (New Dual-Encryption format)
+              const encryptedData = JSON.parse(rawContent); // Parse nội dung mã hóa
+              if (encryptedData[user.id]) { // Check xem có mã giải cho bạn không
+                msg.content = await decryptContent(encryptedData[user.id], privateKey); // Giải mã nội dung
+              } else {
+                msg.content = " [E2EE: Không có mã giải cho bạn]";
+              }
+            } catch (e) {
+              // Not JSON? Fallback (Old format: pure ciphertext)
+              try {
+                msg.content = await decryptContent(rawContent, privateKey); // Giải mã nội dung
+              } catch (decryptErr) {
+                console.error("[E2EE] Decryption failed:", decryptErr);
+                msg.content = " [Không thể giải mã tin nhắn]";
+              }
+            }
+          }
+        }
+        return msg;
+      }));
 
       // Only update state if data actually changed to prevent UI flicker
       setMessages(prev => {
@@ -540,9 +571,35 @@ export default function UserHomePage() {
         await api.editMessage(editingMessage.id, messageInput.trim());
         setEditingMessage(null);
       } else {
+        let finalContent = messageInput.trim();
+
+        // E2EE Encryption for Direct Chat
+        const conv = conversations.find(c => c.id === selectedChat);
+        if (conv && conv.conversationType === 'direct' && conv.otherUser?.publicKey) { // Kiểm tra xem có phải là tin nhắn trực tiếp và có public key của người nhận không "conv.otherUser?.publicKey"
+          console.log("[E2EE] Encrypting message for both parties...");
+          try {
+            const encryptedForRecipient = await encryptContent(finalContent, conv.otherUser.publicKey); // Dùng encryptContent để mã hóa tin nhắn và public key của người nhận để tạo bản mã encryptedForRecipient
+            const myPublicKey = user.publicKey
+
+            if (myPublicKey) {
+              const encryptedForMe = await encryptContent(finalContent, myPublicKey); // Dùng Public Key của chính mình (A) để tạo bản mã encryptedForMe (giúp A xem lại được tin nhắn mình đã gửi).
+              const dualPayload = { // Gộp tất cả 2 bản mã vào 1 object gắn liền với ID của người gửi và người nhận
+                [conv.otherUser.id]: encryptedForRecipient,
+                [user.id]: encryptedForMe
+              };
+              finalContent = `[E2EE]:${JSON.stringify(dualPayload)}`; // Thêm tiền tố [E2EE]: để đánh dấu là tin nhắn mã hóa
+            } else {
+              // Fallback if sender public key is missing
+              finalContent = `[E2EE]:${JSON.stringify({ [conv.otherUser.id]: encryptedForRecipient })}`;
+            }
+          } catch (e) {
+            console.error("[E2EE] Dual Encryption failed", e);
+          }
+        }
+
         const newMessage = await api.sendMessage(
           selectedChat,
-          messageInput.trim(),
+          finalContent,
           'text',
           null,
           replyingTo ? replyingTo.id : null,
@@ -1000,20 +1057,23 @@ export default function UserHomePage() {
     <div style={{
       display: 'flex',
       height: '100vh',
-      background: '#0e1621',
+      background: 'var(--bg-app)',
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
       overflow: 'hidden'
     }}>
       {/* SIDEBAR */}
       <div style={{
-        width: isMobile ? '60px' : '80px',
-        background: '#1a2332',
-        borderRight: '1px solid #2a3441',
-        display: (isMobile && !showSidebarOnMobile) ? 'none' : 'flex',
+        width: '64px',
+        background: 'var(--bg-main)',
+        borderRight: '1px solid var(--border-color)',
+        display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
         padding: '20px 0',
-        flexShrink: 0
+        zIndex: 100,
+        boxShadow: 'var(--shadow)',
+        overflowY: 'auto',
+        overflowX: 'hidden'
       }}>
         <div style={{
           width: '50px',
@@ -1029,90 +1089,84 @@ export default function UserHomePage() {
           <Shield size={28} color="#fff" />
         </div>
 
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '8px 0', flex: 1 }}>
           <NavIcon
-            icon={<MessageSquare size={24} />}
+            icon={<MessageSquare size={22} />}
             active={activeTab === 'messages'}
             onClick={() => setActiveTab('messages')}
             label="Messages"
           />
           <NavIcon
-            icon={<Users size={24} />}
+            icon={<Users size={22} />}
             active={activeTab === 'contacts' || activeTab === 'team'}
             onClick={() => setActiveTab('contacts')}
             label="Contacts"
           />
           <NavIcon
-            icon={<Briefcase size={24} />}
+            icon={<Briefcase size={22} />}
             active={activeTab === 'projects'}
             onClick={() => setActiveTab('projects')}
             label="Projects"
           />
           {(isManager || isAdmin) && (
             <NavIcon
-              icon={<BarChart3 size={24} />}
+              icon={<BarChart3 size={22} />}
               active={activeTab === 'team'}
               onClick={() => setActiveTab('team')}
               label="Team Management"
             />
           )}
           <NavIcon
-            icon={<Compass size={24} />}
+            icon={<Compass size={22} />}
             active={activeTab === 'discover'}
             onClick={() => setActiveTab('discover')}
             label="Discover"
           />
           <NavIcon
-            icon={<Phone size={24} />}
+            icon={<Phone size={22} />}
             active={activeTab === 'calls'}
             onClick={() => setActiveTab('calls')}
             label="Calls"
           />
           <NavIcon
-            icon={<Shield size={24} />}
+            icon={<Shield size={22} />}
             active={activeTab === 'vault'}
             onClick={() => setActiveTab('vault')}
             label="Vault"
           />
           <NavIcon
-            icon={<Bell size={24} />}
+            icon={<Bell size={22} />}
             active={activeTab === 'alerts'}
             onClick={() => setActiveTab('alerts')}
             label="Alerts"
             badge={unreadNotificationsCount}
           />
           <NavIcon
-            icon={<Settings size={24} />}
+            icon={<Settings size={22} />}
             active={activeTab === 'settings'}
             onClick={() => setActiveTab('settings')}
             label="Settings"
           />
         </div>
 
-        <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '12px',
-          alignItems: 'center'
-        }}>
+        {/* Bottom: Avatar + Logout */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'center', padding: '12px 0', borderTop: '1px solid var(--border-color)', marginTop: '4px', flexShrink: 0 }}>
           <div
-            onClick={() => setActiveTab('settings')}
+            title={`${user?.firstName} ${user?.lastName} \n${user?.email}`}
             style={{
-              width: '45px',
-              height: '45px',
-              background: '#667eea',
-              borderRadius: '12px',
+              width: '36px',
+              height: '36px',
+              background: 'var(--primary)',
+              borderRadius: '10px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: '18px',
-              cursor: 'pointer',
-              border: '2px solid #2a3441',
-              transition: 'all 0.2s',
-              fontWeight: '700',
-              color: '#fff'
+              fontSize: '15px',
+              fontWeight: '900',
+              color: '#fff',
+              boxShadow: '0 2px 8px rgba(0,123,255,0.25)',
+              flexShrink: 0
             }}
-            title={user?.email}
           >
             {user?.firstName?.charAt(0) || '?'}
           </div>
@@ -1125,169 +1179,166 @@ export default function UserHomePage() {
               }
             }}
             style={{
-              width: '45px',
-              height: '45px',
-              background: 'rgba(239, 68, 68, 0.1)',
-              borderRadius: '12px',
+              width: '36px',
+              height: '36px',
+              background: 'var(--bg-red-soft)',
+              borderRadius: '10px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               cursor: 'pointer',
-              border: '1px solid rgba(239, 68, 68, 0.3)',
-              transition: 'all 0.2s'
+              transition: 'all 0.2s',
+              flexShrink: 0
             }}
             title="Logout"
           >
-            <LogOut size={20} color="#ef4444" />
+            <LogOut size={18} color="var(--red-color)" />
           </div>
         </div>
       </div>
 
-      {/* CHAT LIST PANEL */}
+      {/* CHAT LIST PANEL (Sidebar) */}
       {activeTab === 'messages' && (
         <div style={{
-          width: isMobile ? '100%' : '340px',
+          width: isMobile ? '100%' : '280px',
           display: (isMobile && !showSidebarOnMobile) ? 'none' : 'flex',
-          background: '#151f2e',
-          borderRight: '1px solid #2a3441',
+          background: 'var(--bg-panel)',
+          borderRight: '1px solid var(--border-color)',
           flexDirection: 'column',
           flexShrink: 0
         }}>
+          {/* Workspace Header */}
           <div style={{
-            padding: '20px',
-            borderBottom: '1px solid #2a3441'
+            padding: '24px 20px',
+            borderBottom: '1px solid var(--border-color)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px'
           }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-              <h2 style={{
-                margin: 0,
-                color: '#fff',
-                fontSize: '24px',
-                fontWeight: '700'
-              }}>
-                Secure Chat
-              </h2>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button
-                  onClick={async () => {
-                    await handleStartNewChat();
-                    setShowGroupModal(true);
-                    setShowNewChatModal(false);
-                  }}
-                  style={{
-                    background: '#667eea',
-                    border: 'none',
-                    borderRadius: '10px',
-                    width: '40px',
-                    height: '40px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer',
-                    color: '#fff'
-                  }}
-                  title="New Group"
-                >
-                  <Users size={20} />
-                </button>
-                <button
-                  onClick={handleStartNewChat}
-                  style={{
-                    background: '#667eea',
-                    border: 'none',
-                    borderRadius: '10px',
-                    width: '40px',
-                    height: '40px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer',
-                    color: '#fff'
-                  }}
-                  title="New Chat"
-                >
-                  <Plus size={20} />
-                </button>
+            <div style={{
+              width: '40px',
+              height: '40px',
+              background: 'var(--primary)',
+              borderRadius: '8px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#fff'
+            }}>
+              <Building2 size={24} />
+            </div>
+            <div>
+              <h2 style={{ margin: 0, color: 'var(--text-main)', fontSize: '18px', fontWeight: '800' }}>TechCorp</h2>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--green-color)' }}></div>
+                <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{onlineUserIds.size} Online</span>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ flex: 1, overflowY: 'auto', padding: '10px 0' }}>
+            {/* CHANNELS SECTION */}
+            <div style={{ padding: '20px 20px 10px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                <span style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Channels</span>
+                <button onClick={() => setShowGroupModal(true)} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}><Plus size={16} /></button>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                {conversations
+                  .filter(c => c.conversationType === 'group')
+                  .map(conv => (
+                    <div
+                      key={conv.id}
+                      onClick={() => setSelectedChat(conv.id)}
+                      style={{
+                        padding: '8px 12px',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        background: selectedChat === conv.id ? 'var(--bg-selected)' : 'transparent',
+                        color: selectedChat === conv.id ? 'var(--primary)' : 'var(--text-secondary)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px',
+                        fontWeight: selectedChat === conv.id ? '600' : '400',
+                        fontSize: '14px'
+                      }}
+                    >
+                      <Hash size={16} /> {getConversationName(conv)}
+                    </div>
+                  ))}
               </div>
             </div>
 
-            {/* Search Bar */}
-            {selectedChat && (
-              <SearchBar
-                conversationId={selectedChat}
-                onResultClick={(messageId) => {
-                  // In a real implementation with infinite scroll,
-                  // we would scroll to the specific message.
-                  // For now, we just ensure it's loaded if possible.
-                  console.log('Jump to message:', messageId);
-                }}
-              />
-            )}
-            {!selectedChat && (
-              <div style={{
-                background: '#1a2332',
-                borderRadius: '10px',
-                padding: '10px 15px',
-                color: '#8b98a5'
-              }}>
-                Select a chat to search...
+            {/* DIRECT MESSAGES SECTION */}
+            <div style={{ padding: '20px 20px 10px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                <span style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Direct Messages</span>
+                <button onClick={handleStartNewChat} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}><Plus size={16} /></button>
               </div>
-            )}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                {conversations
+                  .filter(c => c.conversationType === 'direct')
+                  .map(conv => (
+                    <div
+                      key={conv.id}
+                      onClick={() => setSelectedChat(conv.id)}
+                      style={{
+                        padding: '8px 12px',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        background: selectedChat === conv.id ? 'var(--bg-selected)' : 'transparent',
+                        color: selectedChat === conv.id ? 'var(--primary)' : 'var(--text-secondary)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px',
+                        fontWeight: selectedChat === conv.id ? '600' : '400',
+                        fontSize: '14px'
+                      }}
+                    >
+                      <div style={{ position: 'relative' }}>
+                        <div style={{ width: '24px', height: '24px', borderRadius: '4px', background: 'var(--bg-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: '700' }}>
+                          {getConversationAvatar(conv)}
+                        </div>
+                        {isConversationOnline(conv) && (
+                          <div style={{ position: 'absolute', bottom: '-2px', right: '-2px', width: '8px', height: '8px', background: 'var(--green-color)', borderRadius: '50%', border: '2px solid var(--bg-panel)' }}></div>
+                        )}
+                      </div>
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{getConversationName(conv)}</span>
+                    </div>
+                  ))}
+              </div>
+            </div>
           </div>
 
-          <div style={{ flex: 1, overflowY: 'auto' }}>
-            {conversationsLoading ? (
-              <div style={{ padding: '40px', textAlign: 'center', color: '#8b98a5' }}>
-                Loading conversations...
-              </div>
-            ) : conversations.length === 0 ? (
-              <div style={{ padding: '40px', textAlign: 'center', color: '#8b98a5' }}>
-                <MessageSquare size={48} style={{ opacity: 0.3, marginBottom: '16px' }} />
-                <p>No conversations yet</p>
-                <button
-                  onClick={handleStartNewChat}
-                  style={{
-                    background: '#667eea',
-                    border: 'none',
-                    color: '#fff',
-                    padding: '10px 20px',
-                    borderRadius: '8px',
-                    cursor: 'pointer',
-                    marginTop: '12px'
-                  }}
-                >
-                  Start New Chat
-                </button>
-              </div>
-            ) : (
-              conversations
-                .filter(conv => !hiddenChatIds.has(conv.id))
-                .sort((a, b) => {
-                  const aPinned = pinnedChatIds.has(a.id);
-                  const bPinned = pinnedChatIds.has(b.id);
-                  if (aPinned && !bPinned) return -1;
-                  if (!aPinned && bPinned) return 1;
-                  return new Date(b.lastMessage?.createdAt || 0) - new Date(a.lastMessage?.createdAt || 0);
-                })
-                .map(conv => (
-                  <ChatItem
-                    key={conv.id}
-                    chat={conv}
-                    active={selectedChat === conv.id}
-                    onClick={() => {
-                      setSelectedChat(conv.id);
-                      api.markAsRead(conv.id).catch(() => { });
-                      if (isMobile) setShowSidebarOnMobile(false);
-                    }}
-                    getName={getConversationName}
-                    getAvatar={getConversationAvatar}
-                    formatTime={formatTime}
-                    onContextMenu={(e) => handleContextMenu(e, conv)}
-                    isPinned={pinnedChatIds.has(conv.id)}
-                    isMuted={mutedChatIds.has(conv.id)}
-                    isOnline={isConversationOnline(conv)}
-                  />
-                ))
-            )}
+          {/* Sidebar Footer */}
+          <div style={{ padding: '16px 20px', borderTop: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <button
+              onClick={() => handleStartNewChat()}
+              style={{
+                background: 'var(--primary)',
+                color: '#fff',
+                border: 'none',
+                padding: '10px',
+                borderRadius: '8px',
+                fontWeight: '600',
+                fontSize: '14px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px'
+              }}
+            >
+              <Plus size={18} /> New Message
+            </button>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0 4px' }}>
+              <button style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px' }}>
+                <Settings size={16} /> Settings
+              </button>
+              <button style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px' }}>
+                <HelpCircle size={16} /> Support
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -1297,7 +1348,7 @@ export default function UserHomePage() {
         flex: 1,
         display: (isMobile && showSidebarOnMobile) ? 'none' : 'flex',
         flexDirection: 'column',
-        background: '#0e1621',
+        background: 'var(--bg-app)',
         minWidth: 0,
         position: 'relative'
       }}>
@@ -1309,29 +1360,30 @@ export default function UserHomePage() {
             alignItems: 'center',
             justifyContent: 'center',
             flexDirection: 'column',
-            gap: '20px',
-            background: '#0e1621',
+            gap: '24px',
+            background: 'var(--bg-panel)',
             zIndex: 5
           }}>
             <div style={{
               width: '120px',
               height: '120px',
-              background: 'rgba(102, 126, 234, 0.1)',
-              borderRadius: '30px',
+              background: 'var(--bg-primary-soft)',
+              borderRadius: '35px',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center'
+              justifyContent: 'center',
+              border: '1px solid var(--border-primary-soft)'
             }}>
-              <Shield size={60} color="#667eea" />
+              <Shield size={60} color="var(--primary)" />
             </div>
             <div style={{ textAlign: 'center' }}>
-              <h2 style={{ color: '#fff', margin: '0 0 10px 0', fontSize: '24px' }}>Secure Cyber Communication</h2>
-              <p style={{ color: '#8b98a5', margin: 0, fontSize: '14px' }}>End-to-end encrypted messaging for your safety.</p>
+              <h2 style={{ margin: '0 0 10px 0', fontSize: '24px', fontWeight: '900', textTransform: 'uppercase', tracking: '-0.02em', color: 'var(--text-main)' }}>TechCorp Secure Terminal</h2>
+              <p style={{ color: 'var(--text-secondary)', margin: 0, fontSize: '14px', fontWeight: '500' }}>Quantum-safe end-to-end encrypted protocol active.</p>
             </div>
           </div>
         )}
         {activeTab === 'projects' && <ProjectsTasksContent />}
-        {activeTab === 'settings' && <SettingsContent user={user} />}
+        {activeTab === 'settings' && <SettingsContent user={user} darkMode={darkMode} toggleDarkMode={toggleDarkMode} />}
         {activeTab === 'contacts' && <ContactsContent users={availableUsers} onSelect={(id) => { setActiveTab('messages'); handleSelectUser(id); }} />}
         {activeTab === 'team' && (isManager || isAdmin) && (
           <TeamContent
@@ -1348,23 +1400,25 @@ export default function UserHomePage() {
           <div style={{ width: '100%', maxWidth: '1000px', flex: 1, display: 'flex', flexDirection: 'column', padding: '20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', flexWrap: 'wrap', gap: '20px' }}>
               <div>
-                <h2 style={{ color: '#fff', margin: 0, fontSize: '28px', fontWeight: '800' }}>Encrypted Vault</h2>
-                <p style={{ color: '#8b98a5', margin: '5px 0 0 0', fontSize: '14px' }}>Secure storage for your sensitive documents</p>
+                <h2 style={{ color: 'var(--text-main)', margin: 0, fontSize: '28px', fontWeight: '900', textTransform: 'uppercase', tracking: '-0.02em' }}>Secure Repo</h2>
+                <p style={{ color: 'var(--text-secondary)', margin: '5px 0 0 0', fontSize: '13px', fontWeight: '500' }}>AES-256 cloud-synchronized asset storage</p>
               </div>
               <button
                 onClick={handleFileClick}
                 style={{
-                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  background: 'var(--primary)',
                   color: '#fff',
                   border: 'none',
-                  padding: '12px 24px',
+                  padding: '12px 28px',
                   borderRadius: '12px',
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '10px',
-                  fontWeight: '600',
-                  boxShadow: '0 4px 15px rgba(102, 126, 234, 0.3)'
+                  fontWeight: '900',
+                  fontSize: '13px',
+                  textTransform: 'uppercase',
+                  boxShadow: '0 4px 15px rgba(0,123,255,0.2)'
                 }}
               >
                 <Plus size={20} /> Upload New File
@@ -1383,45 +1437,45 @@ export default function UserHomePage() {
                 flex: 1,
                 minWidth: '250px',
                 position: 'relative',
-                background: '#151f2e',
-                borderRadius: '12px',
-                border: '1px solid #2a3441',
-                padding: '10px 15px',
+                background: 'var(--bg-panel)',
+                borderRadius: '10px',
+                border: '1px solid var(--border-color)',
+                padding: '12px 15px',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '10px'
               }}>
-                <Search size={18} color="#8b98a5" />
+                <Search size={16} color="var(--text-secondary)" />
                 <input
                   type="text"
-                  placeholder="Search files..."
+                  placeholder="Filter objects by name..."
                   value={vaultSearch}
                   onChange={(e) => setVaultSearch(e.target.value)}
                   style={{
                     background: 'transparent',
                     border: 'none',
                     outline: 'none',
-                    color: '#fff',
+                    color: 'var(--text-main)',
                     width: '100%',
                     fontSize: '14px'
                   }}
                 />
               </div>
-              <div style={{ display: 'flex', gap: '8px', background: '#151f2e', padding: '4px', borderRadius: '10px', border: '1px solid #2a3441' }}>
+              <div style={{ display: 'flex', gap: '4px', background: 'var(--bg-panel)', padding: '4px', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
                 {['date', 'name', 'size'].map(sort => (
                   <button
                     key={sort}
                     onClick={() => setVaultSort(sort)}
                     style={{
-                      background: vaultSort === sort ? '#2a3441' : 'transparent',
-                      border: 'none',
-                      color: vaultSort === sort ? '#fff' : '#8b98a5',
-                      padding: '6px 12px',
+                      background: vaultSort === sort ? 'var(--bg-light)' : 'transparent',
+                      border: vaultSort === sort ? '1px solid var(--border-color)' : '1px solid transparent',
+                      color: vaultSort === sort ? 'var(--primary)' : 'var(--text-secondary)',
+                      padding: '6px 14px',
                       borderRadius: '8px',
                       cursor: 'pointer',
-                      fontSize: '13px',
-                      fontWeight: '500',
-                      textTransform: 'capitalize'
+                      fontSize: '12px',
+                      fontWeight: '800',
+                      textTransform: 'uppercase'
                     }}
                   >
                     {sort}
@@ -1431,16 +1485,17 @@ export default function UserHomePage() {
             </div>
 
             <div style={{
-              background: '#151f2e',
+              background: 'var(--bg-panel)',
               borderRadius: '16px',
-              border: '1px solid #2a3441',
+              border: '1px solid var(--border-color)',
               overflow: 'hidden',
               flex: 1,
               display: 'flex',
-              flexDirection: 'column'
+              flexDirection: 'column',
+              shadow: '0 4px 20px rgba(0,0,0,0.02)'
             }}>
               {filesLoading ? (
-                <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#8b98a5' }}>
+                <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)' }}>
                   <div className="loader"></div>
                   <span style={{ marginLeft: '12px' }}>Accessing secure storage...</span>
                 </div>
@@ -1448,11 +1503,11 @@ export default function UserHomePage() {
                 <div style={{ overflowY: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
-                      <tr style={{ background: '#1a2332', textAlign: 'left', position: 'sticky', top: 0, zIndex: 10 }}>
-                        <th style={{ padding: '15px 20px', color: '#8b98a5', fontSize: '13px', fontWeight: '600' }}>File Name</th>
-                        <th style={{ padding: '15px 20px', color: '#8b98a5', fontSize: '13px', fontWeight: '600' }}>Size</th>
-                        <th style={{ padding: '15px 20px', color: '#8b98a5', fontSize: '13px', fontWeight: '600' }}>Created At</th>
-                        <th style={{ padding: '15px 20px', color: '#8b98a5', fontSize: '13px', fontWeight: '600' }}></th>
+                      <tr style={{ background: 'var(--bg-light)', textAlign: 'left', position: 'sticky', top: 0, zIndex: 10, borderBottom: '1px solid var(--border-color)' }}>
+                        <th style={{ padding: '16px 24px', color: 'var(--text-main)', fontSize: '11px', fontWeight: '900', textTransform: 'uppercase', tracking: '0.05em' }}>Asset Label</th>
+                        <th style={{ padding: '16px 24px', color: 'var(--text-main)', fontSize: '11px', fontWeight: '900', textTransform: 'uppercase', tracking: '0.05em' }}>Size</th>
+                        <th style={{ padding: '16px 24px', color: 'var(--text-main)', fontSize: '11px', fontWeight: '900', textTransform: 'uppercase', tracking: '0.05em' }}>Timestamp</th>
+                        <th style={{ padding: '16px 24px', color: 'var(--text-main)', fontSize: '11px', fontWeight: '900', textTransform: 'uppercase', tracking: '0.05em' }}></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1464,30 +1519,31 @@ export default function UserHomePage() {
                           return new Date(b.createdAt) - new Date(a.createdAt);
                         })
                         .map(f => (
-                          <tr key={f.id} style={{ borderBottom: '1px solid #2a3441', transition: 'all 0.2s' }} className="vault-row">
-                            <td style={{ padding: '15px 20px', color: '#fff' }}>
+                          <tr key={f.id} style={{ borderBottom: '1px solid var(--border-color)', transition: 'all 0.2s' }} className="vault-row">
+                            <td style={{ padding: '16px 24px', color: 'var(--text-main)' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                                 <div style={{
                                   width: '36px',
                                   height: '36px',
-                                  background: 'rgba(102, 126, 234, 0.1)',
+                                  background: 'var(--bg-primary-soft)',
                                   borderRadius: '10px',
                                   display: 'flex',
                                   alignItems: 'center',
-                                  justifyContent: 'center'
+                                  justifyContent: 'center',
+                                  border: '1px solid var(--border-primary-soft)'
                                 }}>
-                                  <FileText size={18} color="#667eea" />
+                                  <FileText size={18} color="var(--primary)" />
                                 </div>
                                 <div style={{ overflow: 'hidden' }}>
-                                  <div style={{ fontSize: '14px', fontWeight: '500', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{f.name}</div>
-                                  <div style={{ fontSize: '11px', color: '#8b98a5' }}>AES-256 Encrypted</div>
+                                  <div style={{ fontSize: '14px', fontWeight: '700', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{f.name}</div>
+                                  <div style={{ fontSize: '10px', color: 'var(--text-secondary)', fontWeight: '800', uppercase: 'true' }}>AES-256 SECURE</div>
                                 </div>
                               </div>
                             </td>
-                            <td style={{ padding: '15px 20px', color: '#8b98a5', fontSize: '13px' }}>
+                            <td style={{ padding: '16px 24px', color: 'var(--text-secondary)', fontSize: '12px', fontWeight: '600' }}>
                               {(f.sizeBytes / 1024 / 1024).toFixed(2)} MB
                             </td>
-                            <td style={{ padding: '15px 20px', color: '#8b98a5', fontSize: '13px' }}>
+                            <td style={{ padding: '16px 24px', color: 'var(--text-secondary)', fontSize: '12px', fontWeight: '600' }}>
                               {new Date(f.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
                             </td>
                             <td style={{ padding: '15px 20px', textAlign: 'right' }}>
@@ -1495,9 +1551,9 @@ export default function UserHomePage() {
                                 <button
                                   onClick={() => api.downloadFile(f.id, f.name)}
                                   style={{
-                                    background: 'rgba(102, 126, 234, 0.1)',
+                                    background: 'var(--bg-primary-soft)',
                                     border: 'none',
-                                    color: '#667eea',
+                                    color: 'var(--primary)',
                                     cursor: 'pointer',
                                     padding: '8px',
                                     borderRadius: '8px',
@@ -1521,9 +1577,9 @@ export default function UserHomePage() {
                                     }
                                   }}
                                   style={{
-                                    background: 'rgba(16, 185, 129, 0.1)',
+                                    background: 'var(--bg-green-soft)',
                                     border: 'none',
-                                    color: '#10b981',
+                                    color: 'var(--green-color)',
                                     cursor: 'pointer',
                                     padding: '8px',
                                     borderRadius: '8px',
@@ -1536,9 +1592,9 @@ export default function UserHomePage() {
                                 <button
                                   onClick={() => handleDeleteFile(f.id)}
                                   style={{
-                                    background: 'rgba(239, 68, 68, 0.1)',
+                                    background: 'var(--bg-red-soft)',
                                     border: 'none',
-                                    color: '#ef4444',
+                                    color: 'var(--red-color)',
                                     cursor: 'pointer',
                                     padding: '8px',
                                     borderRadius: '8px',
@@ -1566,8 +1622,8 @@ export default function UserHomePage() {
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
               {/* Chat Header */}
               <div style={{
-                background: '#151f2e',
-                borderBottom: '1px solid #2a3441',
+                background: 'var(--bg-panel)',
+                borderBottom: '1px solid var(--border-color)',
                 padding: '12px 20px',
                 flexShrink: 0
               }}>
@@ -1577,194 +1633,79 @@ export default function UserHomePage() {
                   justifyContent: 'space-between'
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                    {isMobile && (
-                      <button
-                        onClick={() => setShowSidebarOnMobile(true)}
-                        style={{
-                          background: 'transparent',
-                          border: 'none',
-                          color: '#667eea',
-                          padding: '8px 0',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '4px'
-                        }}
-                      >
-                        <ChevronDown size={24} style={{ transform: 'rotate(90deg)' }} />
-                      </button>
-                    )}
                     <div style={{
-                      width: '45px',
-                      height: '45px',
-                      background: '#667eea',
-                      borderRadius: '12px',
+                      width: '32px',
+                      height: '32px',
+                      background: 'var(--bg-light)',
+                      borderRadius: '6px',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      fontSize: '20px',
-                      fontWeight: '700',
-                      color: '#fff',
-                      position: 'relative'
+                      fontSize: '14px',
+                      fontWeight: '800',
+                      color: 'var(--text-main)'
                     }}>
-                      {getConversationAvatar(selectedConversation)}
-                      {isConversationOnline(selectedConversation) && (
-                        <div style={{
-                          position: 'absolute',
-                          bottom: '-2px',
-                          right: '-2px',
-                          width: '12px',
-                          height: '12px',
-                          background: '#4ade80',
-                          border: '2px solid #151f2e',
-                          borderRadius: '50%'
-                        }} />
-                      )}
+                      <Hash size={18} />
                     </div>
                     <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <h3 style={{ margin: 0, color: '#fff', fontSize: '16px', fontWeight: '600' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <h3 style={{ margin: 0, color: 'var(--text-main)', fontSize: '16px', fontWeight: '800' }}>
                           {getConversationName(selectedConversation)}
                         </h3>
-                        {selectedConversation.isVerified && <Shield size={14} color="#667eea" fill="#667eea" />}
-                      </div>
-                      <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        marginTop: '2px'
-                      }}>
-                        <span style={{ color: '#8b98a5', fontSize: '12px' }}>
-                          {selectedConversation.conversationType === 'group'
-                            ? `${selectedConversation.members?.length || 0} members`
-                            : (isConversationOnline(selectedConversation) ? 'Active now' : 'End-to-End Encrypted')}
-                        </span>
+                        {/* Tabs from Mockup */}
+                        <div style={{ display: 'flex', gap: '20px', marginLeft: '20px' }}>
+                          <span style={{ fontSize: '13px', color: 'var(--text-secondary)', cursor: 'pointer' }}>Threads</span>
+                          <span style={{ fontSize: '13px', color: 'var(--text-secondary)', cursor: 'pointer' }}>Files</span>
+                          <span style={{ fontSize: '13px', color: 'var(--text-secondary)', cursor: 'pointer' }}>Mentions</span>
+                        </div>
                       </div>
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                    <button
-                      onClick={() => setShowSearchInChat(!showSearchInChat)}
-                      style={{
-                        background: showSearchInChat ? 'rgba(102, 126, 234, 0.15)' : 'transparent',
-                        border: '1px solid #2a3441',
-                        color: showSearchInChat ? '#667eea' : '#8b98a5',
-                        padding: '8px',
-                        borderRadius: '8px',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        transition: 'all 0.2s'
-                      }}
-                      title="Search in chat"
-                    >
-                      <Search size={18} />
-                    </button>
-
-                    <button
-                      onClick={() => initiateCall('voice')}
-                      style={{
-                        background: 'transparent',
-                        border: '1px solid #2a3441',
-                        color: '#8b98a5',
-                        padding: '8px',
-                        borderRadius: '8px',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        transition: 'all 0.2s'
-                      }}
-                      title="Voice Call"
-                    >
-                      <Phone size={18} />
-                    </button>
-
-                    <button
-                      onClick={() => initiateCall('video')}
-                      style={{
-                        background: 'transparent',
-                        border: '1px solid #2a3441',
-                        color: '#8b98a5',
-                        padding: '8px',
-                        borderRadius: '8px',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        transition: 'all 0.2s'
-                      }}
-                      title="Video Call"
-                    >
-                      <Video size={18} />
-                    </button>
-
-                    <button
-                      onClick={() => setShowRightSidebar(!showRightSidebar)}
-                      style={{
-                        background: showRightSidebar ? 'rgba(102, 126, 234, 0.15)' : 'transparent',
-                        border: '1px solid #2a3441',
-                        color: showRightSidebar ? '#667eea' : '#8b98a5',
-                        padding: '8px',
-                        borderRadius: '8px',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        transition: 'all 0.2s'
-                      }}
-                      title="Conversation Info & Options"
-                    >
-                      <Info size={18} />
-                    </button>
+                  <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                    {/* Search bar in header like mockup */}
+                    <div style={{
+                      position: 'relative',
+                      marginRight: '12px'
+                    }}>
+                      <Search size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: 'var(--text-secondary)' }} />
+                      <input
+                        type="text"
+                        placeholder={`Search message history...`}
+                        style={{
+                          background: 'var(--bg-light)',
+                          border: 'none',
+                          borderRadius: '6px',
+                          padding: '8px 12px 8px 32px',
+                          fontSize: '13px',
+                          width: '200px',
+                          outline: 'none',
+                          color: 'var(--text-main)'
+                        }}
+                      />
+                    </div>
+                    {[Phone, Video, Info].map((Icon, idx) => (
+                      <button
+                        key={idx}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          color: 'var(--text-secondary)',
+                          padding: '8px',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}
+                        onMouseEnter={(e) => e.target.style.background = 'var(--bg-light)'}
+                        onMouseLeave={(e) => e.target.style.background = 'transparent'}
+                      >
+                        <Icon size={20} />
+                      </button>
+                    ))}
                   </div>
                 </div>
-
-                {/* Animated Search Bar */}
-                {showSearchInChat && (
-                  <div style={{
-                    marginTop: '12px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '10px',
-                    background: '#0e1621',
-                    borderRadius: '10px',
-                    padding: '8px 12px',
-                    border: '1px solid #667eea',
-                    animation: 'fadeIn 0.2s ease-out'
-                  }}>
-                    <Search size={16} color="#667eea" />
-                    <input
-                      type="text"
-                      placeholder="Search for messages..."
-                      value={chatSearchQuery}
-                      onChange={(e) => setChatSearchQuery(e.target.value)}
-                      autoFocus
-                      style={{
-                        flex: 1,
-                        background: 'transparent',
-                        border: 'none',
-                        outline: 'none',
-                        color: '#fff',
-                        fontSize: '14px'
-                      }}
-                    />
-                    <button
-                      onClick={() => { setShowSearchInChat(false); setChatSearchQuery(''); }}
-                      style={{
-                        background: 'transparent',
-                        border: 'none',
-                        color: '#8b98a5',
-                        cursor: 'pointer',
-                        display: 'flex'
-                      }}
-                    >
-                      <X size={16} />
-                    </button>
-                  </div>
-                )}
               </div>
 
               {/* Pinned Messages Banner */}
@@ -1783,7 +1724,7 @@ export default function UserHomePage() {
                 gap: '16px'
               }}>
                 {messagesLoading ? (
-                  <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#8b98a5' }}>
+                  <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)' }}>
                     Loading messages...
                   </div>
                 ) : messages.length === 0 ? (
@@ -1795,8 +1736,8 @@ export default function UserHomePage() {
                     flexDirection: 'column',
                     gap: '12px'
                   }}>
-                    <Lock size={48} color="#667eea" style={{ opacity: 0.3 }} />
-                    <p style={{ color: '#8b98a5', margin: 0 }}>
+                    <Lock size={48} color="var(--primary)" style={{ opacity: 0.3 }} />
+                    <p style={{ color: 'var(--text-secondary)', margin: 0 }}>
                       Start a secure conversation
                     </p>
                   </div>
@@ -1832,7 +1773,7 @@ export default function UserHomePage() {
                     marginBottom: '8px'
                   }}>
                     <div style={{
-                      background: '#1a2332',
+                      background: 'var(--bg-main)',
                       padding: '10px 16px',
                       borderRadius: '16px 16px 16px 4px',
                       display: 'flex',
@@ -1842,7 +1783,7 @@ export default function UserHomePage() {
                       <div className="typing-dots">
                         <span></span><span></span><span></span>
                       </div>
-                      <span style={{ color: '#8b98a5', fontSize: '12px' }}>
+                      <span style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>
                         {typingUsers.length === 1 ? 'Typing...' : 'Several people are typing...'}
                       </span>
                     </div>
@@ -1851,16 +1792,23 @@ export default function UserHomePage() {
               </div>
 
               <form onSubmit={handleSendMessage} style={{
-                padding: '20px 30px',
-                background: '#151f2e',
-                borderTop: '1px solid #2a3441',
+                padding: '16px 20px',
+                background: 'var(--bg-panel)',
+                borderTop: '1px solid var(--border-color)',
                 flexShrink: 0
               }}>
+                {/* Rich Text Controls Top Bar */}
+                <div style={{ display: 'flex', gap: '20px', marginBottom: '12px', paddingLeft: '4px' }}>
+                  {[Bold, Italic, Link, List, Code].map((Icon, idx) => (
+                    <Icon key={idx} size={18} color="var(--text-secondary)" style={{ cursor: 'pointer' }} />
+                  ))}
+                </div>
+
                 {/* Edit/Reply Preview */}
                 {(replyingTo || editingMessage) && (
                   <div style={{
-                    background: 'rgba(102, 126, 234, 0.1)',
-                    borderLeft: '3px solid #667eea',
+                    background: 'var(--bg-light)',
+                    borderLeft: '3px solid var(--primary)',
                     padding: '8px 12px',
                     marginBottom: '10px',
                     borderRadius: '0 8px 8px 0',
@@ -1869,279 +1817,91 @@ export default function UserHomePage() {
                     alignItems: 'center'
                   }}>
                     <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: '12px', fontWeight: '700', color: '#667eea', marginBottom: '2px' }}>
+                      <div style={{ fontSize: '12px', fontWeight: '800', color: 'var(--primary)', marginBottom: '2px' }}>
                         {editingMessage ? 'Editing Message' : `Replying to ${replyingTo.sender?.firstName || 'User'}`}
                       </div>
-                      <div style={{
-                        fontSize: '13px',
-                        color: '#8b98a5',
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis'
-                      }}>
+                      <div style={{ fontSize: '13px', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {editingMessage ? editingMessage.content : replyingTo.content}
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => { setReplyingTo(null); setEditingMessage(null); if (editingMessage) setMessageInput(''); }}
-                      style={{ background: 'transparent', border: 'none', color: '#8b98a5', cursor: 'pointer' }}
-                    >
-                      <X size={16} />
-                    </button>
+                    <button type="button" onClick={() => { setReplyingTo(null); setEditingMessage(null); }} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}><X size={16} /></button>
                   </div>
                 )}
+
                 <div style={{
                   display: 'flex',
                   gap: '12px',
-                  alignItems: 'flex-end',
-                  position: 'relative'
+                  alignItems: 'center',
+                  background: 'var(--bg-light)',
+                  borderRadius: '8px',
+                  padding: '4px 12px',
+                  border: '1px solid transparent',
+                  transition: 'border-color 0.2s'
                 }}>
                   <div style={{ position: 'relative' }}>
                     <button
                       type="button"
                       onClick={() => setShowAttachmentMenu(!showAttachmentMenu)}
-                      disabled={uploading}
                       style={{
-                        background: uploading ? '#2a3441' : (showAttachmentMenu ? '#2a3441' : 'transparent'),
-                        border: '1px solid #2a3441',
-                        borderRadius: '12px',
-                        width: '48px',
-                        height: '48px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        cursor: uploading ? 'not-allowed' : 'pointer',
-                        color: uploading ? '#4a5568' : '#8b98a5',
-                        transition: 'all 0.2s'
+                        background: 'transparent',
+                        border: 'none',
+                        color: 'var(--text-secondary)',
+                        padding: '8px',
+                        cursor: 'pointer',
+                        display: 'flex'
                       }}
-                      title="Attachments"
                     >
-                      <Paperclip size={20} style={{ transform: showAttachmentMenu ? 'rotate(45deg)' : 'none', transition: 'transform 0.2s' }} />
+                      <Plus size={20} />
                     </button>
-
                     {showAttachmentMenu && (
                       <div style={{
                         position: 'absolute',
-                        bottom: '60px',
+                        bottom: '50px',
                         left: '0',
-                        background: '#1a2332',
-                        border: '1px solid #2a3441',
-                        borderRadius: '12px',
+                        background: 'var(--bg-panel)',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: '8px',
                         padding: '8px',
-                        width: '180px',
-                        boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
-                        zIndex: 100,
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '4px'
+                        width: '200px',
+                        boxShadow: 'var(--shadow)',
+                        zIndex: 100
                       }}>
-                        <button
-                          type="button"
-                          onClick={handleFileClick}
-                          style={{
-                            background: 'transparent',
-                            border: 'none',
-                            color: '#fff',
-                            padding: '10px',
-                            textAlign: 'left',
-                            borderRadius: '8px',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '10px',
-                            fontSize: '13px'
-                          }}
-                          onMouseEnter={(e) => e.target.style.background = '#2a3441'}
-                          onMouseLeave={(e) => e.target.style.background = 'transparent'}
-                        >
-                          <FileText size={16} color="#667eea" /> Upload from PC
-                        </button>
-                        <button
-                          type="button"
-                          onClick={startCamera}
-                          style={{
-                            background: 'transparent',
-                            border: 'none',
-                            color: '#fff',
-                            padding: '10px',
-                            textAlign: 'left',
-                            borderRadius: '8px',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '10px',
-                            fontSize: '13px'
-                          }}
-                          onMouseEnter={(e) => e.target.style.background = '#2a3441'}
-                          onMouseLeave={(e) => e.target.style.background = 'transparent'}
-                        >
-                          <Camera size={16} color="#667eea" /> Take Photo
-                        </button>
-                        <button
-                          type="button"
-                          onClick={shareFromVault}
-                          style={{
-                            background: 'transparent',
-                            border: 'none',
-                            color: '#fff',
-                            padding: '10px',
-                            textAlign: 'left',
-                            borderRadius: '8px',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '10px',
-                            fontSize: '13px'
-                          }}
-                          onMouseEnter={(e) => e.target.style.background = '#2a3441'}
-                          onMouseLeave={(e) => e.target.style.background = 'transparent'}
-                        >
-                          <Shield size={16} /> Share from Vault
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleShareLocation}
-                          style={{
-                            background: 'transparent',
-                            border: 'none',
-                            color: '#fff',
-                            padding: '10px',
-                            textAlign: 'left',
-                            borderRadius: '8px',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '10px',
-                            fontSize: '13px'
-                          }}
-                          onMouseEnter={(e) => e.target.style.background = '#2a3441'}
-                          onMouseLeave={(e) => e.target.style.background = 'transparent'}
-                        >
-                          <MapPin size={16} color="#667eea" /> Share Location
-                        </button>
-
-                        <div style={{ height: '1px', background: '#2a3441', margin: '4px 0' }} />
-                        <div style={{ padding: '8px 10px', fontSize: '11px', color: '#8b98a5', textTransform: 'uppercase', fontWeight: 'bold' }}>Ephemeral Privacy</div>
-                        {[
-                          { label: 'Off', val: null },
-                          { label: '10 Seconds', val: 10 },
-                          { label: '1 Minute', val: 60 },
-                          { label: '1 Hour', val: 3600 }
-                        ].map(t => (
-                          <button
-                            key={t.label}
-                            type="button"
-                            onClick={() => { setSelfDestructTime(t.val); setShowAttachmentMenu(false); }}
-                            style={{
-                              background: selfDestructTime === t.val ? 'rgba(102, 126, 234, 0.2)' : 'transparent',
-                              border: 'none',
-                              color: selfDestructTime === t.val ? '#667eea' : '#fff',
-                              padding: '8px 10px',
-                              textAlign: 'left',
-                              borderRadius: '8px',
-                              cursor: 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '10px',
-                              fontSize: '13px'
-                            }}
-                          >
-                            <Clock size={14} /> {t.label}
-                          </button>
-                        ))}
+                        {/* Simplified menu for demo */}
+                        <div style={{ padding: '8px', fontSize: '13px', cursor: 'pointer', color: 'var(--text-main)' }} onClick={handleFileClick}><FileText size={16} /> Upload file</div>
+                        <div style={{ padding: '8px', fontSize: '13px', cursor: 'pointer', color: 'var(--text-main)' }} onClick={startCamera}><Camera size={16} /> Take photo</div>
                       </div>
                     )}
                   </div>
 
                   <input
-                    type="file"
-                    ref={fileInputRef}
-                    onChange={handleFileChange}
-                    style={{ display: 'none' }}
+                    type="text"
+                    value={messageInput}
+                    onChange={(e) => { setMessageInput(e.target.value); handleTyping(); }}
+                    placeholder={`Message #${getConversationName(selectedConversation)}`}
+                    style={{
+                      flex: 1,
+                      background: 'transparent',
+                      border: 'none',
+                      outline: 'none',
+                      color: '#1a1d21',
+                      fontSize: '15px',
+                      padding: '10px 0'
+                    }}
                   />
 
-                  <div style={{
-                    flex: 1,
-                    background: '#1a2332',
-                    borderRadius: '12px',
-                    border: '1px solid #2a3441',
-                    padding: '12px 16px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '12px'
-                  }}>
-                    <input
-                      type="text"
-                      value={messageInput}
-                      onChange={(e) => {
-                        setMessageInput(e.target.value);
-                        handleTyping();
-                      }}
-                      placeholder="Type a secure message..."
-                      style={{
-                        flex: 1,
-                        background: 'transparent',
-                        border: 'none',
-                        outline: 'none',
-                        color: '#fff',
-                        fontSize: '14px'
-                      }}
-                      disabled={sending}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowStickerPicker(!showStickerPicker)}
-                      style={{
-                        background: 'transparent',
-                        border: 'none',
-                        color: showStickerPicker ? '#667eea' : '#8b98a5',
-                        cursor: 'pointer',
-                        padding: '4px',
-                        display: 'flex',
-                        transition: 'all 0.2s'
-                      }}
-                    >
-                      <Smile size={20} />
-                    </button>
-                    {showStickerPicker && (
-                      <StickerPicker
-                        onSelect={(sticker) => {
-                          setMessageInput(prev => prev + sticker);
-                          setShowStickerPicker(false);
-                        }}
-                        onClose={() => setShowStickerPicker(false)}
-                      />
-                    )}
+                  <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                    <button type="button" onClick={() => setShowStickerPicker(!showStickerPicker)} style={{ background: 'transparent', border: 'none', color: '#616061', cursor: 'pointer' }}><Smile size={20} /></button>
+                    <button type="submit" style={{ background: 'transparent', border: 'none', color: messageInput.trim() ? '#007bff' : '#616061', cursor: 'pointer' }}><Send size={20} /></button>
                   </div>
-                  <button
-                    type="submit"
-                    disabled={sending || uploading}
-                    onClick={(e) => {
-                      if (isRecording) {
-                        e.preventDefault();
-                        handleStopRecording();
-                      } else if (!messageInput.trim()) {
-                        e.preventDefault();
-                        handleStartRecording();
-                      }
-                    }}
-                    style={{
-                      background: isRecording ? '#ef4444' : (messageInput.trim() && !sending ? '#667eea' : '#2a3441'),
-                      border: 'none',
-                      borderRadius: '12px',
-                      width: '48px',
-                      height: '48px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: (sending || uploading) ? 'not-allowed' : 'pointer',
-                      transition: 'all 0.2s',
-                      flexShrink: 0
-                    }}
-                  >
-                    {isRecording ? <Square size={20} fill="#fff" color="#fff" /> : (messageInput.trim() ? <Send size={20} color="#fff" /> : <Mic size={20} color="#fff" />)}
-                  </button>
+                </div>
+                <div style={{ marginTop: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '12px', color: '#616061' }}>
+                    Return to send, <b>Shift + Return</b> for new line
+                  </span>
+                  <div style={{ display: 'flex', gap: '15px' }}>
+                    <AtSign size={16} color="#616061" style={{ cursor: 'pointer' }} />
+                    <Paperclip size={16} color="#616061" style={{ cursor: 'pointer' }} />
+                  </div>
                 </div>
               </form>
             </div>
@@ -3062,79 +2822,68 @@ function ChatItem({ chat, active, onClick, getName, getAvatar, formatTime, onCon
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        padding: '12px 16px',
-        margin: '2px 8px',
-        borderRadius: '12px',
+        padding: '10px 16px',
+        margin: '1px 8px',
+        borderRadius: '8px',
         cursor: 'pointer',
-        background: active ? 'rgba(102, 126, 234, 0.15)' : (hovered ? 'rgba(255, 255, 255, 0.03)' : 'transparent'),
-        transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+        background: active ? '#007bff15' : (hovered ? '#f1f3f5' : 'transparent'),
+        transition: 'all 0.15s ease',
         display: 'flex',
         gap: '12px',
-        alignItems: 'center',
-        transform: hovered ? 'translateX(4px)' : 'translateX(0)',
-        border: active ? '1px solid rgba(102, 126, 234, 0.3)' : '1px solid transparent'
+        alignItems: 'center'
       }}
     >
       <div style={{ position: 'relative' }}>
         <div style={{
-          width: '52px',
-          height: '52px',
-          background: active ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : '#2a3441',
-          borderRadius: '16px',
+          width: '36px',
+          height: '36px',
+          background: active ? '#007bff' : '#f1f3f5',
+          borderRadius: '6px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          fontSize: '20px',
-          fontWeight: '700',
-          color: '#fff',
-          transition: 'all 0.3s ease',
-          boxShadow: active ? '0 4px 12px rgba(102, 126, 234, 0.25)' : 'none'
+          fontSize: '14px',
+          fontWeight: '800',
+          color: active ? '#fff' : '#1a1d21'
         }}>
           {getAvatar(chat)}
         </div>
         {isOnline && (
           <div style={{
             position: 'absolute',
-            bottom: '2px',
-            right: '2px',
-            width: '12px',
-            height: '12px',
-            background: '#10b981',
-            border: '2px solid #151f2e',
+            bottom: '-1px',
+            right: '-1px',
+            width: '10px',
+            height: '10px',
+            background: '#4ade80',
+            border: '2px solid #fff',
             borderRadius: '50%'
           }} />
         )}
       </div>
 
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h4 style={{
             margin: 0,
-            color: active ? '#fff' : '#e2e8f0',
-            fontSize: '15px',
-            fontWeight: '600',
+            color: '#1a1d21',
+            fontSize: '14px',
+            fontWeight: chat.unreadCount > 0 ? '800' : (active ? '700' : '400'),
             overflow: 'hidden',
             textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
+            whiteSpace: 'nowrap'
           }}>
             {getName(chat)}
-            {isMuted && <BellOff size={12} color="#8b98a5" style={{ opacity: 0.7 }} />}
           </h4>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            {isPinned && <Pin size={12} color="#667eea" style={{ transform: 'rotate(45deg)' }} />}
-            <span style={{ color: '#8b98a5', fontSize: '11px', flexShrink: 0 }}>
-              {chat.lastMessage ? formatTime(chat.lastMessage.createdAt) : ''}
-            </span>
-          </div>
+          <span style={{ color: '#616061', fontSize: '11px' }}>
+            {chat.lastMessage ? formatTime(chat.lastMessage.createdAt) : ''}
+          </span>
         </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2px' }}>
           <p style={{
             margin: 0,
-            color: active ? '#94a3b8' : '#718096',
-            fontSize: '13px',
+            color: chat.unreadCount > 0 ? '#1a1d21' : '#616061',
+            fontSize: '12px',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
@@ -3362,7 +3111,7 @@ function ContextMenu({ contextMenu, onDelete, onClose, pinnedChatIds, mutedChatI
   );
 }
 
-function SettingsContent({ user }) {
+function SettingsContent({ user, darkMode, toggleDarkMode }) {
   const fileInputRef = React.useRef(null);
   const [isChangingPass, setIsChangingPass] = React.useState(false);
   const [passData, setPassData] = React.useState({ newPass: '', confirmPass: '' });
@@ -3505,10 +3254,10 @@ function SettingsContent({ user }) {
   };
 
   return (
-    <div style={{ padding: '40px', color: '#fff', maxWidth: '900px', margin: '0 auto' }}>
+    <div style={{ padding: '40px', color: 'var(--text-main)', maxWidth: '900px', margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '30px' }}>
-        <h2 style={{ fontSize: '28px', margin: 0 }}>Settings</h2>
-        <div style={{ display: 'flex', background: '#151f2e', padding: '4px', borderRadius: '10px', flexWrap: 'wrap', gap: '5px' }}>
+        <h2 style={{ fontSize: '28px', margin: 0, color: 'var(--text-main)' }}>Settings</h2>
+        <div style={{ display: 'flex', background: 'var(--bg-panel)', padding: '4px', borderRadius: '10px', flexWrap: 'wrap', gap: '5px' }}>
           {['profile', 'security', 'preferences', 'sessions', 'activity'].map(tab => (
             <button
               key={tab}
@@ -3516,7 +3265,7 @@ function SettingsContent({ user }) {
               style={{
                 padding: '8px 16px',
                 background: activeSubTab === tab ? '#667eea' : 'transparent',
-                color: '#fff',
+                color: activeSubTab === tab ? '#fff' : 'var(--text-muted)',
                 border: 'none',
                 borderRadius: '8px',
                 cursor: 'pointer',
@@ -3534,7 +3283,7 @@ function SettingsContent({ user }) {
       {activeSubTab === 'profile' && (
         <div style={{ display: 'grid', gap: '30px' }}>
           {/* Profile Card */}
-          <div style={{ background: '#151f2e', padding: '30px', borderRadius: '20px', display: 'flex', alignItems: 'center', gap: '30px' }}>
+          <div style={{ background: 'var(--bg-panel)', padding: '30px', borderRadius: '20px', display: 'flex', alignItems: 'center', gap: '30px' }}>
             <input type="file" ref={fileInputRef} onChange={handleFileChange} style={{ display: 'none' }} accept="image/*" />
             <div
               onClick={handleAvatarClick}
@@ -3557,8 +3306,8 @@ function SettingsContent({ user }) {
             <div style={{ flex: 1 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div>
-                  <h3 style={{ margin: '0 0 5px 0', fontSize: '26px' }}>{user?.firstName} {user?.lastName}</h3>
-                  <p style={{ margin: 0, color: '#8b98a5' }}>{user?.email}</p>
+                  <h3 style={{ margin: '0 0 5px 0', fontSize: '26px', color: 'var(--text-main)' }}>{user?.firstName} {user?.lastName}</h3>
+                  <p style={{ margin: 0, color: 'var(--text-muted)' }}>{user?.email}</p>
                 </div>
                 <button
                   onClick={() => setIsEditingProfile(!isEditingProfile)}
@@ -3568,15 +3317,15 @@ function SettingsContent({ user }) {
                 </button>
               </div>
               <div style={{ marginTop: '15px', display: 'flex', gap: '10px' }}>
-                <span style={{ padding: '4px 10px', background: '#2a3441', borderRadius: '6px', fontSize: '12px', color: '#667eea' }}>{user?.role || 'User'}</span>
-                <span style={{ padding: '4px 10px', background: '#2a3441', borderRadius: '6px', fontSize: '12px', color: '#8b98a5' }}>ID: {user?.employeeId || 'N/A'}</span>
+                <span style={{ padding: '4px 10px', background: 'var(--bg-main)', borderRadius: '6px', fontSize: '12px', color: '#667eea' }}>{user?.role || 'User'}</span>
+                <span style={{ padding: '4px 10px', background: 'var(--bg-main)', borderRadius: '6px', fontSize: '12px', color: 'var(--text-muted)' }}>ID: {user?.employeeId || 'N/A'}</span>
               </div>
             </div>
           </div>
 
           {/* Details Form */}
-          <div style={{ background: '#151f2e', padding: '30px', borderRadius: '20px' }}>
-            <h3 style={{ marginTop: 0, marginBottom: '20px', fontSize: '18px' }}>Personal Information</h3>
+          <div style={{ background: 'var(--bg-panel)', padding: '30px', borderRadius: '20px' }}>
+            <h3 style={{ marginTop: 0, marginBottom: '20px', fontSize: '18px', color: 'var(--text-main)' }}>Personal Information</h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
               {[
                 { label: 'First Name', key: 'firstName' },
@@ -3586,16 +3335,16 @@ function SettingsContent({ user }) {
                 { label: 'Job Title', key: 'jobTitle' }
               ].map(field => (
                 <div key={field.key}>
-                  <label style={{ display: 'block', color: '#8b98a5', fontSize: '12px', marginBottom: '8px' }}>{field.label}</label>
+                  <label style={{ display: 'block', color: 'var(--text-muted)', fontSize: '12px', marginBottom: '8px' }}>{field.label}</label>
                   {isEditingProfile ? (
                     <input
                       type="text"
                       value={profileData[field.key]}
                       onChange={e => setProfileData({ ...profileData, [field.key]: e.target.value })}
-                      style={{ width: '100%', padding: '10px', background: '#0e1621', border: '1px solid #2a3441', borderRadius: '8px', color: '#fff', outline: 'none' }}
+                      style={{ width: '100%', padding: '10px', background: 'var(--bg-main)', border: '1px solid var(--border-color)', borderRadius: '8px', color: 'var(--text-main)', outline: 'none', boxSizing: 'border-box' }}
                     />
                   ) : (
-                    <div style={{ padding: '10px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px' }}>{user?.[field.key] || 'Not specified'}</div>
+                    <div style={{ padding: '10px', background: 'var(--bg-main)', borderRadius: '8px', color: 'var(--text-main)', border: '1px solid var(--border-color)' }}>{user?.[field.key] || 'Not specified'}</div>
                   )}
                 </div>
               ))}
@@ -3614,14 +3363,14 @@ function SettingsContent({ user }) {
 
       {activeSubTab === 'security' && (
         <div style={{ display: 'grid', gap: '30px' }}>
-          <div style={{ background: '#151f2e', padding: '30px', borderRadius: '20px' }}>
-            <h3 style={{ marginTop: 0, marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '10px' }}><Shield size={20} color="#667eea" /> Security Settings</h3>
+          <div style={{ background: 'var(--bg-panel)', padding: '30px', borderRadius: '20px' }}>
+            <h3 style={{ marginTop: 0, marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--text-main)' }}><Shield size={20} color="#667eea" /> Security Settings</h3>
 
             {/* MFA */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 0', borderBottom: '1px solid #2a3441' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 0', borderBottom: '1px solid var(--border-color)' }}>
               <div>
-                <div style={{ fontWeight: '600' }}>Multi-Factor Authentication</div>
-                <div style={{ fontSize: '13px', color: '#8b98a5' }}>{user?.mfaRequired ? 'Account is secured with 2FA' : 'Your account is less secure without 2FA'}</div>
+                <div style={{ fontWeight: '600', color: 'var(--text-main)' }}>Multi-Factor Authentication</div>
+                <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{user?.mfaRequired ? 'Account is secured with 2FA' : 'Your account is less secure without 2FA'}</div>
               </div>
               <button
                 onClick={user?.mfaRequired ?
@@ -3682,7 +3431,7 @@ function SettingsContent({ user }) {
                         fontFamily: 'monospace'
                       }}>
                         {mfaBackupCodes.map((code, idx) => (
-                          <div key={idx} style={{ background: '#0e1621', padding: '6px 10px', borderRadius: '4px', border: '1px solid #2a3441', color: '#e2e8f0' }}>
+                          <div key={idx} style={{ background: 'var(--bg-main)', padding: '6px 10px', borderRadius: '4px', border: '1px solid var(--border-color)', color: 'var(--text-main)' }}>
                             {code}
                           </div>
                         ))}
@@ -3690,7 +3439,7 @@ function SettingsContent({ user }) {
                     </div>
 
                     <div style={{ width: '100%', textAlign: 'left' }}>
-                      <label style={{ display: 'block', color: '#fff', fontSize: '13px', fontWeight: '600', marginBottom: '10px' }}>
+                      <label style={{ display: 'block', color: 'var(--text-main)', fontSize: '13px', fontWeight: '600', marginBottom: '10px' }}>
                         3. Enter the 6-digit code from your app
                       </label>
                       <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
@@ -3706,10 +3455,10 @@ function SettingsContent({ user }) {
                           style={{
                             flex: 1,
                             padding: '14px',
-                            background: '#0e1621',
-                            border: '1px solid #2a3441',
+                            background: 'var(--bg-main)',
+                            border: '1px solid var(--border-color)',
                             borderRadius: '12px',
-                            color: '#fff',
+                            color: 'var(--text-main)',
                             textAlign: 'center',
                             fontSize: '24px',
                             fontWeight: 'bold',
@@ -3726,7 +3475,7 @@ function SettingsContent({ user }) {
                       style={{
                         width: '100%',
                         padding: '16px',
-                        background: mfaVerifyToken.length === 6 ? '#667eea' : '#2a3441',
+                        background: mfaVerifyToken.length === 6 ? '#667eea' : 'var(--border-color)',
                         color: '#fff',
                         border: 'none',
                         borderRadius: '12px',
@@ -3749,8 +3498,8 @@ function SettingsContent({ user }) {
             <div style={{ padding: '20px 0' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
-                  <div style={{ fontWeight: '600' }}>Change Password</div>
-                  <div style={{ fontSize: '13px', color: '#8b98a5' }}>Last changed: {user?.lastPasswordChange ? new Date(user.lastPasswordChange).toLocaleDateString() : 'Never'}</div>
+                  <div style={{ fontWeight: '600', color: 'var(--text-main)' }}>Change Password</div>
+                  <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Last changed: {user?.lastPasswordChange ? new Date(user.lastPasswordChange).toLocaleDateString() : 'Never'}</div>
                 </div>
                 {!isChangingPass && (
                   <button onClick={() => setIsChangingPass(true)} style={{ padding: '8px 16px', background: 'rgba(102, 126, 234, 0.1)', color: '#667eea', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>Update</button>
@@ -3758,11 +3507,11 @@ function SettingsContent({ user }) {
               </div>
               {isChangingPass && (
                 <div style={{ marginTop: '20px', display: 'grid', gap: '12px' }}>
-                  <input type="password" placeholder="New Password" value={passData.newPass} onChange={e => setPassData({ ...passData, newPass: e.target.value })} style={{ padding: '10px', background: '#0e1621', border: '1px solid #2a3441', borderRadius: '8px', color: '#fff', outline: 'none' }} />
-                  <input type="password" placeholder="Confirm New Password" value={passData.confirmPass} onChange={e => setPassData({ ...passData, confirmPass: e.target.value })} style={{ padding: '10px', background: '#0e1621', border: '1px solid #2a3441', borderRadius: '8px', color: '#fff', outline: 'none' }} />
+                  <input type="password" placeholder="New Password" value={passData.newPass} onChange={e => setPassData({ ...passData, newPass: e.target.value })} style={{ padding: '10px', background: 'var(--bg-main)', border: '1px solid var(--border-color)', borderRadius: '8px', color: 'var(--text-main)', outline: 'none' }} />
+                  <input type="password" placeholder="Confirm New Password" value={passData.confirmPass} onChange={e => setPassData({ ...passData, confirmPass: e.target.value })} style={{ padding: '10px', background: 'var(--bg-main)', border: '1px solid var(--border-color)', borderRadius: '8px', color: 'var(--text-main)', outline: 'none' }} />
                   <div style={{ display: 'flex', gap: '10px' }}>
                     <button onClick={handlePassUpdate} style={{ flex: 1, padding: '10px', background: '#667eea', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>Save Password</button>
-                    <button onClick={() => setIsChangingPass(false)} style={{ flex: 1, padding: '10px', background: '#2a3441', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>Cancel</button>
+                    <button onClick={() => setIsChangingPass(false)} style={{ flex: 1, padding: '10px', background: 'var(--bg-main)', border: '1px solid var(--border-color)', color: 'var(--text-main)', borderRadius: '8px', cursor: 'pointer' }}>Cancel</button>
                   </div>
                 </div>
               )}
@@ -3773,11 +3522,43 @@ function SettingsContent({ user }) {
 
       {activeSubTab === 'preferences' && (
         <div style={{ display: 'grid', gap: '30px' }}>
-          <div style={{ background: '#151f2e', padding: '30px', borderRadius: '20px' }}>
-            <h3 style={{ marginTop: 0, marginBottom: '25px', display: 'flex', alignItems: 'center', gap: '10px' }}><Settings size={20} color="#667eea" /> Appearance & Preferences</h3>
+          <div style={{ background: 'var(--bg-panel)', padding: '30px', borderRadius: '20px' }}>
+            <h3 style={{ marginTop: 0, marginBottom: '25px', display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--text-main)' }}><Settings size={20} color="#667eea" /> Appearance & Preferences</h3>
 
-            <div style={{ marginBottom: '30px' }}>
-              <label style={{ display: 'block', color: '#8b98a5', fontSize: '14px', marginBottom: '15px' }}>Accent Color</label>
+            {/* Dark Mode Toggle */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px', borderRadius: '16px', background: 'var(--bg-main)', border: '1px solid var(--border-color)', marginBottom: '24px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: darkMode ? 'rgba(102,126,234,0.15)' : 'rgba(234, 179, 8, 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '22px' }}>
+                  {darkMode ? '🌙' : '☀️'}
+                </div>
+                <div>
+                  <div style={{ fontWeight: '700', color: 'var(--text-main)', fontSize: '15px' }}>Dark Mode</div>
+                  <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '2px' }}>{darkMode ? 'Currently using dark theme' : 'Currently using light theme'}</div>
+                </div>
+              </div>
+              <div
+                onClick={toggleDarkMode}
+                style={{
+                  width: '52px', height: '28px',
+                  background: darkMode ? '#667eea' : 'var(--border-color)',
+                  borderRadius: '20px', position: 'relative', cursor: 'pointer',
+                  transition: 'background 0.3s',
+                  flexShrink: 0
+                }}
+              >
+                <div style={{
+                  position: 'absolute', top: '3px',
+                  left: darkMode ? '26px' : '3px',
+                  width: '22px', height: '22px',
+                  background: '#fff', borderRadius: '50%',
+                  transition: 'left 0.3s',
+                  boxShadow: '0 1px 4px rgba(0,0,0,0.25)'
+                }} />
+              </div>
+            </div>
+
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', color: 'var(--text-muted)', fontSize: '14px', marginBottom: '15px' }}>Accent Color</label>
               <div style={{ display: 'flex', gap: '15px' }}>
                 {['#667eea', '#22c55e', '#ef4444', '#eab308', '#ec4899', '#8b5cf6'].map(color => (
                   <div
@@ -3801,15 +3582,15 @@ function SettingsContent({ user }) {
               { label: 'Read Receipts', desc: 'Allow others to see when you read messages', key: 'readReceipts' },
               { label: 'Online Status', desc: 'Show your current online availability', key: 'onlineStatus' }
             ].map(pref => (
-              <div key={pref.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 0', borderTop: '1px solid #2a3441' }}>
+              <div key={pref.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 0', borderTop: '1px solid var(--border-color)' }}>
                 <div>
-                  <div style={{ fontWeight: '600' }}>{pref.label}</div>
-                  <div style={{ fontSize: '13px', color: '#8b98a5' }}>{pref.desc}</div>
+                  <div style={{ fontWeight: '600', color: 'var(--text-main)' }}>{pref.label}</div>
+                  <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{pref.desc}</div>
                 </div>
                 <div
                   onClick={() => updatePreference({ ...preferences, [pref.key]: !preferences[pref.key] })}
                   style={{
-                    width: '45px', height: '22px', background: preferences[pref.key] ? '#667eea' : '#2a3441',
+                    width: '45px', height: '22px', background: preferences[pref.key] ? '#667eea' : 'var(--border-color)',
                     borderRadius: '15px', position: 'relative', cursor: 'pointer', transition: 'background 0.3s'
                   }}
                 >
@@ -3827,22 +3608,22 @@ function SettingsContent({ user }) {
 
       {activeSubTab === 'sessions' && (
         <div style={{ display: 'grid', gap: '20px' }}>
-          <div style={{ background: '#151f2e', padding: '30px', borderRadius: '20px' }}>
+          <div style={{ background: 'var(--bg-panel)', padding: '30px', borderRadius: '20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px' }}>
-              <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '10px' }}><Lock size={20} color="#667eea" /> Active Sessions</h3>
+              <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--text-main)' }}><Lock size={20} color="#667eea" /> Active Sessions</h3>
               <button onClick={loadSessions} style={{ background: 'transparent', border: 'none', color: '#667eea', cursor: 'pointer', fontSize: '14px' }}>Refresh</button>
             </div>
             <div style={{ display: 'grid', gap: '15px' }}>
               {sessions.length > 0 ? sessions.map(s => (
-                <div key={s.id} style={{ background: '#0e1621', padding: '20px', borderRadius: '15px', border: '1px solid #2a3441', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div key={s.id} style={{ background: 'var(--bg-main)', padding: '20px', borderRadius: '15px', border: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-                    <div style={{ width: '45px', height: '45px', borderRadius: '12px', background: '#1a273a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ width: '45px', height: '45px', borderRadius: '12px', background: 'var(--bg-panel)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       {s.deviceType === 'mobile' ? <Phone size={20} color="#667eea" /> : <Settings size={20} color="#667eea" />}
                     </div>
                     <div>
-                      <div style={{ fontWeight: '600' }}>{s.deviceName || 'Unknown Device'} • {s.browser || 'Unknown Browser'}</div>
-                      <div style={{ fontSize: '13px', color: '#8b98a5', marginTop: '4px' }}>{s.ipAddress} • {s.city || 'Unknown Location'}</div>
-                      <div style={{ fontSize: '11px', color: '#54637a', marginTop: '4px' }}>Last accessed: {new Date(s.lastAccessedAt).toLocaleString()}</div>
+                      <div style={{ fontWeight: '600', color: 'var(--text-main)' }}>{s.deviceName || 'Unknown Device'} • {s.browser || 'Unknown Browser'}</div>
+                      <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px' }}>{s.ipAddress} • {s.city || 'Unknown Location'}</div>
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px', opacity: 0.7 }}>Last accessed: {new Date(s.lastAccessedAt).toLocaleString()}</div>
                     </div>
                   </div>
                   <button
@@ -3861,16 +3642,16 @@ function SettingsContent({ user }) {
       )}
 
       {activeSubTab === 'activity' && (
-        <div style={{ background: '#151f2e', padding: '30px', borderRadius: '20px' }}>
-          <h3 style={{ marginTop: 0, marginBottom: '20px', fontSize: '18px' }}>Recent Activity</h3>
+        <div style={{ background: 'var(--bg-panel)', padding: '30px', borderRadius: '20px' }}>
+          <h3 style={{ marginTop: 0, marginBottom: '20px', fontSize: '18px', color: 'var(--text-main)' }}>Recent Activity</h3>
           <div style={{ display: 'grid', gap: '0' }}>
             {activity.length > 0 ? activity.map((log, idx) => (
-              <div key={idx} style={{ padding: '15px 0', borderBottom: idx === activity.length - 1 ? 'none' : '1px solid #2a3441', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div key={idx} style={{ padding: '15px 0', borderBottom: idx === activity.length - 1 ? 'none' : '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
                   <div style={{ fontWeight: '600', color: '#667eea', fontSize: '14px' }}>{log.eventType.replace(/_/g, ' ')}</div>
-                  <div style={{ fontSize: '13px', color: '#8b98a5', marginTop: '4px' }}>{log.description}</div>
+                  <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px' }}>{log.description}</div>
                 </div>
-                <div style={{ fontSize: '12px', color: '#54637a' }}>{new Date(log.createdAt).toLocaleString()}</div>
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)', opacity: 0.7 }}>{new Date(log.createdAt).toLocaleString()}</div>
               </div>
             )) : (
               <div style={{ textAlign: 'center', padding: '40px', color: '#8b98a5' }}>No recent activity found.</div>
@@ -3881,6 +3662,7 @@ function SettingsContent({ user }) {
     </div>
   );
 }
+
 
 function ContactsContent({ users, onSelect }) {
   const [term, setTerm] = React.useState('');
@@ -3894,11 +3676,11 @@ function ContactsContent({ users, onSelect }) {
   }) || [];
 
   return (
-    <div style={{ padding: '30px', color: '#fff', height: '100%', display: 'flex', flexDirection: 'column', maxWidth: '1200px', margin: '0 auto' }}>
+    <div style={{ padding: '30px', color: 'var(--text-main)', height: '100%', display: 'flex', flexDirection: 'column', maxWidth: '1200px', margin: '0 auto' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
         <div>
-          <h2 style={{ fontSize: '32px', margin: 0, fontWeight: '700' }}>Directory</h2>
-          <p style={{ color: '#8b98a5', marginTop: '8px' }}>Connect with your colleagues securely</p>
+          <h2 style={{ fontSize: '32px', margin: 0, fontWeight: '700', color: 'var(--text-main)' }}>Directory</h2>
+          <p style={{ color: 'var(--text-muted)', marginTop: '8px' }}>Connect with your colleagues securely</p>
         </div>
       </div>
 
@@ -3911,14 +3693,14 @@ function ContactsContent({ users, onSelect }) {
           style={{
             width: '100%',
             padding: '16px 16px 16px 55px',
-            background: '#151f2e',
-            border: '1px solid #2a3441',
+            background: 'var(--bg-panel)',
+            border: '1px solid var(--border-color)',
             borderRadius: '16px',
-            color: '#fff',
+            color: 'var(--text-main)',
             outline: 'none',
             fontSize: '15px',
             transition: 'all 0.2s',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+            boxSizing: 'border-box'
           }}
         />
       </div>
@@ -3929,7 +3711,7 @@ function ContactsContent({ users, onSelect }) {
             key={u.id}
             onClick={() => onSelect(u.id)}
             style={{
-              background: '#151f2e',
+              background: 'var(--bg-panel)',
               padding: '24px',
               borderRadius: '24px',
               cursor: 'pointer',
@@ -3937,7 +3719,7 @@ function ContactsContent({ users, onSelect }) {
               alignItems: 'center',
               gap: '18px',
               transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-              border: '1px solid #2a3441'
+              border: '1px solid var(--border-color)'
             }}
             onMouseEnter={e => {
               e.currentTarget.style.transform = 'translateY(-5px) scale(1.02)';
@@ -3946,7 +3728,7 @@ function ContactsContent({ users, onSelect }) {
             }}
             onMouseLeave={e => {
               e.currentTarget.style.transform = 'translateY(0) scale(1)';
-              e.currentTarget.style.borderColor = '#2a3441';
+              e.currentTarget.style.borderColor = 'var(--border-color)';
               e.currentTarget.style.boxShadow = 'none';
             }}
           >
@@ -3961,21 +3743,20 @@ function ContactsContent({ users, onSelect }) {
               fontSize: '24px',
               fontWeight: '800',
               color: '#fff',
-              boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)'
+              flexShrink: 0
             }}>
               {u.firstName?.charAt(0)}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontWeight: '700', fontSize: '17px', color: '#fff', marginBottom: '2px' }}>{u.firstName} {u.lastName}</div>
+              <div style={{ fontWeight: '700', fontSize: '17px', color: 'var(--text-main)', marginBottom: '2px' }}>{u.firstName} {u.lastName}</div>
               <div style={{ fontSize: '13px', color: '#667eea', fontWeight: '600', marginBottom: '4px' }}>{u.jobTitle || u.department || 'Team Member'}</div>
-              <div style={{ fontSize: '12px', color: '#8b98a5', overflow: 'hidden', textOverflow: 'ellipsis' }}>{u.email}</div>
+              <div style={{ fontSize: '12px', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis' }}>{u.email}</div>
             </div>
             <div style={{
-              width: '10px',
-              height: '10px',
-              borderRadius: '50%',
-              background: '#4ade80', // In a real app check online status
-              boxShadow: '0 0 10px #4ade80'
+              width: '10px', height: '10px', borderRadius: '50%',
+              background: 'var(--green-color)',
+              boxShadow: '0 0 8px var(--green-color)',
+              flexShrink: 0
             }} />
           </div>
         ))}
@@ -4009,11 +3790,11 @@ function TeamContent({ users, currentUser, onSelect, isAdmin }) {
   };
 
   return (
-    <div style={{ padding: '40px', color: '#fff', maxWidth: '1200px', margin: '0 auto', height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ padding: '40px', color: 'var(--text-main)', maxWidth: '1200px', margin: '0 auto', height: '100%', display: 'flex', flexDirection: 'column' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '40px' }}>
         <div>
-          <h2 style={{ fontSize: '32px', margin: 0, fontWeight: '700' }}>Team Management</h2>
-          <p style={{ color: '#8b98a5', marginTop: '8px' }}>Manage and communicate with your direct reports</p>
+          <h2 style={{ fontSize: '32px', margin: 0, fontWeight: '700', color: 'var(--text-main)' }}>Team Management</h2>
+          <p style={{ color: 'var(--text-muted)', marginTop: '8px' }}>Manage and communicate with your direct reports</p>
         </div>
         <div style={{ display: 'flex', gap: '15px' }}>
           <button
@@ -4031,13 +3812,13 @@ function TeamContent({ users, currentUser, onSelect, isAdmin }) {
       </div>
 
       {showBroadcast && (
-        <div style={{ background: '#151f2e', padding: '24px', borderRadius: '24px', border: '1px solid #667eea', marginBottom: '30px', animation: 'fadeIn 0.3s ease' }}>
-          <h4 style={{ margin: '0 0 15px 0' }}>Send message to all {teamMembers.length} members</h4>
+        <div style={{ background: 'var(--bg-panel)', padding: '24px', borderRadius: '24px', border: '1px solid #667eea', marginBottom: '30px', animation: 'fadeIn 0.3s ease' }}>
+          <h4 style={{ margin: '0 0 15px 0', color: 'var(--text-main)' }}>Send message to all {teamMembers.length} members</h4>
           <textarea
             value={broadcastMsg}
             onChange={e => setBroadcastMsg(e.target.value)}
             placeholder="Type your message here..."
-            style={{ width: '100%', background: '#0e1621', border: '1px solid #2a3441', borderRadius: '12px', padding: '15px', color: '#fff', height: '100px', outline: 'none', marginBottom: '15px' }}
+            style={{ width: '100%', background: 'var(--bg-main)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '15px', color: 'var(--text-main)', height: '100px', outline: 'none', marginBottom: '15px', boxSizing: 'border-box' }}
           />
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
             <button onClick={() => setShowBroadcast(false)} style={{ background: 'transparent', border: 'none', color: '#8b98a5', padding: '10px 20px', cursor: 'pointer' }}>Cancel</button>
@@ -4052,14 +3833,14 @@ function TeamContent({ users, currentUser, onSelect, isAdmin }) {
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '25px', marginBottom: '40px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '25px', marginBottom: '40px' }}>
         {[
           { label: 'Team Size', val: teamMembers.length, color: '#667eea', icon: <Users /> },
-          { label: 'Online Now', val: teamMembers.filter(m => true).length, color: '#10b981', icon: <Clock /> },
+          { label: 'Online Now', val: teamMembers.length, color: '#10b981', icon: <Clock /> },
           { label: 'Files Shared', val: '42', color: '#f59e0b', icon: <File /> },
           { label: 'Security Level', val: 'SECURED', color: '#ef4444', icon: <Shield /> },
         ].map(s => (
-          <div key={s.label} style={{ background: '#151f2e', padding: '25px', borderRadius: '24px', border: '1px solid #2a3441' }}>
+          <div key={s.label} style={{ background: 'var(--bg-panel)', padding: '25px', borderRadius: '24px', border: '1px solid var(--border-color)' }}>
             <div style={{ color: s.color, marginBottom: '15px' }}>{s.icon}</div>
             <div style={{ fontSize: '28px', fontWeight: '800', marginBottom: '5px' }}>{s.val}</div>
             <div style={{ color: '#8b98a5', fontSize: '13px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '1px' }}>{s.label}</div>
@@ -4068,10 +3849,10 @@ function TeamContent({ users, currentUser, onSelect, isAdmin }) {
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto' }}>
-        <h3 style={{ fontSize: '20px', marginBottom: '20px', fontWeight: '700' }}>Team Members</h3>
+        <h3 style={{ fontSize: '20px', marginBottom: '20px', fontWeight: '700', color: 'var(--text-main)' }}>Team Members</h3>
         <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 12px' }}>
           <thead>
-            <tr style={{ textAlign: 'left', color: '#8b98a5', fontSize: '13px' }}>
+            <tr style={{ textAlign: 'left', color: 'var(--text-muted)', fontSize: '13px' }}>
               <th style={{ padding: '0 20px' }}>Name</th>
               <th>Role</th>
               <th>Department</th>
@@ -4081,24 +3862,24 @@ function TeamContent({ users, currentUser, onSelect, isAdmin }) {
           </thead>
           <tbody>
             {teamMembers.map(u => (
-              <tr key={u.id} style={{ background: '#151f2e', transition: 'all 0.2s' }}>
-                <td style={{ padding: '15px 20px', borderRadius: '16px 0 0 16px', borderLeft: '1px solid #2a3441', borderTop: '1px solid #2a3441', borderBottom: '1px solid #2a3441' }}>
+              <tr key={u.id} style={{ background: 'var(--bg-panel)', transition: 'all 0.2s' }}>
+                <td style={{ padding: '15px 20px', borderRadius: '16px 0 0 16px', borderLeft: '1px solid var(--border-color)', borderTop: '1px solid var(--border-color)', borderBottom: '1px solid var(--border-color)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                    <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: '#2a3441', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'var(--bg-main)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-main)', fontWeight: '700' }}>
                       {u.firstName?.charAt(0)}
                     </div>
                     <div>
-                      <div style={{ fontWeight: '600' }}>{u.firstName} {u.lastName}</div>
-                      <div style={{ fontSize: '12px', color: '#8b98a5' }}>{u.email}</div>
+                      <div style={{ fontWeight: '600', color: 'var(--text-main)' }}>{u.firstName} {u.lastName}</div>
+                      <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{u.email}</div>
                     </div>
                   </div>
                 </td>
-                <td style={{ borderTop: '1px solid #2a3441', borderBottom: '1px solid #2a3441', fontSize: '14px' }}>{u.jobTitle || 'Engineer'}</td>
-                <td style={{ borderTop: '1px solid #2a3441', borderBottom: '1px solid #2a3441', fontSize: '14px' }}>{u.department}</td>
-                <td style={{ borderTop: '1px solid #2a3441', borderBottom: '1px solid #2a3441' }}>
+                <td style={{ borderTop: '1px solid var(--border-color)', borderBottom: '1px solid var(--border-color)', fontSize: '14px', color: 'var(--text-main)' }}>{u.jobTitle || 'Engineer'}</td>
+                <td style={{ borderTop: '1px solid var(--border-color)', borderBottom: '1px solid var(--border-color)', fontSize: '14px', color: 'var(--text-main)' }}>{u.department}</td>
+                <td style={{ borderTop: '1px solid var(--border-color)', borderBottom: '1px solid var(--border-color)' }}>
                   <span style={{ padding: '4px 12px', borderRadius: '20px', background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', fontSize: '12px', fontWeight: '700' }}>Active</span>
                 </td>
-                <td style={{ padding: '15px 20px', borderRadius: '0 16px 16px 0', borderRight: '1px solid #2a3441', borderTop: '1px solid #2a3441', borderBottom: '1px solid #2a3441', textAlign: 'right' }}>
+                <td style={{ padding: '15px 20px', borderRadius: '0 16px 16px 0', borderRight: '1px solid var(--border-color)', borderTop: '1px solid var(--border-color)', borderBottom: '1px solid var(--border-color)', textAlign: 'right' }}>
                   <button
                     onClick={() => onSelect(u.id)}
                     style={{ background: 'rgba(102, 126, 234, 0.14)', border: 'none', color: '#667eea', padding: '8px 16px', borderRadius: '10px', cursor: 'pointer', fontWeight: '700', fontSize: '13px' }}
@@ -4157,9 +3938,9 @@ function CallsContent() {
   if (loading) return <div style={{ padding: '40px', textAlign: 'center', color: '#8b98a5' }}>Loading call history...</div>;
 
   return (
-    <div style={{ padding: '30px', color: '#fff', maxWidth: '800px', margin: '0 auto' }}>
+    <div style={{ padding: '30px', color: 'var(--text-main)', maxWidth: '800px', margin: '0 auto' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
-        <h2 style={{ fontSize: '28px', margin: 0 }}>Call History</h2>
+        <h2 style={{ fontSize: '28px', margin: 0, color: 'var(--text-main)' }}>Call History</h2>
         <button
           onClick={loadCalls}
           style={{
@@ -4173,13 +3954,13 @@ function CallsContent() {
             fontWeight: '600',
             transition: 'all 0.2s'
           }}
-          onMouseEnter={(e) => e.target.style.background = 'rgba(102, 126, 234, 0.2)'}
-          onMouseLeave={(e) => e.target.style.background = 'rgba(102, 126, 234, 0.1)'}
+          onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(102, 126, 234, 0.2)'}
+          onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(102, 126, 234, 0.1)'}
         >
           Refresh List
         </button>
       </div>
-      <div style={{ background: '#151f2e', borderRadius: '20px', overflow: 'hidden', border: '1px solid #2a3441' }}>
+      <div style={{ background: 'var(--bg-panel)', borderRadius: '20px', overflow: 'hidden', border: '1px solid var(--border-color)' }}>
         {calls.length === 0 ? (
           <div style={{ padding: '60px 40px', textAlign: 'center', color: '#8b98a5' }}>
             <Phone size={48} style={{ opacity: 0.2, marginBottom: '20px' }} />
@@ -4196,14 +3977,14 @@ function CallsContent() {
             return (
               <div key={call.id} style={{
                 padding: '20px',
-                borderBottom: '1px solid #2a3441',
+                borderBottom: '1px solid var(--border-color)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 transition: 'background 0.2s',
                 cursor: 'default'
               }}
-                onMouseEnter={(e) => e.currentTarget.style.background = '#1a2332'}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'var(--active-bg)'}
                 onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
@@ -4224,16 +4005,16 @@ function CallsContent() {
                     )}
                   </div>
                   <div>
-                    <div style={{ fontWeight: '600', color: call.status === 'missed' ? '#ef4444' : '#fff', fontSize: '15px' }}>
+                    <div style={{ fontWeight: '600', color: call.status === 'missed' ? 'var(--red-color)' : 'var(--text-main)', fontSize: '15px' }}>
                       {getOtherParty(call)}
                     </div>
-                    <div style={{ fontSize: '13px', color: '#8b98a5', marginTop: '2px' }}>
+                    <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '2px' }}>
                       {typeLabel} • {new Date(call.createdAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                     </div>
                   </div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: '14px', color: '#fff', fontWeight: '500' }}>{formatDuration(call.duration)}</div>
+                  <div style={{ fontSize: '14px', color: 'var(--text-main)', fontWeight: '500' }}>{formatDuration(call.duration)}</div>
                   <div style={{
                     fontSize: '11px',
                     color: call.status === 'completed' ? '#4ade80' : (call.status === 'missed' ? '#ef4444' : '#8b98a5'),
@@ -4318,23 +4099,23 @@ function AlertsContent({ onUpdateCount }) {
   };
 
   return (
-    <div style={{ padding: '40px', color: '#fff', maxWidth: '900px', margin: '0 auto' }}>
+    <div style={{ padding: '40px', color: 'var(--text-main)', maxWidth: '900px', margin: '0 auto' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', flexWrap: 'wrap', gap: '20px' }}>
         <div>
-          <h2 style={{ fontSize: '32px', margin: 0, fontWeight: '700' }}>Notification Center</h2>
-          <p style={{ color: '#8b98a5', marginTop: '8px' }}>Stay updated with your account activity</p>
+          <h2 style={{ fontSize: '32px', margin: 0, fontWeight: '700', color: 'var(--text-main)' }}>Notification Center</h2>
+          <p style={{ color: 'var(--text-muted)', marginTop: '8px' }}>Stay updated with your account activity</p>
         </div>
         <div style={{ display: 'flex', gap: '10px' }}>
           <button
             onClick={handleMarkAllRead}
             style={{
-              background: '#151f2e', color: '#fff', border: '1px solid #2a3441',
+              background: 'var(--bg-panel)', color: 'var(--text-main)', border: '1px solid var(--border-color)',
               padding: '10px 18px', borderRadius: '12px', cursor: 'pointer', fontSize: '14px',
               display: 'flex', alignItems: 'center', gap: '8px',
               transition: 'all 0.2s'
             }}
-            onMouseEnter={e => e.currentTarget.style.background = '#1e293b'}
-            onMouseLeave={e => e.currentTarget.style.background = '#151f2e'}
+            onMouseEnter={e => e.currentTarget.style.background = 'var(--active-bg)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'var(--bg-panel)'}
           >
             <CheckCheck size={16} /> Mark all read
           </button>
@@ -4348,9 +4129,9 @@ function AlertsContent({ onUpdateCount }) {
             onClick={() => setFilter(f)}
             style={{
               padding: '10px 24px',
-              background: filter === f ? '#667eea' : '#151f2e',
-              color: '#fff',
-              border: 'none',
+              background: filter === f ? '#667eea' : 'var(--bg-panel)',
+              color: filter === f ? '#fff' : 'var(--text-main)',
+              border: filter === f ? 'none' : '1px solid var(--border-color)',
               borderRadius: '12px',
               cursor: 'pointer',
               textTransform: 'capitalize',
@@ -4371,22 +4152,22 @@ function AlertsContent({ onUpdateCount }) {
             <div className="shimmer" style={{ width: '100%', height: '100px', borderRadius: '20px', background: '#151f2e' }} />
           </div>
         ) : filtered.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '80px 20px', background: '#151f2e', borderRadius: '24px', border: '2px dashed #2a3441' }}>
+          <div style={{ textAlign: 'center', padding: '80px 20px', background: 'var(--bg-panel)', borderRadius: '24px', border: '2px dashed var(--border-color)' }}>
             <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: 'rgba(102, 126, 234, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
               <Bell size={40} color="#667eea" style={{ opacity: 0.5 }} />
             </div>
-            <h3 style={{ margin: '0 0 10px 0', fontSize: '20px' }}>No News is Good News</h3>
-            <p style={{ color: '#8b98a5', fontSize: '16px', maxWidth: '300px', margin: '0 auto' }}>You are all caught up! There are no {filter !== 'all' ? filter : ''} notifications at the moment.</p>
+            <h3 style={{ margin: '0 0 10px 0', fontSize: '20px', color: 'var(--text-main)' }}>No News is Good News</h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '16px', maxWidth: '300px', margin: '0 auto' }}>You are all caught up! There are no {filter !== 'all' ? filter : ''} notifications at the moment.</p>
           </div>
         ) : (
           filtered.map(n => (
             <div
               key={n.id}
               style={{
-                background: n.isRead ? '#151f2e' : 'rgba(102, 126, 234, 0.05)',
+                background: n.isRead ? 'var(--bg-panel)' : 'rgba(102, 126, 234, 0.05)',
                 padding: '24px',
                 borderRadius: '24px',
-                border: n.isRead ? '1px solid #2a3441' : '1px solid #667eea',
+                border: n.isRead ? '1px solid var(--border-color)' : '1px solid #667eea',
                 display: 'flex',
                 gap: '20px',
                 transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
@@ -4395,7 +4176,7 @@ function AlertsContent({ onUpdateCount }) {
               }}
             >
               <div style={{
-                width: '56px', height: '56px', borderRadius: '18px', background: '#0e1621',
+                width: '56px', height: '56px', borderRadius: '18px', background: 'var(--bg-main)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
                 boxShadow: '0 4px 12px rgba(0,0,0,0.2)'
               }}>
@@ -4403,13 +4184,13 @@ function AlertsContent({ onUpdateCount }) {
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', alignItems: 'flex-start' }}>
-                  <div style={{ fontWeight: '700', fontSize: '18px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div style={{ fontWeight: '700', fontSize: '18px', display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--text-main)' }}>
                     {n.title}
                     {!n.isRead && <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#667eea' }} />}
                   </div>
-                  <div style={{ fontSize: '13px', color: '#8b98a5', whiteSpace: 'nowrap' }}>{new Date(n.createdAt).toLocaleDateString()} {new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                  <div style={{ fontSize: '13px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{new Date(n.createdAt).toLocaleDateString()} {new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
                 </div>
-                <div style={{ color: '#8b98a5', fontSize: '15px', lineHeight: '1.6', marginBottom: '20px' }}>{n.message}</div>
+                <div style={{ color: 'var(--text-muted)', fontSize: '15px', lineHeight: '1.6', marginBottom: '20px' }}>{n.message}</div>
                 <div style={{ display: 'flex', gap: '12px', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div style={{ display: 'flex', gap: '12px' }}>
                     {!n.isRead && (
@@ -4425,8 +4206,8 @@ function AlertsContent({ onUpdateCount }) {
                     {n.actionUrl && (
                       <button
                         onClick={() => window.open(n.actionUrl, '_blank')}
-                        style={{ background: 'transparent', color: '#fff', border: '1px solid #2a3441', padding: '10px 20px', borderRadius: '12px', cursor: 'pointer', fontSize: '13px', fontWeight: '600', transition: 'all 0.2s' }}
-                        onMouseEnter={e => e.currentTarget.style.background = '#2a3441'}
+                        style={{ background: 'transparent', color: 'var(--text-main)', border: '1px solid var(--border-color)', padding: '10px 20px', borderRadius: '12px', cursor: 'pointer', fontSize: '13px', fontWeight: '600', transition: 'all 0.2s' }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'var(--active-bg)'}
                         onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                       >
                         {n.actionLabel || 'View Detail'}
@@ -4512,19 +4293,19 @@ function ProjectsTasksContent() {
   };
 
   return (
-    <div style={{ padding: '30px', color: '#fff', height: '100%', display: 'flex', gap: '30px', maxWidth: '1400px', margin: '0 auto', width: '100%' }}>
+    <div style={{ padding: '30px', color: 'var(--text-main)', height: '100%', display: 'flex', gap: '30px', maxWidth: '1400px', margin: '0 auto', width: '100%' }}>
       <div style={{ width: selectedProject ? '350px' : '100%', display: 'flex', flexDirection: 'column' }}>
-        <h2 style={{ fontSize: '32px', margin: '0 0 20px 0', fontWeight: '800' }}>Secure Projects</h2>
-        {loading ? <div style={{ color: '#8b98a5' }}>Loading...</div> : (
+        <h2 style={{ fontSize: '32px', margin: '0 0 20px 0', fontWeight: '800', color: 'var(--text-main)' }}>Secure Projects</h2>
+        {loading ? <div style={{ color: 'var(--text-muted)' }}>Loading...</div> : (
           <div style={{ display: 'grid', gridTemplateColumns: selectedProject ? '1fr' : 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px', overflowY: 'auto' }}>
             {projects.map(p => (
-              <div key={p.id} onClick={() => handleProjectClick(p)} style={{ background: '#151f2e', padding: '24px', borderRadius: '24px', border: `1px solid ${selectedProject?.id === p.id ? '#667eea' : '#2a3441'}`, cursor: 'pointer', transition: 'all 0.2s' }}>
+              <div key={p.id} onClick={() => handleProjectClick(p)} style={{ background: 'var(--bg-panel)', padding: '24px', borderRadius: '24px', border: `1px solid ${selectedProject?.id === p.id ? '#667eea' : 'var(--border-color)'}`, cursor: 'pointer', transition: 'all 0.2s' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px' }}>
                   <span style={{ fontSize: '10px', fontWeight: '800', textTransform: 'uppercase', color: getStatusColor(p.status), background: `${getStatusColor(p.status)}15`, padding: '4px 8px', borderRadius: '6px' }}>{p.status}</span>
                   <Layers size={16} color="#8b98a5" />
                 </div>
-                <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '700' }}>{p.name}</h3>
-                <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', color: '#8b98a5' }}>
+                <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '700', color: 'var(--text-main)' }}>{p.name}</h3>
+                <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', color: 'var(--text-muted)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Clock size={14} /> {p.deadline ? new Date(p.deadline).toLocaleDateString() : 'N/A'}</div>
                   <ChevronRight size={16} />
                 </div>
@@ -4534,10 +4315,10 @@ function ProjectsTasksContent() {
         )}
       </div>
       {selectedProject && (
-        <div style={{ flex: 1, background: '#151f2e', borderRadius: '24px', padding: '30px', border: '1px solid #2a3441', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ flex: 1, background: 'var(--bg-panel)', borderRadius: '24px', padding: '30px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
-            <h2 style={{ margin: 0 }}>{selectedProject.name}</h2>
-            <button onClick={() => setSelectedProject(null)} style={{ background: 'transparent', border: 'none', color: '#fff', cursor: 'pointer' }}><X size={24} /></button>
+            <h2 style={{ margin: 0, color: 'var(--text-main)' }}>{selectedProject.name}</h2>
+            <button onClick={() => setSelectedProject(null)} style={{ background: 'transparent', border: 'none', color: 'var(--text-main)', cursor: 'pointer' }}><X size={24} /></button>
           </div>
           {tasksLoading ? <div style={{ color: '#8b98a5' }}>Loading...</div> : (
             <div style={{ display: 'grid', gap: '12px' }}>

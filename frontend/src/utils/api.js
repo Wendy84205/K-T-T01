@@ -1,5 +1,4 @@
-const API_BASE_URL = '/api/v1'; // Use relative path with setupProxy
-// const API_BASE_URL = 'https://importantly-people-citizen-interest.trycloudflare.com/api/v1';
+const API_BASE_URL = 'https://herein-tuning-porcelain-sarah.trycloudflare.com/api/v1';
 
 class ApiClient {
   constructor() {
@@ -41,6 +40,10 @@ class ApiClient {
         error.data = data; // Attach full response data
         error.status = response.status;
         throw error;
+      }
+
+      if (data && data.success && data.data !== undefined) {
+        return data.data;
       }
 
       return data;
@@ -618,70 +621,6 @@ class ApiClient {
   async demoteToMember(conversationId, memberId) {
     return this.request(`/chat/conversations/${conversationId}/members/${memberId}/demote`, {
       method: 'POST',
-    });
-  }
-
-  // Project & Task endpoints
-  async getProjects(teamId) {
-    const url = teamId ? `/projects?teamId=${teamId}` : '/projects';
-    return this.request(url, { method: 'GET' });
-  }
-
-  async createProject(projectData) {
-    return this.request('/projects', {
-      method: 'POST',
-      body: JSON.stringify(projectData),
-    });
-  }
-
-  async getProjectById(id) {
-    return this.request(`/projects/${id}`, { method: 'GET' });
-  }
-
-  async updateProject(id, updates) {
-    return this.request(`/projects/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(updates),
-    });
-  }
-
-  async deleteProject(id) {
-    return this.request(`/projects/${id}`, { method: 'DELETE' });
-  }
-
-  async createTask(projectId, taskData) {
-    return this.request(`/projects/${projectId}/tasks`, {
-      method: 'POST',
-      body: JSON.stringify(taskData),
-    });
-  }
-
-  async getProjectTasks(projectId) {
-    return this.request(`/projects/${projectId}/tasks`, { method: 'GET' });
-  }
-
-  async updateTask(taskId, updates) {
-    return this.request(`/projects/tasks/${taskId}`, {
-      method: 'PUT',
-      body: JSON.stringify(updates),
-    });
-  }
-
-  async deleteTask(taskId) {
-    return this.request(`/projects/tasks/${taskId}`, { method: 'DELETE' });
-  }
-
-  async requestProjectAccess(projectId, justification) {
-    return this.request(`/projects/${projectId}/access-requests`, {
-      method: 'POST',
-      body: JSON.stringify({ businessJustification: justification }),
-    });
-  }
-
-  async approveAccessRequest(requestId, notes) {
-    return this.request(`/projects/access-requests/${requestId}/approve`, {
-      method: 'PUT',
-      body: JSON.stringify({ notes }),
     });
   }
 }
