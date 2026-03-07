@@ -53,6 +53,7 @@ export class ChatController {
         @Body('messageType') messageType?: string,
         @Body('fileId') fileId?: string,
         @Body('parentMessageId') parentMessageId?: string,
+        @Body('selfDestructTime') selfDestructTime?: number,
     ) {
         const message = await this.chatService.sendMessage(
             conversationId,
@@ -61,6 +62,7 @@ export class ChatController {
             messageType || 'text',
             fileId,
             parentMessageId,
+            selfDestructTime
         );
 
         // Emit to WebSocket

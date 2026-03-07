@@ -30,6 +30,45 @@ export default function ManageLayout() {
     const { user, logout, darkMode, toggleDarkMode } = useAuth();
     const navigate = useNavigate();
 
+    React.useEffect(() => {
+        const root = document.documentElement;
+        if (darkMode) {
+            root.style.setProperty('--bg-app', '#0e1621');
+            root.style.setProperty('--bg-panel', '#17212b');
+            root.style.setProperty('--bg-main', '#0e1621');
+            root.style.setProperty('--bg-light', '#242f3d');
+            root.style.setProperty('--bg-selected', '#2b5278');
+            root.style.setProperty('--border-color', '#242f3d');
+            root.style.setProperty('--text-main', '#ffffff');
+            root.style.setProperty('--text-secondary', '#8b98a5');
+            root.style.setProperty('--text-muted', '#707579');
+            root.style.setProperty('--primary', '#667eea');
+            root.style.setProperty('--green-color', '#10b981');
+            root.style.setProperty('--accent-amber', '#f59e0b');
+            root.style.setProperty('--red-color', '#ef4444');
+            root.style.setProperty('--shadow', '0 2px 10px rgba(0,0,0,0.3)');
+            root.style.setProperty('--shadow-primary', 'rgba(102, 126, 234, 0.3)');
+            root.style.setProperty('--primary-light', 'rgba(102, 126, 234, 0.1)');
+        } else {
+            root.style.setProperty('--bg-app', '#f0f2f5');
+            root.style.setProperty('--bg-panel', '#ffffff');
+            root.style.setProperty('--bg-main', '#ffffff');
+            root.style.setProperty('--bg-light', '#f8f9fa');
+            root.style.setProperty('--bg-selected', '#e9ecef');
+            root.style.setProperty('--border-color', '#dee2e6');
+            root.style.setProperty('--text-main', '#1c1e21');
+            root.style.setProperty('--text-secondary', '#65676b');
+            root.style.setProperty('--text-muted', '#8d949e');
+            root.style.setProperty('--primary', '#007bff');
+            root.style.setProperty('--green-color', '#28a745');
+            root.style.setProperty('--accent-amber', '#f59e0b');
+            root.style.setProperty('--red-color', '#dc3545');
+            root.style.setProperty('--shadow', '0 2px 10px rgba(0,0,0,0.05)');
+            root.style.setProperty('--shadow-primary', 'rgba(0, 123, 255, 0.3)');
+            root.style.setProperty('--primary-light', 'rgba(0, 123, 255, 0.1)');
+        }
+    }, [darkMode]);
+
     const handleLogout = () => {
         logout();
         navigate('/login');

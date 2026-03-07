@@ -13,5 +13,6 @@ export class LoginResponseDto {
     mfaSetupRequired?: boolean;
     securityClearanceLevel: number;
     roles?: string[];
+    publicKey?: string;
   };
 }

@@ -25,7 +25,7 @@ function SecureLogin() {
     const [otpSeconds, setOtpSeconds] = useState(60);
     const mfaInputRefs = useRef([]);
 
-    const { login } = useAuth();
+    const { login, loadUser } = useAuth();
     const navigate = useNavigate();
 
     // Check for persisted lock on mount
@@ -199,6 +199,10 @@ function SecureLogin() {
 
                 // Upload public key to server
                 await api.updateProfile({ publicKey }); // Gửi khoá công khai lên server qua api updateProfile để user khác dùng nó mã hoá tin nhắn gửi cho user
+
+                // CRITICAL: Refresh user profile in AuthContext so we have the NEW publicKey for encryption
+                if (loadUser) await loadUser();
+
                 console.log("[E2EE] Keys synchronized with server cluster.");
             }
         } catch (err) {

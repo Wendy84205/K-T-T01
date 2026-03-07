@@ -100,6 +100,17 @@ export class AuthController {
     };
   }
 
+  @UseGuards(JwtAuthGuard)
+  @Post('verify-password')
+  @HttpCode(HttpStatus.OK)
+  async verifyPassword(@Request() req, @Body('password') password: string) {
+    const isValid = await this.authService.verifyPassword(req.user.userId, password);
+    if (!isValid) {
+      throw new UnauthorizedException('Invalid password');
+    }
+    return { success: true };
+  }
+
   @Public()
   @Get('health')
   healthCheck() {

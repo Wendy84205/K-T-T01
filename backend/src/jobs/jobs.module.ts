@@ -6,6 +6,8 @@ import { EncryptionKey } from '../database/entities/security/encryption-key.enti
 import { AuditLog } from '../database/entities/security/audit-log.entity';
 import { User } from '../database/entities/core/user.entity';
 import { SecurityIncident } from '../database/entities/security/security-incident.entity';
+import { Message } from '../database/entities/chat/message.entity';
+import { MessageCleanupJob } from './message-cleanup.job';
 
 @Module({
     imports: [
@@ -14,15 +16,18 @@ import { SecurityIncident } from '../database/entities/security/security-inciden
             AuditLog,
             User,
             SecurityIncident,
+            Message,
         ]),
     ],
     providers: [
         KeyRotationJob,
         SecurityScanJob,
+        MessageCleanupJob,
     ],
     exports: [
         KeyRotationJob,
         SecurityScanJob,
+        MessageCleanupJob,
     ],
 })
 export class JobsModule { }

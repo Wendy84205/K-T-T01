@@ -1,4 +1,5 @@
 /* Fallback Socket Service using window.io */
+import { BACKEND_URL } from '../config';
 
 class SocketService {
     constructor() {
@@ -12,7 +13,7 @@ class SocketService {
         }
 
         this.userId = userId;
-        const socketUrl = window.location.origin;
+        const socketUrl = BACKEND_URL;
 
         // Try to get io from window first (loaded via index.html script tag)
         let io = window.io;
