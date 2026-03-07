@@ -33,6 +33,9 @@ export default function UsersPage() {
   const [selectedUserForProfile, setSelectedUserForProfile] = useState(null);
   const [selectedUserForEdit, setSelectedUserForEdit] = useState(null);
   const [editFormData, setEditFormData] = useState({});
+  const [selectedUserForSessions, setSelectedUserForSessions] = useState(null);
+  const [userSessions, setUserSessions] = useState([]);
+  const [loadingSessions, setLoadingSessions] = useState(false);
 
   const fetchUsers = useCallback(async (silent = false) => {
     try {
@@ -192,6 +195,34 @@ export default function UsersPage() {
     }
   };
 
+  const handleManageSessions = async (user) => {
+    setSelectedUserForSessions(user);
+    setLoadingSessions(true);
+    try {
+      const sessions = await api.getAdminUserSessions(user.id);
+      setUserSessions(sessions || []);
+    } catch (err) {
+      alert('Failed to fetch sessions: ' + err.message);
+    } finally {
+      setLoadingSessions(false);
+    }
+  };
+
+  const handleRevokeSession = async (sessionId) => {
+    if (!window.confirm('Kill this active session immediately?')) return;
+    try {
+      setActionLoading(true);
+      await api.adminRevokeSession(sessionId);
+      // Refresh
+      const sessions = await api.getAdminUserSessions(selectedUserForSessions.id);
+      setUserSessions(sessions || []);
+    } catch (err) {
+      alert('Failed to revoke session: ' + err.message);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const handleEditClick = (user) => {
     setEditFormData({
       firstName: user.firstName,
@@ -262,17 +293,17 @@ export default function UsersPage() {
 
   const getStatusColor = (status) => {
     switch (status) {
-      case 'active': return { label: 'Active', color: '#10b981', dot: '#10b981' };
-      case 'pending': return { label: 'Pending', color: '#f59e0b', dot: '#f59e0b' };
-      case 'banned': return { label: 'Banned', color: '#ef4444', dot: '#ef4444' };
-      default: return { label: 'Unknown', color: '#8b949e', dot: '#8b949e' };
+      case 'active': return { label: 'Active', color: 'var(--green-color)', dot: 'var(--green-color)' };
+      case 'pending': return { label: 'Pending', color: 'var(--accent-amber)', dot: 'var(--accent-amber)' };
+      case 'banned': return { label: 'Banned', color: 'var(--red-color)', dot: 'var(--red-color)' };
+      default: return { label: 'Unknown', color: 'var(--text-secondary)', dot: 'var(--text-secondary)' };
     }
   };
 
   return (
-    <div className="soc-dashboard" style={{ background: '#0d1117', minHeight: '100vh', color: '#c9d1d9', padding: '40px' }}>
+    <div className="soc-dashboard" style={{ background: 'var(--bg-app)', minHeight: '100vh', color: 'var(--text-main)', padding: '40px' }}>
       {actionLoading && (
-        <div className="soc-action-overlay" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div className="soc-action-overlay" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' }}>
           <div className="soc-dot-pulse"></div>
         </div>
       )}
@@ -284,15 +315,15 @@ export default function UsersPage() {
           <p className="card-desc">Manage system users, role assignments, and access control lists.</p>
         </div>
         <div className="soc-header-btns">
-          <button className="admin-btn" style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.2)', padding: '10px 20px', borderRadius: '8px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px' }} onClick={() => handleEmergencyLock()}>
+          <button className="admin-btn" style={{ background: 'var(--bg-red-soft)', color: 'var(--red-color)', border: '1px solid var(--border-color)', padding: '10px 20px', borderRadius: '8px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px' }} onClick={() => handleEmergencyLock()}>
             <i className='bx bx-lock-alt'></i> Emergency Lock
           </button>
-          <button className="admin-btn" style={{ background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', border: '1px solid rgba(16, 185, 129, 0.2)', padding: '10px 20px', borderRadius: '8px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px' }} onClick={handleApproveAll}>
+          <button className="admin-btn" style={{ background: 'var(--bg-green-soft)', color: 'var(--green-color)', border: '1px solid var(--border-color)', padding: '10px 20px', borderRadius: '8px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px' }} onClick={handleApproveAll}>
             <i className='bx bx-check-double'></i> Approve All
           </button>
           <button
             className="admin-btn"
-            style={{ background: '#238636', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '8px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}
+            style={{ background: 'var(--primary)', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '8px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', shadow: 'var(--shadow-primary)' }}
             onClick={() => navigate('/admin/users/add')}
           >
             <i className='bx bx-user-plus'></i> Add User
@@ -303,35 +334,35 @@ export default function UsersPage() {
       {/* STATS */}
       <div className="stats-grid" style={{ marginBottom: '40px' }}>
         {[
-          { label: 'TOTAL USERS', value: totalRecords, icon: 'bx-group', color: '#31363f' },
-          { label: 'ACTIVE NOW', value: stats.active, icon: 'bx-bolt-circle', color: '#10b981' },
-          { label: 'PENDING APPROVAL', value: stats.pending, icon: 'bx-hourglass', color: '#f59e0b' },
-          { label: 'BANNED', value: stats.banned, icon: 'bx-error-alt', color: '#ef4444' }
+          { label: 'TOTAL USERS', value: totalRecords, icon: 'bx-group', color: 'var(--primary)' },
+          { label: 'ACTIVE NOW', value: stats.active, icon: 'bx-bolt-circle', color: 'var(--green-color)' },
+          { label: 'PENDING APPROVAL', value: stats.pending, icon: 'bx-hourglass', color: 'var(--accent-amber)' },
+          { label: 'BANNED', value: stats.banned, icon: 'bx-error-alt', color: 'var(--red-color)' }
         ].map((stat, i) => (
           <div key={i} className="stat-card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
               <div className="stat-label" style={{ marginBottom: '8px' }}>{stat.label}</div>
-              <div className="stat-value" style={{ fontSize: '28px', color: i === 1 ? '#10b981' : '#fff' }}>{stat.value.toLocaleString()}</div>
+              <div className="stat-value" style={{ fontSize: '28px', color: i === 1 ? 'var(--green-color)' : 'var(--text-main)' }}>{stat.value.toLocaleString()}</div>
             </div>
-            <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: i === 0 ? 'rgba(255,255,255,0.05)' : `${stat.color}20`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <i className={`bx ${stat.icon}`} style={{ fontSize: '24px', color: i === 0 ? '#8b949e' : stat.color }}></i>
+            <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: `${stat.color}15`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <i className={`bx ${stat.icon}`} style={{ fontSize: '24px', color: stat.color }}></i>
             </div>
           </div>
         ))}
       </div>
 
       {/* FILTERS & SEARCH */}
-      <div className="soc-filter-row" style={{ background: '#161b22', border: '1px solid #30363d', borderRadius: '16px', padding: '20px', marginBottom: '24px' }}>
+      <div className="soc-filter-row" style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-color)', borderRadius: '16px', padding: '20px', marginBottom: '24px' }}>
         <div className="soc-filter-group">
-          <span style={{ fontSize: '14px', color: '#8b949e', fontWeight: '600' }}>Filter by:</span>
+          <span style={{ fontSize: '14px', color: 'var(--text-secondary)', fontWeight: '600' }}>Filter by:</span>
           <div style={{ display: 'flex', gap: '12px' }}>
-            <select style={{ background: '#0d1117', border: '1px solid #30363d', color: '#c9d1d9', padding: '8px 16px', borderRadius: '8px', outline: 'none' }} value={filterRole} onChange={e => { setFilterRole(e.target.value); setPage(1); }}>
+            <select style={{ background: 'var(--bg-app)', border: '1px solid var(--border-color)', color: 'var(--text-main)', padding: '8px 16px', borderRadius: '8px', outline: 'none' }} value={filterRole} onChange={e => { setFilterRole(e.target.value); setPage(1); }}>
               <option>All Roles</option>
               <option>Admin</option>
               <option>Manager</option>
               <option>User</option>
             </select>
-            <select style={{ background: '#0d1117', border: '1px solid #30363d', color: '#c9d1d9', padding: '8px 16px', borderRadius: '8px', outline: 'none' }} value={filterStatus} onChange={e => { setFilterStatus(e.target.value); setPage(1); }}>
+            <select style={{ background: 'var(--bg-app)', border: '1px solid var(--border-color)', color: 'var(--text-main)', padding: '8px 16px', borderRadius: '8px', outline: 'none' }} value={filterStatus} onChange={e => { setFilterStatus(e.target.value); setPage(1); }}>
               <option>All Status</option>
               <option>Active</option>
               <option>Pending</option>
@@ -341,18 +372,18 @@ export default function UsersPage() {
         </div>
         <div className="search-container-mobile" style={{ position: 'relative', width: '320px', display: 'flex', gap: '12px', alignItems: 'center' }}>
           <div style={{ position: 'relative', flex: 1 }}>
-            <i className='bx bx-search' style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: '#8b949e', fontSize: '20px' }}></i>
+            <i className='bx bx-search' style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)', fontSize: '20px' }}></i>
             <input
               type="text"
               placeholder="Search user..."
-              style={{ width: '100%', background: '#0d1117', border: '1px solid #30363d', color: '#c9d1d9', padding: '10px 16px 10px 48px', borderRadius: '8px', outline: 'none' }}
+              style={{ width: '100%', background: 'var(--bg-app)', border: '1px solid var(--border-color)', color: 'var(--text-main)', padding: '10px 16px 10px 48px', borderRadius: '8px', outline: 'none' }}
               value={searchTerm}
               onChange={e => { setSearchTerm(e.target.value); setPage(1); }}
             />
           </div>
           <button
             onClick={fetchUsers}
-            style={{ background: '#161b22', border: '1px solid #30363d', color: '#8b949e', width: '40px', height: '40px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+            style={{ background: 'var(--bg-light)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', width: '40px', height: '40px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
             title="Refresh Database"
           >
             <i className={`bx bx-refresh ${loading ? 'bx-spin' : ''}`} style={{ fontSize: '20px' }}></i>
@@ -361,12 +392,12 @@ export default function UsersPage() {
       </div>
 
       {/* TABLE */}
-      <div className="audit-table-container" style={{ background: '#161b22', border: '1px solid #30363d', borderRadius: '16px', overflow: 'hidden' }}>
+      <div className="audit-table-container" style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-color)', borderRadius: '16px', overflow: 'hidden' }}>
         <table className="audit-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
           <thead>
-            <tr style={{ borderBottom: '1px solid #30363d', background: '#0d1117' }}>
-              <th style={{ padding: '16px 24px', width: '40px' }}><input type="checkbox" style={{ accentColor: '#2f81f7' }} /></th>
-              <th style={{ padding: '16px 24px', fontSize: '12px', fontWeight: '600', color: '#8b949e' }}>USER PROFILE</th>
+            <tr style={{ borderBottom: '1px solid var(--border-color)', background: 'var(--bg-app)' }}>
+              <th style={{ padding: '16px 24px', width: '40px' }}><input type="checkbox" style={{ accentColor: 'var(--primary)' }} /></th>
+              <th style={{ padding: '16px 24px', fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)' }}>USER PROFILE</th>
               <th style={{ padding: '16px 24px', fontSize: '12px', fontWeight: '600', color: '#8b949e' }}>ROLE</th>
               <th style={{ padding: '16px 24px', fontSize: '12px', fontWeight: '600', color: '#8b949e' }}>STATUS</th>
               <th style={{ padding: '16px 24px', fontSize: '12px', fontWeight: '600', color: '#8b949e' }}>LAST ACTIVE</th>
@@ -400,7 +431,7 @@ export default function UsersPage() {
                         )}
                       </div>
                       <div>
-                        <div style={{ fontWeight: '700', color: '#f0f6fc', fontSize: '14px' }}>{user.firstName} {user.lastName || ''}</div>
+                        <div style={{ fontWeight: '700', color: 'var(--text-main)', fontSize: '14px' }}>{user.firstName} {user.lastName || ''}</div>
                         <div style={{ fontSize: '12px', color: '#8b949e', marginTop: '2px' }}>{user.email}</div>
                         {user.jobTitle && <div style={{ fontSize: '10px', color: '#58a6ff', marginTop: '2px', fontWeight: '600' }}>{user.jobTitle.toUpperCase()}</div>}
                       </div>
@@ -408,7 +439,7 @@ export default function UsersPage() {
                   </td>
                   <td style={{ padding: '16px 24px' }}>
                     <select
-                      style={{ background: 'transparent', border: '1px solid #30363d', color: '#8b949e', padding: '4px 8px', borderRadius: '6px', fontSize: '13px', outline: 'none', cursor: 'pointer' }}
+                      style={{ background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', padding: '4px 8px', borderRadius: '6px', fontSize: '13px', outline: 'none', cursor: 'pointer' }}
                       value={
                         user.roles?.some(r => r.name === 'Admin') ? 'Admin' :
                           user.roles?.some(r => r.name === 'Manager') ? 'Manager' :
@@ -494,6 +525,12 @@ export default function UsersPage() {
                                 style={{ width: '100%', padding: '10px 16px', background: 'transparent', border: 'none', color: '#c9d1d9', textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}
                               >
                                 <i className='bx bx-key'></i> Reset Password
+                              </button>
+                              <button
+                                onClick={() => { handleManageSessions(user); setActiveMenu(null); }}
+                                style={{ width: '100%', padding: '10px 16px', background: 'transparent', border: 'none', color: '#c9d1d9', textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}
+                              >
+                                <i className='bx bx-shield-quarter'></i> Manage Active Sessions
                               </button>
                               <div style={{ height: '1px', background: '#30363d', margin: '4px 0' }}></div>
                               <button
@@ -830,6 +867,123 @@ export default function UsersPage() {
                 >Save Changes</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* ADMINISTRATIVE SESSION MANAGEMENT MODAL */}
+      {selectedUserForSessions && (
+        <div
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(10px)', zIndex: 10001, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}
+          onClick={() => setSelectedUserForSessions(null)}
+        >
+          <div
+            style={{
+              background: '#0d1117',
+              border: '1px solid #30363d',
+              borderRadius: '24px',
+              width: '100%',
+              maxWidth: '650px',
+              maxHeight: '85vh',
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: '0 0 50px rgba(59, 130, 246, 0.15)'
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ padding: '24px 32px', borderBottom: '1px solid #30363d', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'linear-gradient(to right, #161b22, #0d1117)' }}>
+              <div>
+                <h2 style={{ margin: 0, color: '#fff', fontSize: '18px', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Active Signal Points</h2>
+                <p style={{ margin: '4px 0 0', color: '#8b949e', fontSize: '12px' }}>Managing sessions for: {selectedUserForSessions.firstName} {selectedUserForSessions.lastName}</p>
+              </div>
+              <button
+                onClick={() => setSelectedUserForSessions(null)}
+                style={{ background: 'rgba(255,255,255,0.05)', border: 'none', color: '#8b949e', width: '36px', height: '36px', borderRadius: '10px', cursor: 'pointer', fontSize: '20px' }}
+              >×</button>
+            </div>
+
+            <div style={{ padding: '32px', overflowY: 'auto', flex: 1 }}>
+              {loadingSessions ? (
+                <div style={{ textAlign: 'center', padding: '40px', color: '#58a6ff' }}>
+                  <i className='bx bx-loader-alt bx-spin' style={{ fontSize: '32px', marginBottom: '16px' }}></i>
+                  <div style={{ fontSize: '12px', fontWeight: '800' }}>INTERCEPTING ACTIVE SIGNALS...</div>
+                </div>
+              ) : userSessions.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '60px', borderRadius: '16px', border: '1px dashed #30363d' }}>
+                  <i className='bx bx-ghost' style={{ fontSize: '48px', color: '#30363d', marginBottom: '16px' }}></i>
+                  <p style={{ margin: 0, color: '#8b949e', fontWeight: '600' }}>No active intelligence signals detected.</p>
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gap: '16px' }}>
+                  {userSessions.map(session => (
+                    <div
+                      key={session.id}
+                      style={{
+                        background: '#161b22',
+                        padding: '20px',
+                        borderRadius: '16px',
+                        border: '1px solid #30363d',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        transition: 'border-color 0.2s'
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.borderColor = '#444'}
+                      onMouseLeave={e => e.currentTarget.style.borderColor = '#30363d'}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                        <div style={{
+                          width: '44px', height: '44px', borderRadius: '12px',
+                          background: 'rgba(59, 130, 246, 0.1)',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          color: '#58a6ff'
+                        }}>
+                          <i className={`bx ${session.deviceType === 'mobile' ? 'bx-mobile' : 'bx-laptop'}`} style={{ fontSize: '24px' }}></i>
+                        </div>
+                        <div>
+                          <div style={{ fontWeight: '700', color: '#f0f6fc', fontSize: '14px' }}>
+                            {session.deviceName || 'UNIDENTIFIED UNIT'} • {session.browser}
+                          </div>
+                          <div style={{ fontSize: '12px', color: '#8b949e', marginTop: '4px', display: 'flex', gap: '8px', alignItems: 'center' }}>
+                            <span style={{ color: '#58a6ff', fontWeight: '800' }}>{session.ipAddress}</span>
+                            <span>•</span>
+                            <span>{session.city || 'Uknown Sector'}</span>
+                          </div>
+                          <div style={{ fontSize: '11px', color: '#484f58', marginTop: '6px' }}>
+                            Pulse: {new Date(session.lastAccessedAt).toLocaleString()}
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleRevokeSession(session.id)}
+                        disabled={actionLoading}
+                        style={{
+                          padding: '10px 16px',
+                          background: 'rgba(248, 81, 73, 0.1)',
+                          color: '#f85149',
+                          border: 'none',
+                          borderRadius: '10px',
+                          cursor: actionLoading ? 'not-allowed' : 'pointer',
+                          fontSize: '12px',
+                          fontWeight: '900',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.05em'
+                        }}
+                      >
+                        Terminate
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div style={{ padding: '24px 32px', borderTop: '1px solid #30363d', background: '#0d1117', textAlign: 'center' }}>
+              <button
+                onClick={() => setSelectedUserForSessions(null)}
+                style={{ padding: '12px 30px', background: 'transparent', border: '1px solid #30363d', color: '#c9d1d9', borderRadius: '12px', cursor: 'pointer', fontWeight: '700', fontSize: '13px' }}
+              >Return to Command Center</button>
+            </div>
           </div>
         </div>
       )}

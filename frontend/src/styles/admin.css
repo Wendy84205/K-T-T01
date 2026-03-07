@@ -9,17 +9,45 @@ body,
     padding: 0;
     width: 100%;
     min-height: 100vh;
-    background-color: #030712 !important;
+    background-color: var(--bg-app);
 }
 
 :root {
+    /* ── Layout ─────────────────────────────── */
     --sidebar-width: 280px;
     --header-height: 80px;
-    --admin-bg: #030712;
-    --sidebar-bg: #0a0e1a;
-    --card-bg: #111827;
-    --card-hover: #161e2e;
 
+    /* ── Theme tokens (dark defaults — overridden by AuthContext at runtime) ── */
+    --bg-app: #030712;
+    --bg-panel: #0a0e1a;
+    --bg-main: #030712;
+    --bg-light: #111827;
+    --bg-selected: #1a2540;
+    --border-color: rgba(255, 255, 255, 0.06);
+    --text-main: #f8fafc;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --primary: #3b82f6;
+    --primary-light: rgba(59, 130, 246, 0.15);
+    --active-bg: rgba(59, 130, 246, 0.1);
+    --shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+    --shadow-primary: 0 4px 15px rgba(59, 130, 246, 0.4);
+    --bg-primary-soft: rgba(59, 130, 246, 0.08);
+    --border-primary-soft: rgba(59, 130, 246, 0.2);
+    --bg-green-soft: rgba(16, 185, 129, 0.1);
+    --green-color: #10b981;
+    --bg-red-soft: rgba(239, 68, 68, 0.1);
+    --red-color: #ef4444;
+
+    /* ── Admin-specific aliases (map to theme tokens above) ── */
+    --admin-bg: var(--bg-app);
+    --sidebar-bg: var(--bg-panel);
+    --card-bg: var(--bg-panel);
+    --card-hover: var(--bg-light);
+    --text-primary: var(--text-main);
+    --border-subtle: var(--border-color);
+
+    /* ── Accent palette (static — not theme-dependent) ── */
     --accent-blue: #3b82f6;
     --accent-blue-glow: rgba(59, 130, 246, 0.4);
     --accent-emerald: #10b981;
@@ -28,12 +56,6 @@ body,
     --accent-red-glow: rgba(239, 68, 68, 0.4);
     --accent-amber: #f59e0b;
     --accent-amber-glow: rgba(245, 158, 11, 0.4);
-
-    --text-primary: #f8fafc;
-    --text-secondary: #94a3b8;
-    --text-muted: #64748b;
-
-    --border-subtle: rgba(255, 255, 255, 0.05);
     --border-glow: rgba(59, 130, 246, 0.2);
 }
 

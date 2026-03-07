@@ -1,4 +1,4 @@
-const API_BASE_URL = 'https://herein-tuning-porcelain-sarah.trycloudflare.com/api/v1';
+import { API_BASE_URL } from '../config';
 
 class ApiClient {
   constructor() {
@@ -102,6 +102,13 @@ class ApiClient {
     });
   }
 
+  async verifyPassword(password) {
+    return this.request('/auth/verify-password', {
+      method: 'POST',
+      body: JSON.stringify({ password }),
+    });
+  }
+
   async refreshToken() {
     return this.request('/auth/refresh', {
       method: 'POST',
@@ -177,6 +184,19 @@ class ApiClient {
 
   async revokeSession(sessionId) {
     return this.request(`/users/profile/sessions/${sessionId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Admin Session Management
+  async getAdminUserSessions(userId) {
+    return this.request(`/users/${userId}/sessions`, {
+      method: 'GET',
+    });
+  }
+
+  async adminRevokeSession(sessionId) {
+    return this.request(`/users/sessions/${sessionId}/admin`, {
       method: 'DELETE',
     });
   }
@@ -493,6 +513,47 @@ class ApiClient {
     });
   }
 
+  // ── File Versioning ──────────────────────────────────────────
+  async getFileVersions(id) {
+    return this.request(`/files/${id}/versions`, {
+      method: 'GET',
+    });
+  }
+
+  async restoreFileVersion(fileId, versionNumber) {
+    return this.request(`/files/${fileId}/versions/${versionNumber}/restore`, {
+      method: 'POST',
+    });
+  }
+
+  async deleteFileVersion(fileId, versionNumber) {
+    return this.request(`/files/${fileId}/versions/${versionNumber}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // ── File Sharing ─────────────────────────────────────────────
+  async shareFile(fileId, targetUserId, permission = 'view') {
+    return this.request(`/files/${fileId}/share`, {
+      method: 'POST',
+      body: JSON.stringify({ targetUserId, permission }),
+    });
+  }
+
+  async getFileShares(fileId) {
+    return this.request(`/files/${fileId}/shares`, {
+      method: 'GET',
+    });
+  }
+
+  async revokeFileShare(fileId, shareId) {
+    return this.request(`/files/${fileId}/shares/${shareId}`, {
+      method: 'DELETE',
+    });
+  }
+
+
+
   async setTyping(conversationId, isTyping) {
     return this.request(`/chat/conversations/${conversationId}/typing`, {
       method: 'POST',
@@ -621,6 +682,29 @@ class ApiClient {
   async demoteToMember(conversationId, memberId) {
     return this.request(`/chat/conversations/${conversationId}/members/${memberId}/demote`, {
       method: 'POST',
+    });
+  }
+
+  // Team Management
+  async getTeams() {
+    return this.request('/teams');
+  }
+
+  async createTeam(teamData) {
+    return this.request('/teams', {
+      method: 'POST',
+      body: JSON.stringify(teamData),
+    });
+  }
+
+  async getTeamMembers(teamId) {
+    return this.request(`/teams/${teamId}/members`);
+  }
+
+  async addTeamMember(teamId, userId, role = 'member') {
+    return this.request(`/teams/${teamId}/members`, {
+      method: 'POST',
+      body: JSON.stringify({ userId, role }),
     });
   }
 }

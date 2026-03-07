@@ -1,6 +1,6 @@
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In, IsNull, Not, Like } from 'typeorm';
+import { Repository, In, IsNull, Not, Like, LessThan } from 'typeorm';
 import { Conversation } from '../../database/entities/chat/conversation.entity';
 import { Message } from '../../database/entities/chat/message.entity';
 import { ConversationMember } from '../../database/entities/chat/conversation-member.entity';
@@ -12,7 +12,7 @@ import { User } from '../../database/entities/core/user.entity';
 import { EncryptionService } from '../../common/service/encryption.service';
 
 @Injectable()
-export class ChatService {
+export class ChatService implements OnModuleInit {
     constructor(
         @InjectRepository(Conversation)
         private conversationRepository: Repository<Conversation>,
@@ -38,6 +38,34 @@ export class ChatService {
         private encryptionService: EncryptionService,
     ) { }
 
+    onModuleInit() {
+        // Run cleanup every 10 seconds
+        setInterval(() => this.cleanupExpiredMessages(), 10000);
+    }
+
+    private async cleanupExpiredMessages() {
+        try {
+            const now = new Date();
+            const expired = await this.messageRepository.find({
+                where: {
+                    expiresAt: LessThan(now),
+                    isDeleted: false
+                }
+            });
+
+            if (expired.length > 0) {
+                console.log(`[Chat] Cleaning up ${expired.length} expired messages`);
+                for (const msg of expired) {
+                    msg.isDeleted = true;
+                    msg.deleteReason = 'Self-destructed';
+                }
+                await this.messageRepository.save(expired);
+            }
+        } catch (error) {
+            console.error('[Chat] Cleanup error:', error);
+        }
+    }
+
     private readonly chatMasterKey = Buffer.from('8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92', 'hex');
 
     // Typing indicators (in-memory, use Redis in production)
@@ -62,7 +90,7 @@ export class ChatService {
             .createQueryBuilder('conv')
             .where('conv.id IN (:...ids)', { ids: conversationIds })
             .leftJoinAndSelect('conv.creator', 'creator')
-            .orderBy('conv.lastMessageAt', 'DESC') // Removed 'NULLS LAST' (PostgreSQL specific)
+            .orderBy('conv.lastMessageAt', 'DESC')
             .addOrderBy('conv.createdAt', 'DESC')
             .getMany();
 
@@ -292,23 +320,41 @@ export class ChatService {
         // Mark as read when fetching messages
         await this.markConversationAsRead(conversationId, userId);
 
+        // Fetch other members for read status (✓✓)
+        const otherMembers = await this.conversationMemberRepository.find({
+            where: { conversationId, userId: Not(userId), leftAt: IsNull() }
+        });
+
         return {
-            data: messages.reverse().map(msg => ({
-                id: msg.id,
-                content: this.decryptIfNeeded(msg),
-                messageType: msg.messageType,
-                isEncrypted: msg.isEncrypted,
-                encryptionAlgorithm: msg.encryptionAlgorithm,
-                createdAt: msg.createdAt,
-                isEdited: msg.isEdited,
-                fileId: msg.fileId,
-                sender: {
-                    id: msg.sender.id,
-                    firstName: msg.sender.firstName,
-                    lastName: msg.sender.lastName,
-                    avatarUrl: msg.sender.avatarUrl,
-                },
-            })),
+            data: messages.reverse().map(msg => {
+                // For direct chats, read status is based on the other person's lastReadAt
+                let isRead = false;
+                if (otherMembers.length > 0) {
+                    // It's "read" if AT LEAST ONE other person has read past this message's timestamp
+                    // In DM, it's the other person. In group, it's typically shown as read if you want Simplification. 
+                    // Let's check if the MOST RECENT read of any other member is after this message.
+                    isRead = otherMembers.some(m => m.lastReadAt && m.lastReadAt >= msg.createdAt);
+                }
+
+                return {
+                    id: msg.id,
+                    content: this.decryptIfNeeded(msg),
+                    messageType: msg.messageType,
+                    isEncrypted: msg.isEncrypted,
+                    encryptionAlgorithm: msg.encryptionAlgorithm,
+                    createdAt: msg.createdAt,
+                    expiresAt: msg.expiresAt,
+                    isEdited: msg.isEdited,
+                    fileId: msg.fileId,
+                    isRead,
+                    sender: {
+                        id: msg.sender.id,
+                        firstName: msg.sender.firstName,
+                        lastName: msg.sender.lastName,
+                        avatarUrl: msg.sender.avatarUrl,
+                    },
+                };
+            }),
             total,
             page,
             totalPages: Math.ceil(total / limit),
@@ -325,7 +371,7 @@ export class ChatService {
     }
 
     // Send a message
-    async sendMessage(conversationId: string, userId: string, content: string, messageType = 'text', fileId?: string, parentMessageId?: string) {
+    async sendMessage(conversationId: string, userId: string, content: string, messageType = 'text', fileId?: string, parentMessageId?: string, selfDestructTime?: number) {
         if (messageType !== 'system') {
             const membership = await this.conversationMemberRepository.findOne({
                 where: { conversationId, userId, leftAt: IsNull() },
@@ -339,6 +385,12 @@ export class ChatService {
         // Encrypt message content
         const { encrypted, iv, tag } = this.encryptionService.encryptText(content, this.chatMasterKey);
 
+        let expiresAt: Date | null = null;
+        if (selfDestructTime && selfDestructTime > 0) {
+            expiresAt = new Date();
+            expiresAt.setSeconds(expiresAt.getSeconds() + selfDestructTime);
+        }
+
         const message = this.messageRepository.create({
             conversationId,
             senderId: userId,
@@ -350,6 +402,7 @@ export class ChatService {
             fileId,
             parentMessageId,
             isEncrypted: true,
+            expiresAt,
         });
 
         const savedMessage = await this.messageRepository.save(message);
@@ -366,11 +419,13 @@ export class ChatService {
 
         return {
             id: completeMessage.id,
-            content: content, // Return plain content for immediate UI feedback
+            content: content,
             messageType: completeMessage.messageType,
             isEncrypted: completeMessage.isEncrypted,
             createdAt: completeMessage.createdAt,
+            expiresAt: completeMessage.expiresAt,
             fileId: completeMessage.fileId,
+            isRead: false,
             sender: completeMessage.sender ? {
                 id: completeMessage.sender.id,
                 firstName: completeMessage.sender.firstName,
@@ -461,7 +516,6 @@ export class ChatService {
             throw new NotFoundException('Original message not found');
         }
 
-        // Just send a new message with the same content (plaintext from decrypt)
         const decryptedContent = this.decryptIfNeeded(originalMessage);
         return this.sendMessage(targetConversationId, userId, decryptedContent);
     }
@@ -490,7 +544,6 @@ export class ChatService {
             role: 'member',
         });
 
-        // System message
         const [requester, newMember] = await Promise.all([
             this.userRepository.findOne({ where: { id: userId } }),
             this.userRepository.findOne({ where: { id: newMemberId } })
@@ -514,7 +567,6 @@ export class ChatService {
         membership.leftAt = new Date();
         await this.conversationMemberRepository.save(membership);
 
-        // System message
         const user = await this.userRepository.findOne({ where: { id: userId } });
         await this.createSystemMessage(conversationId, userId, `${user.firstName} left the group`);
 
@@ -541,7 +593,6 @@ export class ChatService {
         targetMembership.leftAt = new Date();
         await this.conversationMemberRepository.save(targetMembership);
 
-        // System message
         const [requester, target] = await Promise.all([
             this.userRepository.findOne({ where: { id: requesterId } }),
             this.userRepository.findOne({ where: { id: targetUserId } })
@@ -564,7 +615,6 @@ export class ChatService {
         }
         await this.conversationRepository.update({ id: conversationId }, { name: newName.trim() });
 
-        // System message
         const user = await this.userRepository.findOne({ where: { id: requesterId } });
         await this.createSystemMessage(conversationId, requesterId, `${user.firstName} renamed the group to "${newName.trim()}"`);
 
@@ -588,7 +638,6 @@ export class ChatService {
         targetMembership.role = newRole;
         await this.conversationMemberRepository.save(targetMembership);
 
-        // System message
         const [requester, target] = await Promise.all([
             this.userRepository.findOne({ where: { id: requesterId } }),
             this.userRepository.findOne({ where: { id: targetUserId } })
@@ -653,11 +702,9 @@ export class ChatService {
             throw new NotFoundException('Conversation not found or already deleted');
         }
 
-        // Mark membership as left/deleted
         membership.leftAt = new Date();
         await this.conversationMemberRepository.save(membership);
 
-        // Optional: If no members left, we could mark conversation as isDeleted=true
         const activeMembers = await this.conversationMemberRepository.count({
             where: { conversationId, leftAt: IsNull() }
         });
@@ -679,7 +726,6 @@ export class ChatService {
 
         if (isTyping) {
             typingSet.add(userId);
-            // Auto-clear after 5 seconds
             setTimeout(() => {
                 typingSet.delete(userId);
             }, 5000);
@@ -706,7 +752,6 @@ export class ChatService {
         return users;
     }
 
-    // Reactions
     async addReaction(messageId: string, userId: string, emoji: string) {
         const existing = await this.messageReactionRepository.findOne({ where: { messageId, userId, emoji } });
         if (existing) {
@@ -726,7 +771,6 @@ export class ChatService {
         }, {});
     }
 
-    // Pin messages
     async pinMessage(conversationId: string, messageId: string, userId: string) {
         const membership = await this.conversationMemberRepository.findOne({ where: { conversationId, userId, leftAt: IsNull() } });
         if (!membership) throw new ForbiddenException('Not a member');
@@ -762,7 +806,6 @@ export class ChatService {
         }));
     }
 
-    // Search
     async searchMessages(conversationId: string, userId: string, query: string) {
         const membership = await this.conversationMemberRepository.findOne({ where: { conversationId, userId, leftAt: IsNull() } });
         if (!membership) throw new ForbiddenException('Not a member');
@@ -780,7 +823,6 @@ export class ChatService {
         }));
     }
 
-    // Shared Content
     async getSharedMedia(conversationId: string, userId: string) {
         const membership = await this.conversationMemberRepository.findOne({ where: { conversationId, userId, leftAt: IsNull() } });
         if (!membership) throw new ForbiddenException('Not a member');
@@ -798,8 +840,8 @@ export class ChatService {
             content: m.content,
             messageType: m.messageType,
             fileId: m.fileId,
+            sender: { id: m.sender.id, firstName: m.sender.firstName, lastName: m.sender.lastName },
             createdAt: m.createdAt,
-            sender: { id: m.sender.id, name: `${m.sender.firstName} ${m.sender.lastName}` }
         }));
     }
 
@@ -807,11 +849,7 @@ export class ChatService {
         const membership = await this.conversationMemberRepository.findOne({ where: { conversationId, userId, leftAt: IsNull() } });
         if (!membership) throw new ForbiddenException('Not a member');
         const messages = await this.messageRepository.find({
-            where: {
-                conversationId,
-                messageType: 'file',
-                isDeleted: false
-            },
+            where: { conversationId, messageType: 'file', isDeleted: false },
             relations: ['sender'],
             order: { createdAt: 'DESC' }
         });
@@ -819,8 +857,8 @@ export class ChatService {
             id: m.id,
             content: m.content,
             fileId: m.fileId,
+            sender: { id: m.sender.id, firstName: m.sender.firstName, lastName: m.sender.lastName },
             createdAt: m.createdAt,
-            sender: { id: m.sender.id, name: `${m.sender.firstName} ${m.sender.lastName}` }
         }));
     }
 
@@ -828,283 +866,84 @@ export class ChatService {
         const membership = await this.conversationMemberRepository.findOne({ where: { conversationId, userId, leftAt: IsNull() } });
         if (!membership) throw new ForbiddenException('Not a member');
         const messages = await this.messageRepository.find({
-            where: {
-                conversationId,
-                content: Like('%http%'),
-                isDeleted: false
-            },
+            where: { conversationId, content: Like('%http%'), isDeleted: false },
             relations: ['sender'],
             order: { createdAt: 'DESC' }
         });
-        // Simplistic URL extract
         return messages.map(m => ({
             id: m.id,
             content: m.content,
+            sender: { id: m.sender.id, firstName: m.sender.firstName, lastName: m.sender.lastName },
             createdAt: m.createdAt,
-            sender: { id: m.sender.id, name: `${m.sender.firstName} ${m.sender.lastName}` }
         }));
     }
 
-    // Call Logs
-    async createCallLog(data: Partial<CallLog>) {
-        const log = this.callLogRepository.create(data);
-        return await this.callLogRepository.save(log);
-    }
-
-    async updateCallLog(id: string, data: Partial<CallLog>) {
-        await this.callLogRepository.update(id, data);
-        return await this.callLogRepository.findOne({ where: { id } });
-    }
-
     async getCallHistory(userId: string) {
-        const memberships = await this.conversationMemberRepository.find({ where: { userId, leftAt: IsNull() } });
-        const conversationIds = memberships.map(m => m.conversationId);
-        if (conversationIds.length === 0) return [];
-
         return await this.callLogRepository.find({
-            where: { conversationId: In(conversationIds) },
-            relations: ['caller', 'conversation'],
-            order: { createdAt: 'DESC' },
+            where: { callerId: userId },
+            relations: ['caller'],
+            order: { startTime: 'DESC' },
             take: 50
         });
     }
 
-    // Discover Feature Methods
-    async discoverPublicGroups(
-        userId: string,
-        search?: string,
-        category?: string,
-        page: number = 1,
-        limit: number = 20,
-    ) {
-        const query = this.conversationRepository
-            .createQueryBuilder('conversation')
-            .leftJoinAndSelect('conversation.creator', 'creator')
-            .where('conversation.conversation_type = :type', { type: 'group' })
-            .andWhere('conversation.is_private = :isPrivate', { isPrivate: false })
-            .andWhere('conversation.is_deleted = :isDeleted', { isDeleted: false });
+    async discoverPublicGroups(userId: string, search?: string, category?: string, page = 1, limit = 20) {
+        const query = this.conversationRepository.createQueryBuilder('conv')
+            .where('conv.conversationType = :type', { type: 'public' })
+            .andWhere('conv.isPrivate = false');
 
         if (search) {
-            query.andWhere(
-                '(LOWER(conversation.name) LIKE LOWER(:search) OR LOWER(conversation.description) LIKE LOWER(:search))',
-                { search: `%${search}%` }
-            );
+            query.andWhere('(conv.name LIKE :search OR conv.description LIKE :search)', { search: `%${search}%` });
         }
 
-        if (category) {
-            query.andWhere('conversation.category = :category', { category });
-        }
-
-        const total = await query.getCount();
-
-        const groups = await query
-            .select([
-                'conversation.id',
-                'conversation.name',
-                'conversation.avatarUrl',
-                'conversation.description',
-                'conversation.category',
-                'conversation.isVerified',
-                'conversation.memberCount',
-                'conversation.createdAt',
-                'creator.id',
-                'creator.firstName',
-                'creator.lastName',
-            ])
-            .orderBy('conversation.isVerified', 'DESC')
-            .addOrderBy('conversation.memberCount', 'DESC')
+        const [groups, total] = await query
+            .orderBy('conv.createdAt', 'DESC')
             .skip((page - 1) * limit)
             .take(limit)
-            .getMany();
-
-        const groupIds = groups.map(g => g.id);
-        const memberships = groupIds.length > 0 ? await this.conversationMemberRepository.find({
-            where: {
-                conversationId: In(groupIds),
-                userId,
-                leftAt: IsNull()
-            }
-        }) : [];
-        const membershipMap = new Set(memberships.map(m => m.conversationId));
+            .getManyAndCount();
 
         return {
-            groups: groups.map(group => ({
-                id: group.id,
-                name: group.name,
-                avatarUrl: group.avatarUrl,
-                description: group.description,
-                category: group.category,
-                verified: group.isVerified,
-                members: group.memberCount,
-                createdAt: group.createdAt,
-                isMember: membershipMap.has(group.id),
-                creator: group.creator ? {
-                    id: group.creator.id,
-                    name: `${group.creator.firstName} ${group.creator.lastName}`
-                } : null
+            groups: await Promise.all(groups.map(async g => {
+                const memberCount = await this.conversationMemberRepository.count({ where: { conversationId: g.id, leftAt: IsNull() } });
+                const isMember = await this.conversationMemberRepository.count({ where: { conversationId: g.id, userId, leftAt: IsNull() } }) > 0;
+                return { ...g, memberCount, isMember };
             })),
-            pagination: {
-                page,
-                limit,
-                total,
-                totalPages: Math.ceil(total / limit)
-            }
+            total,
+            page,
+            totalPages: Math.ceil(total / limit)
         };
     }
 
-    async discoverSuggestedUsers(userId: string, limit: number = 10) {
-        const userConversations = await this.conversationMemberRepository.find({
-            where: { userId, leftAt: IsNull() },
-            relations: ['conversation']
-        });
-
-        const directConvIds = userConversations
-            .filter(m => m.conversation?.conversationType === 'direct')
-            .map(m => m.conversationId);
-
-        const currentConnections = directConvIds.length > 0 ? await this.conversationMemberRepository.find({
-            where: {
-                conversationId: In(directConvIds),
-                userId: Not(userId),
-                leftAt: IsNull()
-            }
-        }) : [];
-
-        const connectedUserIds = new Set(currentConnections.map(m => m.userId));
-
-        const groupConvIds = userConversations
-            .filter(m => m.conversation?.conversationType === 'group')
-            .map(m => m.conversationId);
-
-        if (groupConvIds.length === 0) {
-            const users = await this.userRepository
-                .createQueryBuilder('user')
-                .where('user.id != :userId', { userId })
-                .andWhere('user.is_active = :isActive', { isActive: true })
-                .orderBy('RANDOM()')
-                .limit(limit)
-                .getMany();
-
-            return users.map(user => ({
-                id: user.id,
-                name: `${user.firstName} ${user.lastName}`,
-                username: user.email.split('@')[0],
-                email: user.email,
-                verified: user.isVerified || false,
-                mutualFriends: 0
-            }));
-        }
-
-        const potentialConnections = await this.conversationMemberRepository
-            .createQueryBuilder('member')
-            .select('member.user_id', 'userId')
-            .addSelect('COUNT(DISTINCT member.conversation_id)', 'mutualGroups')
-            .where('member.conversation_id IN (:...groupIds)', { groupIds: groupConvIds })
-            .andWhere('member.user_id != :userId', { userId })
-            .andWhere('member.left_at IS NULL')
-            .groupBy('member.user_id')
-            .orderBy('mutualGroups', 'DESC')
-            .limit(limit * 2)
-            .getRawMany();
-
-        const suggestedUserIds = potentialConnections
-            .filter(p => !connectedUserIds.has(p.userId))
-            .slice(0, limit)
-            .map(p => p.userId);
-
-        if (suggestedUserIds.length === 0) {
-            return [];
-        }
-
+    async discoverSuggestedUsers(currentUserId: string, limit = 10) {
+        // Simple suggestion: users in same department or recently active
+        const currentUser = await this.userRepository.findOne({ where: { id: currentUserId } });
         const users = await this.userRepository.find({
-            where: { id: In(suggestedUserIds) }
+            where: {
+                id: Not(currentUserId),
+                status: 'active',
+                department: currentUser?.department || undefined
+            },
+            take: limit
         });
-
-        const mutualGroupsMap = new Map(
-            potentialConnections.map(p => [p.userId, parseInt(p.mutualGroups)])
-        );
-
-        return users.map(user => ({
-            id: user.id,
-            name: `${user.firstName} ${user.lastName}`,
-            username: user.email.split('@')[0],
-            email: user.email,
-            verified: user.isVerified || false,
-            mutualFriends: mutualGroupsMap.get(user.id) || 0
-        }));
+        return users;
     }
 
     async joinPublicGroup(conversationId: string, userId: string) {
-        const conversation = await this.conversationRepository.findOne({
-            where: { id: conversationId }
+        const group = await this.conversationRepository.findOne({ where: { id: conversationId, conversationType: 'public' } });
+        if (!group) throw new NotFoundException('Public group not found');
+
+        const existing = await this.conversationMemberRepository.findOne({ where: { conversationId, userId, leftAt: IsNull() } });
+        if (existing) return { success: true, message: 'Already a member' };
+
+        await this.conversationMemberRepository.save({
+            conversationId,
+            userId,
+            role: 'member'
         });
-
-        if (!conversation) {
-            throw new NotFoundException('Group not found');
-        }
-
-        if (conversation.isPrivate) {
-            throw new ForbiddenException('This is a private group. You need an invitation to join.');
-        }
-
-        if (conversation.conversationType !== 'group') {
-            throw new BadRequestException('You can only join group conversations');
-        }
-
-        const existingMember = await this.conversationMemberRepository.findOne({
-            where: { conversationId, userId, leftAt: IsNull() }
-        });
-
-        if (existingMember) {
-            throw new BadRequestException('You are already a member of this group');
-        }
-
-        const previousMember = await this.conversationMemberRepository.findOne({
-            where: { conversationId, userId },
-            order: { leftAt: 'DESC' }
-        });
-
-        if (previousMember) {
-            previousMember.leftAt = null;
-            previousMember.joinedAt = new Date();
-            await this.conversationMemberRepository.save(previousMember);
-        } else {
-            const newMember = this.conversationMemberRepository.create({
-                conversationId,
-                userId,
-                role: 'member',
-                joinedAt: new Date()
-            });
-            await this.conversationMemberRepository.save(newMember);
-        }
-
-        await this.conversationRepository.increment(
-            { id: conversationId },
-            'memberCount',
-            1
-        );
 
         const user = await this.userRepository.findOne({ where: { id: userId } });
-        const systemMessage = this.messageRepository.create({
-            conversationId,
-            senderId: userId,
-            messageType: 'system',
-            content: `${user.firstName} ${user.lastName} joined the group`,
-            createdAt: new Date()
-        });
-        const savedMessage = await this.messageRepository.save(systemMessage);
+        const systemMessage = await this.createSystemMessage(conversationId, userId, `${user.firstName} joined the group via discovery`);
 
-        return {
-            success: true,
-            message: 'Successfully joined the group',
-            systemMessage: {
-                ...savedMessage,
-                sender: { id: user.id, firstName: user.firstName, lastName: user.lastName }
-            },
-            conversation: await this.conversationRepository.findOne({
-                where: { id: conversationId },
-                relations: ['creator']
-            })
-        };
+        return { success: true, systemMessage };
     }
 }

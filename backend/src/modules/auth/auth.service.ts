@@ -225,6 +225,7 @@ export class AuthService {
         mfaSetupRequired: mfaSetupRequired || undefined,
         securityClearanceLevel: user.securityClearanceLevel,
         roles,
+        publicKey: user.publicKey,
       },
     };
   }
@@ -323,6 +324,7 @@ export class AuthService {
         mfaVerified: true,
         securityClearanceLevel: user.securityClearanceLevel,
         roles,
+        publicKey: user.publicKey,
       },
     };
   }
@@ -444,5 +446,10 @@ export class AuthService {
     } catch (e) {
       // Silent fail
     }
+  }
+  async verifyPassword(userId: string, password: string): Promise<boolean> {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) return false;
+    return bcrypt.compare(password, user.passwordHash);
   }
 }

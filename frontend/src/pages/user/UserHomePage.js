@@ -2,16 +2,72 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Search, Plus, MessageSquare, MoreHorizontal, Phone, Video, Info, Lock, Send, Mic, Image, Paperclip, Smile, Settings, Bell, BellOff, Clock, Shield, LogOut, ChevronLeft, ChevronRight, User, File, Download, Trash2, ShieldCheck, CreditCard, HelpCircle, Key, Eye, EyeOff, Check, CheckCheck, Square, X, Forward, Reply, Edit2, Play, Pause, List, Pin, Star, Cloud, Heart, ChevronDown, Users, MoreVertical, FileText, Camera, MapPin, AlertTriangle, BarChart3, Folder, Maximize2, Minimize2, Compass, Briefcase, Layers, Building2, Bold, Italic, Link, Code, AtSign, Hash } from 'lucide-react';
 import api from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
-import { encryptContent, decryptContent } from "../../utils/crypto";
-import { SearchBar, PinnedMessagesBanner, ConversationSidebar, PollModal } from '../../components/chat/ChatEnhancements';
+import { encryptContent, decryptContent, encryptHybrid, decryptHybrid } from "../../utils/crypto";
+import { SearchBar, PinnedMessagesBanner, ConversationSidebar, PollModal, StickerPicker } from '../../components/chat/ChatEnhancements';
 import { DiscoverContent, MiniAppsContent } from '../../components/chat/ZaloStyleComponents';
 import { EnhancedMessageBubble } from '../../components/chat/EnhancedMessage';
-import StickerPicker from '../../components/chat/StickerPicker';
+
 import socketService from '../../utils/socket';
 import '../../chat.css';
 
 export default function UserHomePage() {
   const { user, isAdmin, isManager, darkMode, toggleDarkMode } = useAuth();
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (darkMode) {
+      root.style.setProperty('--bg-app', '#0e1621');
+      root.style.setProperty('--bg-panel', '#17212b');
+      root.style.setProperty('--bg-main', '#0e1621');
+      root.style.setProperty('--bg-light', '#242f3d');
+      root.style.setProperty('--bg-selected', '#2b5278');
+      root.style.setProperty('--border-color', '#242f3d');
+      root.style.setProperty('--text-main', '#ffffff');
+      root.style.setProperty('--text-secondary', '#8b98a5');
+      root.style.setProperty('--text-muted', '#707579');
+      root.style.setProperty('--primary', '#667eea');
+      root.style.setProperty('--green-color', '#10b981');
+      root.style.setProperty('--accent-amber', '#f59e0b');
+      root.style.setProperty('--red-color', '#ef4444');
+      root.style.setProperty('--shadow', '0 2px 10px rgba(0,0,0,0.3)');
+      root.style.setProperty('--shadow-primary', 'rgba(102, 126, 234, 0.3)');
+      root.style.setProperty('--primary-light', 'rgba(102, 126, 234, 0.1)');
+      root.style.setProperty('--bg-primary-soft', 'rgba(102, 126, 234, 0.1)');
+      root.style.setProperty('--border-primary-soft', 'rgba(102, 126, 234, 0.2)');
+      root.style.setProperty('--bg-green-soft', 'rgba(16, 185, 129, 0.1)');
+      root.style.setProperty('--bg-red-soft', 'rgba(239, 68, 68, 0.1)');
+    } else {
+      root.style.setProperty('--bg-app', '#f0f2f5');
+      root.style.setProperty('--bg-panel', '#ffffff');
+      root.style.setProperty('--bg-main', '#ffffff');
+      root.style.setProperty('--bg-light', '#f8f9fa');
+      root.style.setProperty('--bg-selected', '#e9ecef');
+      root.style.setProperty('--border-color', '#dee2e6');
+      root.style.setProperty('--text-main', '#1c1e21');
+      root.style.setProperty('--text-secondary', '#65676b');
+      root.style.setProperty('--text-muted', '#8d949e');
+      root.style.setProperty('--primary', '#007bff');
+      root.style.setProperty('--primary-light', 'rgba(0, 123, 255, 0.1)');
+      root.style.setProperty('--shadow', '0 2px 10px rgba(0,0,0,0.05)');
+      root.style.setProperty('--shadow-primary', 'rgba(0, 123, 255, 0.3)');
+      root.style.setProperty('--bg-primary-soft', 'rgba(0, 123, 255, 0.05)');
+      root.style.setProperty('--border-primary-soft', 'rgba(0, 123, 255, 0.1)');
+      root.style.setProperty('--bg-green-soft', 'rgba(40, 167, 69, 0.1)');
+      root.style.setProperty('--green-color', '#28a745');
+      root.style.setProperty('--bg-red-soft', 'rgba(220, 53, 69, 0.1)');
+      root.style.setProperty('--red-color', '#dc3545');
+    }
+  }, [darkMode]);
+
+  useEffect(() => {
+    if (selectedChat) {
+      api.markAsRead(selectedChat);
+      loadUnreadCount();
+      setConversations(prev => prev.map(c =>
+        c.id === selectedChat ? { ...c, unreadCount: 0 } : c
+      ));
+    }
+  }, [selectedChat]);
 
   useEffect(() => {
     const token = localStorage.getItem('accessToken');
@@ -106,7 +162,9 @@ export default function UserHomePage() {
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const fileInputRef = useRef(null);
+  const inputRef = useRef(null);
   const [uploading, setUploading] = useState(false);
+  const [selectedFile, setSelectedFile] = useState(null);
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
   const [incomingCall, setIncomingCall] = useState(null);
   const [showCamera, setShowCamera] = useState(false);
@@ -114,6 +172,10 @@ export default function UserHomePage() {
   const [callType, setCallType] = useState(null); // 'voice' or 'video'
   const [vaultSearch, setVaultSearch] = useState('');
   const [vaultSort, setVaultSort] = useState('date'); // 'date' or 'name' or 'size'
+  const [isVaultLocked, setIsVaultLocked] = useState(true);
+  const [showVaultUnlockModal, setShowVaultUnlockModal] = useState(false);
+  const [unlockPassword, setUnlockPassword] = useState('');
+  const [unlockLoading, setUnlockLoading] = useState(false);
   const [callDuration, setCallDuration] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
@@ -137,6 +199,28 @@ export default function UserHomePage() {
   const [showStickerPicker, setShowStickerPicker] = useState(false);
   const [showPollModal, setShowPollModal] = useState(false);
   const [pinnedChatIds, setPinnedChatIds] = useState(new Set());
+  const [showVersionModal, setShowVersionModal] = useState(false);
+  const [selectedFileVersionData, setSelectedFileVersionData] = useState(null);
+  const [loadingVersions, setLoadingVersions] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [sharingFile, setSharingFile] = useState(null);
+  const [currentShares, setCurrentShares] = useState([]);
+  const [sharesLoading, setSharesLoading] = useState(false);
+  const [sharePermission, setSharePermission] = useState('view');
+  const [shareTargetUserId, setShareTargetUserId] = useState('');
+
+  // E2EE Key Diagnostics
+  useEffect(() => {
+    if (user) {
+      const privKey = localStorage.getItem(`e2ee_private_key_${user.id}`);
+      console.log("[E2EE] Key Status:", {
+        userId: user.id,
+        hasPrivateKey: !!privKey,
+        hasPublicKey: !!user.publicKey,
+        pubKeyLen: user.publicKey?.length || 0
+      });
+    }
+  }, [user]);
   const [mutedChatIds, setMutedChatIds] = useState(new Set());
   const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
   const [showRightSidebar, setShowRightSidebar] = useState(false);
@@ -257,9 +341,10 @@ export default function UserHomePage() {
   }, [selectedChat]);
 
   useEffect(() => {
-    const handleNewMessage = (message) => {
+    const handleNewMessage = async (message) => {
       if (message.conversationId === selectedChat) {
-        setMessages(prev => [...prev, message]);
+        const decrypted = await decryptMessage({ ...message });
+        setMessages(prev => [...prev, decrypted]);
         // Scroll to bottom
         setTimeout(() => {
           messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -378,6 +463,64 @@ export default function UserHomePage() {
     }
   };
 
+  const decryptMessage = async (msg) => {
+    if (!msg || !msg.content || !msg.content.startsWith('[E2EE]:')) return msg;
+    if (!user?.id) return msg;
+
+    const rawContent = msg.content.substring(7);
+    const privateKey = localStorage.getItem(`e2ee_private_key_${user.id}`);
+
+    if (!privateKey) {
+      console.warn("[E2EE] Missing private key for user", user.id);
+      msg.content = "[E2EE: Thiếu khóa cá nhân]";
+      return msg;
+    }
+
+    try {
+      // Try to parse as JSON (New Dual-Encryption or Hybrid format)
+      const encryptedData = JSON.parse(rawContent);
+      const myId = String(user.id);
+
+      // 1. Check for Hybrid Format (Version 2)
+      if (encryptedData.v === "2" || encryptedData.ciphertext) {
+        msg.content = await decryptHybrid(encryptedData, privateKey, myId);
+        return msg;
+      }
+
+      // 2. Fallback to Legacy Dual-Encryption (Version 1 / RSA-only)
+      const myPayload = encryptedData[myId] || encryptedData[user.id];
+
+      if (myPayload) {
+        try {
+          const decrypted = await decryptContent(myPayload, privateKey);
+          if (decrypted !== "[Unable to decrypt message]") {
+            msg.content = decrypted;
+          } else {
+            console.error("[E2EE] RSA Decryption failed for msg:", msg.id);
+            msg.content = "[Lỗi giải mã: Khóa không khớp]";
+          }
+        } catch (decryptErr) {
+          console.error("[E2EE] decryptContent threw error:", decryptErr);
+          msg.content = "[Lỗi giải mã: Lỗi hệ thống]";
+        }
+      } else {
+        console.warn("[E2EE] No payload for my ID:", myId, "Found keys:", Object.keys(encryptedData));
+        msg.content = "[E2EE: Không có mã giải cho bạn]";
+      }
+    } catch (e) {
+      // Not JSON? Fallback (Oldest format: pure ciphertext)
+      try {
+        console.log("[E2EE] Fallback to legacy decryption format");
+        const decrypted = await decryptContent(rawContent, privateKey);
+        msg.content = decrypted;
+      } catch (decryptErr) {
+        console.error("[E2EE] Legacy Decryption failed:", decryptErr);
+        msg.content = "[Lỗi giải mã: Format không hợp lệ]";
+      }
+    }
+    return msg;
+  };
+
   const loadMessages = async (conversationId, silent = false) => {
     try {
       if (!silent) setMessagesLoading(true);
@@ -385,35 +528,7 @@ export default function UserHomePage() {
       const rawMessages = response.data || response || [];
 
       // E2EE Decryption Logic
-      const newMessages = await Promise.all(rawMessages.map(async msg => {
-        if (msg.content && msg.content.startsWith('[E2EE]:')) { // Check xem có phải tin nhắn mã hóa không có phải là bắt đầu bằng E2EE không ?
-          const rawContent = msg.content.substring(7); // Lấy nội dung mã hóa
-          const privateKey = localStorage.getItem(`e2ee_private_key_${user.id}`); // Lấy private key của người dùng từ localstorage để cb giải mã 
-
-          if (!privateKey) {
-            msg.content = " [E2EE: Thiếu khóa cá nhân]";
-          } else {
-            try {
-              // Try to parse as JSON (New Dual-Encryption format)
-              const encryptedData = JSON.parse(rawContent); // Parse nội dung mã hóa
-              if (encryptedData[user.id]) { // Check xem có mã giải cho bạn không
-                msg.content = await decryptContent(encryptedData[user.id], privateKey); // Giải mã nội dung
-              } else {
-                msg.content = " [E2EE: Không có mã giải cho bạn]";
-              }
-            } catch (e) {
-              // Not JSON? Fallback (Old format: pure ciphertext)
-              try {
-                msg.content = await decryptContent(rawContent, privateKey); // Giải mã nội dung
-              } catch (decryptErr) {
-                console.error("[E2EE] Decryption failed:", decryptErr);
-                msg.content = " [Không thể giải mã tin nhắn]";
-              }
-            }
-          }
-        }
-        return msg;
-      }));
+      const newMessages = await Promise.all(rawMessages.map(m => decryptMessage({ ...m })));
 
       // Only update state if data actually changed to prevent UI flicker
       setMessages(prev => {
@@ -533,6 +648,85 @@ export default function UserHomePage() {
     }
   };
 
+  const handleViewVersions = async (fileId) => {
+    try {
+      setLoadingVersions(true);
+      setShowVersionModal(true);
+      const data = await api.getFileVersions(fileId);
+      setSelectedFileVersionData(data);
+    } catch (error) {
+      console.error('Failed to load version history:', error);
+      alert('Error fetching version history');
+      setShowVersionModal(false);
+    } finally {
+      setLoadingVersions(false);
+    }
+  };
+
+  const handleRestoreVersion = async (fileId, versionNumber) => {
+    if (!window.confirm(`Restore file to Version ${versionNumber}? Current state will be saved as a new version.`)) return;
+    try {
+      await api.restoreFileVersion(fileId, versionNumber);
+      alert('File restored successfully');
+      loadFiles();
+      setShowVersionModal(false);
+    } catch (error) {
+      alert('Failed to restore version');
+    }
+  };
+
+  const handleDeleteVersion = async (fileId, versionNumber) => {
+    if (!window.confirm(`Delete version snapshot v${versionNumber}? This action cannot be undone.`)) return;
+    try {
+      await api.deleteFileVersion(fileId, versionNumber);
+      // Refresh
+      const data = await api.getFileVersions(fileId);
+      setSelectedFileVersionData(data);
+    } catch (error) {
+      alert('Failed to delete version snapshot');
+    }
+  };
+
+  const handleOpenShare = async (file) => {
+    try {
+      setSharingFile(file);
+      setShowShareModal(true);
+      setSharesLoading(true);
+      setShareTargetUserId('');
+      setSharePermission('view');
+      const shares = await api.getFileShares(file.id);
+      setCurrentShares(shares);
+    } catch (error) {
+      console.error('Failed to load shares:', error);
+    } finally {
+      setSharesLoading(false);
+    }
+  };
+
+  const handleShareFile = async () => {
+    if (!shareTargetUserId) return;
+    try {
+      await api.shareFile(sharingFile.id, shareTargetUserId, sharePermission);
+      alert('File shared successfully');
+      // Refresh list
+      const shares = await api.getFileShares(sharingFile.id);
+      setCurrentShares(shares);
+      setShareTargetUserId('');
+    } catch (error) {
+      alert('Failed to share file: ' + error.message);
+    }
+  };
+
+  const handleRevokeShare = async (shareId) => {
+    if (!window.confirm('Revoke access for this user?')) return;
+    try {
+      await api.revokeFileShare(sharingFile.id, shareId);
+      setCurrentShares(prev => prev.filter(s => s.id !== shareId));
+    } catch (error) {
+      alert('Failed to revoke access');
+    }
+  };
+
   const loadTypingUsers = async (conversationId) => {
     try {
       const users = await api.getTypingUsers(conversationId);
@@ -560,51 +754,67 @@ export default function UserHomePage() {
 
   const handleSendMessage = async (e) => {
     e?.preventDefault();
-    if (!messageInput.trim() || !selectedChat || sending) return;
+    if ((!messageInput.trim() && !selectedFile) || !selectedChat || sending) return;
 
     try {
       setSending(true);
       setIsTyping(false);
       api.setTyping(selectedChat, false).catch(() => { });
 
-      if (editingMessage) {
-        await api.editMessage(editingMessage.id, messageInput.trim());
-        setEditingMessage(null);
-      } else {
-        let finalContent = messageInput.trim();
-
-        // E2EE Encryption for Direct Chat
-        const conv = conversations.find(c => c.id === selectedChat);
-        if (conv && conv.conversationType === 'direct' && conv.otherUser?.publicKey) { // Kiểm tra xem có phải là tin nhắn trực tiếp và có public key của người nhận không "conv.otherUser?.publicKey"
-          console.log("[E2EE] Encrypting message for both parties...");
-          try {
-            const encryptedForRecipient = await encryptContent(finalContent, conv.otherUser.publicKey); // Dùng encryptContent để mã hóa tin nhắn và public key của người nhận để tạo bản mã encryptedForRecipient
-            const myPublicKey = user.publicKey
-
-            if (myPublicKey) {
-              const encryptedForMe = await encryptContent(finalContent, myPublicKey); // Dùng Public Key của chính mình (A) để tạo bản mã encryptedForMe (giúp A xem lại được tin nhắn mình đã gửi).
-              const dualPayload = { // Gộp tất cả 2 bản mã vào 1 object gắn liền với ID của người gửi và người nhận
-                [conv.otherUser.id]: encryptedForRecipient,
-                [user.id]: encryptedForMe
-              };
-              finalContent = `[E2EE]:${JSON.stringify(dualPayload)}`; // Thêm tiền tố [E2EE]: để đánh dấu là tin nhắn mã hóa
-            } else {
-              // Fallback if sender public key is missing
-              finalContent = `[E2EE]:${JSON.stringify({ [conv.otherUser.id]: encryptedForRecipient })}`;
-            }
-          } catch (e) {
-            console.error("[E2EE] Dual Encryption failed", e);
-          }
+      // Upload file first if selected via toolbar buttons
+      if (selectedFile) {
+        try {
+          setUploading(true);
+          const uploadedFile = await api.uploadFile(selectedFile);
+          const fileContent = `Shared a file: ${selectedFile.name} `;
+          await api.sendMessage(selectedChat, fileContent, 'file', uploadedFile.id, null, null);
+          setSelectedFile(null);
+        } catch (fileErr) {
+          console.error('File upload failed:', fileErr);
+          alert('Không thể tải file: ' + fileErr.message);
+        } finally {
+          setUploading(false);
         }
+      }
 
-        const newMessage = await api.sendMessage(
-          selectedChat,
-          finalContent,
-          'text',
-          null,
-          replyingTo ? replyingTo.id : null,
-          selfDestructTime
-        );
+      // Send text message if present
+      if (messageInput.trim()) {
+        if (editingMessage) {
+          await api.editMessage(editingMessage.id, messageInput.trim());
+          setEditingMessage(null);
+        } else {
+          let finalContent = messageInput.trim();
+
+          // E2EE Encryption for Direct Chat
+          const conv = conversations.find(c => c.id === selectedChat);
+          if (conv && conv.conversationType === 'direct' && conv.otherUser?.publicKey) {
+            console.log("[E2EE] Encrypting message (Hybrid Mode)...");
+            try {
+              const myPublicKey = user.publicKey || JSON.parse(localStorage.getItem('user'))?.publicKey;
+              const keysToEncryptFor = {
+                [conv.otherUser.id]: conv.otherUser.publicKey
+              };
+              if (myPublicKey) {
+                keysToEncryptFor[user.id] = myPublicKey;
+              }
+
+              const hybridPayload = await encryptHybrid(finalContent, keysToEncryptFor);
+              finalContent = `[E2EE]:${JSON.stringify(hybridPayload)}`;
+            } catch (e) {
+              console.error("[E2EE] Hybrid Encryption failed. Likely key invalid.", e);
+              // Fallback happens to plain text if we don't change finalContent
+            }
+          }
+
+          await api.sendMessage(
+            selectedChat,
+            finalContent,
+            'text',
+            null,
+            replyingTo ? replyingTo.id : null,
+            selfDestructTime
+          );
+        }
       }
 
       setMessageInput('');
@@ -700,7 +910,27 @@ export default function UserHomePage() {
 
   const handleFileChange = async (e) => {
     const file = e.target.files[0];
-    if (!file || !selectedChat) return;
+    if (!file) return;
+
+    // If uploading to Vault
+    if (activeTab === 'vault') {
+      try {
+        setUploading(true);
+        // If file with same name exists, api.uploadFile will automatically version it on backend
+        await api.uploadFile(file);
+        alert('File uploaded to vault successfully! Automatic versioning applied if duplicate found.');
+        loadFiles();
+      } catch (error) {
+        console.error('Vault upload failed:', error);
+        alert('Failed to upload file to vault: ' + error.message);
+      } finally {
+        setUploading(false);
+        if (e.target) e.target.value = '';
+      }
+      return;
+    }
+
+    if (!selectedChat) return;
 
     try {
       setUploading(true);
@@ -898,8 +1128,8 @@ export default function UserHomePage() {
       socketService.sendCallInvite(selectedChat, offer, type);
     } catch (error) {
       console.error('Call initiation error:', error);
+      alert('Could not start call: ' + (error.message || 'Unknown error'));
       stopRingtone();
-      setShowCallModal(false);
       setCallStatus('idle');
       setCallConversationId(null);
       if (localStream) {
@@ -908,6 +1138,10 @@ export default function UserHomePage() {
       }
     }
   };
+
+  // Alias for UI buttons
+  const handleCall = (type) => initiateCall(type);
+
 
   useEffect(() => {
     if (!socketService.socket) return;
@@ -1131,7 +1365,13 @@ export default function UserHomePage() {
           <NavIcon
             icon={<Shield size={22} />}
             active={activeTab === 'vault'}
-            onClick={() => setActiveTab('vault')}
+            onClick={() => {
+              if (isVaultLocked) {
+                setShowVaultUnlockModal(true);
+              } else {
+                setActiveTab('vault');
+              }
+            }}
             label="Vault"
           />
           <NavIcon
@@ -1310,35 +1550,8 @@ export default function UserHomePage() {
             </div>
           </div>
 
-          {/* Sidebar Footer */}
+          {/* Sidebar Footer - Cleaned up per user request */}
           <div style={{ padding: '16px 20px', borderTop: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <button
-              onClick={() => handleStartNewChat()}
-              style={{
-                background: 'var(--primary)',
-                color: '#fff',
-                border: 'none',
-                padding: '10px',
-                borderRadius: '8px',
-                fontWeight: '600',
-                fontSize: '14px',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '8px'
-              }}
-            >
-              <Plus size={18} /> New Message
-            </button>
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0 4px' }}>
-              <button style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px' }}>
-                <Settings size={16} /> Settings
-              </button>
-              <button style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px' }}>
-                <HelpCircle size={16} /> Support
-              </button>
-            </div>
           </div>
         </div>
       )}
@@ -1535,7 +1748,12 @@ export default function UserHomePage() {
                                   <FileText size={18} color="var(--primary)" />
                                 </div>
                                 <div style={{ overflow: 'hidden' }}>
-                                  <div style={{ fontSize: '14px', fontWeight: '700', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{f.name}</div>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <div style={{ fontSize: '14px', fontWeight: '700', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{f.name}</div>
+                                    {f.ownerId !== user?.id && (
+                                      <span style={{ fontSize: '9px', background: 'var(--bg-selected)', color: 'var(--primary)', padding: '2px 6px', borderRadius: '4px', fontWeight: '900' }}>SHARED</span>
+                                    )}
+                                  </div>
                                   <div style={{ fontSize: '10px', color: 'var(--text-secondary)', fontWeight: '800', uppercase: 'true' }}>AES-256 SECURE</div>
                                 </div>
                               </div>
@@ -1590,6 +1808,38 @@ export default function UserHomePage() {
                                   <ShieldCheck size={18} />
                                 </button>
                                 <button
+                                  onClick={() => handleOpenShare(f)}
+                                  disabled={f.ownerId !== user?.id}
+                                  style={{
+                                    background: 'var(--bg-panel)',
+                                    border: '1px solid var(--border-color)',
+                                    color: 'var(--text-secondary)',
+                                    cursor: f.ownerId === user?.id ? 'pointer' : 'not-allowed',
+                                    padding: '8px',
+                                    borderRadius: '8px',
+                                    transition: 'all 0.2s',
+                                    opacity: f.ownerId === user?.id ? 1 : 0.5
+                                  }}
+                                  title="Manage Shares"
+                                >
+                                  <Users size={18} />
+                                </button>
+                                <button
+                                  onClick={() => handleViewVersions(f.id)}
+                                  style={{
+                                    background: 'var(--bg-panel)',
+                                    border: '1px solid var(--border-color)',
+                                    color: 'var(--text-secondary)',
+                                    cursor: 'pointer',
+                                    padding: '8px',
+                                    borderRadius: '8px',
+                                    transition: 'all 0.2s'
+                                  }}
+                                  title="Version History"
+                                >
+                                  <Clock size={18} />
+                                </button>
+                                <button
                                   onClick={() => handleDeleteFile(f.id)}
                                   style={{
                                     background: 'var(--bg-red-soft)',
@@ -1602,7 +1852,7 @@ export default function UserHomePage() {
                                   }}
                                   title="Delete"
                                 >
-                                  <X size={18} />
+                                  <Trash2 size={18} />
                                 </button>
                               </div>
                             </td>
@@ -1624,88 +1874,106 @@ export default function UserHomePage() {
               <div style={{
                 background: 'var(--bg-panel)',
                 borderBottom: '1px solid var(--border-color)',
-                padding: '12px 20px',
+                padding: '0 20px',
                 flexShrink: 0
               }}>
                 <div style={{
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'space-between'
+                  justifyContent: 'space-between',
+                  height: '56px'
                 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                    <div style={{
-                      width: '32px',
-                      height: '32px',
-                      background: 'var(--bg-light)',
-                      borderRadius: '6px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '14px',
-                      fontWeight: '800',
-                      color: 'var(--text-main)'
-                    }}>
-                      <Hash size={18} />
+                  {/* Left: Avatar + Name + Online status */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{ position: 'relative' }}>
+                      <div style={{
+                        width: '40px', height: '40px',
+                        background: 'linear-gradient(135deg, #667eea, #764ba2)',
+                        borderRadius: '50%',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: '16px', fontWeight: '700', color: '#fff'
+                      }}>
+                        {getConversationName(selectedConversation)?.charAt(0)?.toUpperCase()}
+                      </div>
+                      {isConversationOnline(selectedConversation) && (
+                        <div style={{
+                          position: 'absolute', bottom: 1, right: 1,
+                          width: 11, height: 11, background: '#4ade80',
+                          border: '2px solid var(--bg-panel)', borderRadius: '50%'
+                        }} />
+                      )}
                     </div>
                     <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <h3 style={{ margin: 0, color: 'var(--text-main)', fontSize: '16px', fontWeight: '800' }}>
-                          {getConversationName(selectedConversation)}
-                        </h3>
-                        {/* Tabs from Mockup */}
-                        <div style={{ display: 'flex', gap: '20px', marginLeft: '20px' }}>
-                          <span style={{ fontSize: '13px', color: 'var(--text-secondary)', cursor: 'pointer' }}>Threads</span>
-                          <span style={{ fontSize: '13px', color: 'var(--text-secondary)', cursor: 'pointer' }}>Files</span>
-                          <span style={{ fontSize: '13px', color: 'var(--text-secondary)', cursor: 'pointer' }}>Mentions</span>
-                        </div>
+                      <div style={{ fontWeight: '700', fontSize: '15px', color: 'var(--text-main)' }}>
+                        {getConversationName(selectedConversation)}
+                      </div>
+                      <div style={{ fontSize: '12px', color: isConversationOnline(selectedConversation) ? '#4ade80' : 'var(--text-secondary)' }}>
+                        {isConversationOnline(selectedConversation) ? 'Đang hoạt động' : 'Ngoại tuyến'}
                       </div>
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                    {/* Search bar in header like mockup */}
-                    <div style={{
-                      position: 'relative',
-                      marginRight: '12px'
-                    }}>
-                      <Search size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: 'var(--text-secondary)' }} />
-                      <input
-                        type="text"
-                        placeholder={`Search message history...`}
-                        style={{
-                          background: 'var(--bg-light)',
-                          border: 'none',
-                          borderRadius: '6px',
-                          padding: '8px 12px 8px 32px',
-                          fontSize: '13px',
-                          width: '200px',
-                          outline: 'none',
-                          color: 'var(--text-main)'
-                        }}
-                      />
-                    </div>
-                    {[Phone, Video, Info].map((Icon, idx) => (
-                      <button
-                        key={idx}
-                        style={{
-                          background: 'transparent',
-                          border: 'none',
-                          color: 'var(--text-secondary)',
-                          padding: '8px',
-                          borderRadius: '6px',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center'
-                        }}
-                        onMouseEnter={(e) => e.target.style.background = 'var(--bg-light)'}
-                        onMouseLeave={(e) => e.target.style.background = 'transparent'}
-                      >
-                        <Icon size={20} />
-                      </button>
-                    ))}
+                  {/* Right: Action buttons */}
+                  <div style={{ display: 'flex', gap: '2px', alignItems: 'center' }}>
+                    <button
+                      title="Gọi thoại"
+                      onClick={() => initiateCall('voice')}
+                      style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', padding: '8px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', transition: 'all 0.15s' }}
+                      onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-light)'; e.currentTarget.style.color = '#667eea'; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
+                    >
+                      <Phone size={20} />
+                    </button>
+                    <button
+                      title="Gọi video"
+                      onClick={() => initiateCall('video')}
+                      style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', padding: '8px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', transition: 'all 0.15s' }}
+                      onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-light)'; e.currentTarget.style.color = '#667eea'; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
+                    >
+                      <Video size={20} />
+                    </button>
+                    <button
+                      title="Tìm kiếm tin nhắn"
+                      onClick={() => setShowSearchInChat && setShowSearchInChat(v => !v)}
+                      style={{ background: showSearchInChat ? 'rgba(102,126,234,0.12)' : 'transparent', border: 'none', color: showSearchInChat ? '#667eea' : 'var(--text-secondary)', padding: '8px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', transition: 'all 0.15s' }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-light)'}
+                      onMouseLeave={e => e.currentTarget.style.background = showSearchInChat ? 'rgba(102,126,234,0.12)' : 'transparent'}
+                    >
+                      <Search size={20} />
+                    </button>
+                    <button
+                      title="Thông tin hội thoại"
+                      onClick={() => setShowRightSidebar(v => !v)}
+                      style={{ background: showRightSidebar ? 'rgba(102,126,234,0.12)' : 'transparent', border: 'none', color: showRightSidebar ? '#667eea' : 'var(--text-secondary)', padding: '8px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', transition: 'all 0.15s' }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-light)'}
+                      onMouseLeave={e => e.currentTarget.style.background = showRightSidebar ? 'rgba(102,126,234,0.12)' : 'transparent'}
+                    >
+                      <Info size={20} />
+                    </button>
                   </div>
                 </div>
+
+                {/* Inline Search Bar (shown when search icon clicked) */}
+                {showSearchInChat && (
+                  <div style={{ padding: '8px 0 12px', display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <div style={{ flex: 1, position: 'relative' }}>
+                      <Search size={15} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)', pointerEvents: 'none' }} />
+                      <input
+                        autoFocus
+                        type="text"
+                        value={chatSearchQuery || ''}
+                        onChange={e => setChatSearchQuery && setChatSearchQuery(e.target.value)}
+                        placeholder="Tìm kiếm trong cuộc trò chuyện..."
+                        style={{ width: '100%', background: 'var(--bg-light)', border: '1px solid var(--border-color)', borderRadius: '20px', padding: '7px 14px 7px 34px', fontSize: '13px', outline: 'none', color: 'var(--text-main)', boxSizing: 'border-box' }}
+                      />
+                    </div>
+                    <button type="button" onClick={() => { setShowSearchInChat && setShowSearchInChat(false); setChatSearchQuery && setChatSearchQuery(''); }}
+                      style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '4px', display: 'flex' }}>
+                      <X size={18} />
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Pinned Messages Banner */}
@@ -1757,7 +2025,7 @@ export default function UserHomePage() {
                             onReply={(msg) => setReplyingTo(msg)}
                             onForward={(msg) => { setForwardingMessage(msg); setShowForwardModal(true); }}
                             onEdit={(msg) => { setEditingMessage(msg); setMessageInput(msg.content); }}
-                            isRead={true}
+                            isRead={msg.isRead}
                           />
                         </div>
                       ))}
@@ -1791,34 +2059,71 @@ export default function UserHomePage() {
                 )}
               </div>
 
+              {/* Chat Input Area (Enhanced & Consolidated) */}
               <form onSubmit={handleSendMessage} style={{
-                padding: '16px 20px',
+                padding: '12px 20px 20px',
                 background: 'var(--bg-panel)',
                 borderTop: '1px solid var(--border-color)',
                 flexShrink: 0
               }}>
-                {/* Rich Text Controls Top Bar */}
-                <div style={{ display: 'flex', gap: '20px', marginBottom: '12px', paddingLeft: '4px' }}>
-                  {[Bold, Italic, Link, List, Code].map((Icon, idx) => (
-                    <Icon key={idx} size={18} color="var(--text-secondary)" style={{ cursor: 'pointer' }} />
-                  ))}
+                {/* Advanced Toolbar Row (Top) */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  marginBottom: '8px',
+                  padding: '4px 0',
+                  borderBottom: '1px solid var(--border-color)',
+                  overflowX: 'auto',
+                  scrollbarWidth: 'none'
+                }}>
+                  {(() => {
+                    const toolbarButtonStyle = {
+                      background: 'transparent',
+                      border: 'none',
+                      padding: '6px',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      color: 'var(--text-secondary)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transition: 'all 0.2s'
+                    };
+                    return (
+                      <>
+                        <button type="button" onClick={() => setShowStickerPicker(!showStickerPicker)} style={toolbarButtonStyle} title="Emoji & Stickers" onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-light)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}><Smile size={20} /></button>
+                        <button type="button" onClick={() => { const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*'; inp.onchange = ev => { if (ev.target.files[0]) setSelectedFile(ev.target.files[0]); }; inp.click(); }} style={toolbarButtonStyle} title="Gửi ảnh" onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-light)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}><Image size={20} /></button>
+                        <button type="button" onClick={handleFileClick} style={toolbarButtonStyle} title="Gửi file" onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-light)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}><Paperclip size={20} /></button>
+                        <button type="button" onClick={startCamera} style={toolbarButtonStyle} title="Chụp ảnh" onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-light)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}><Camera size={20} /></button>
+                        <button type="button" onClick={() => setShowPollModal(true)} style={toolbarButtonStyle} title="Bình chọn" onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-light)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}><BarChart3 size={20} /></button>
+                        <button type="button" style={toolbarButtonStyle} title="Tin nhắn tự xóa" onClick={() => setSelfDestructTime(v => v ? null : 30)} onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-light)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}><Clock size={20} color={selfDestructTime ? 'var(--primary)' : 'inherit'} /></button>
+
+                        <div style={{ width: '1px', height: '18px', background: 'var(--border-color)', margin: '0 8px' }} />
+
+                        <button type="button" onClick={() => setMessageInput(v => v + '@')} style={toolbarButtonStyle} title="Nhắc tên" onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-light)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}><AtSign size={20} /></button>
+                        <button type="button" onClick={() => setMessageInput(v => v + '**bold**')} style={toolbarButtonStyle} title="Chữ đậm" onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-light)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}><Bold size={20} /></button>
+                        <button type="button" onClick={() => setMessageInput(v => v + '*italic*')} style={toolbarButtonStyle} title="Chữ nghiêng" onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-light)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}><Italic size={20} /></button>
+                        <button type="button" onClick={() => setMessageInput(v => v + '`code`')} style={toolbarButtonStyle} title="Mã code" onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-light)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}><Code size={20} /></button>
+                      </>
+                    );
+                  })()}
                 </div>
 
-                {/* Edit/Reply Preview */}
+                {/* Replying/Editing UI inside Form */}
                 {(replyingTo || editingMessage) && (
                   <div style={{
-                    background: 'var(--bg-light)',
-                    borderLeft: '3px solid var(--primary)',
                     padding: '8px 12px',
-                    marginBottom: '10px',
-                    borderRadius: '0 8px 8px 0',
+                    background: 'var(--bg-light)',
+                    borderRadius: '8px 8px 0 0',
+                    borderBottom: '1px solid var(--border-color)',
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center'
                   }}>
                     <div style={{ minWidth: 0 }}>
                       <div style={{ fontSize: '12px', fontWeight: '800', color: 'var(--primary)', marginBottom: '2px' }}>
-                        {editingMessage ? 'Editing Message' : `Replying to ${replyingTo.sender?.firstName || 'User'}`}
+                        {editingMessage ? 'Đang sửa tin nhắn' : `Đang trả lời ${replyingTo.sender?.firstName || 'người dùng'}`}
                       </div>
                       <div style={{ fontSize: '13px', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {editingMessage ? editingMessage.content : replyingTo.content}
@@ -1828,79 +2133,92 @@ export default function UserHomePage() {
                   </div>
                 )}
 
+                {/* Main Input Area Row (Bottom) */}
                 <div style={{
                   display: 'flex',
-                  gap: '12px',
-                  alignItems: 'center',
+                  alignItems: 'flex-end',
                   background: 'var(--bg-light)',
-                  borderRadius: '8px',
-                  padding: '4px 12px',
-                  border: '1px solid transparent',
-                  transition: 'border-color 0.2s'
+                  borderRadius: (replyingTo || editingMessage) ? '0 0 12px 12px' : '12px',
+                  padding: '8px 12px',
+                  gap: '10px'
                 }}>
-                  <div style={{ position: 'relative' }}>
-                    <button
-                      type="button"
-                      onClick={() => setShowAttachmentMenu(!showAttachmentMenu)}
-                      style={{
-                        background: 'transparent',
-                        border: 'none',
-                        color: 'var(--text-secondary)',
-                        padding: '8px',
-                        cursor: 'pointer',
-                        display: 'flex'
-                      }}
-                    >
-                      <Plus size={20} />
-                    </button>
-                    {showAttachmentMenu && (
-                      <div style={{
-                        position: 'absolute',
-                        bottom: '50px',
-                        left: '0',
-                        background: 'var(--bg-panel)',
-                        border: '1px solid var(--border-color)',
-                        borderRadius: '8px',
-                        padding: '8px',
-                        width: '200px',
-                        boxShadow: 'var(--shadow)',
-                        zIndex: 100
-                      }}>
-                        {/* Simplified menu for demo */}
-                        <div style={{ padding: '8px', fontSize: '13px', cursor: 'pointer', color: 'var(--text-main)' }} onClick={handleFileClick}><FileText size={16} /> Upload file</div>
-                        <div style={{ padding: '8px', fontSize: '13px', cursor: 'pointer', color: 'var(--text-main)' }} onClick={startCamera}><Camera size={16} /> Take photo</div>
-                      </div>
-                    )}
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowAttachmentMenu(!showAttachmentMenu)}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: 'var(--text-secondary)',
+                      padding: '4px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      marginBottom: '2px'
+                    }}
+                  >
+                    <Plus size={22} />
+                  </button>
 
-                  <input
-                    type="text"
+                  <textarea
+                    ref={inputRef}
+                    rows={1}
                     value={messageInput}
-                    onChange={(e) => { setMessageInput(e.target.value); handleTyping(); }}
-                    placeholder={`Message #${getConversationName(selectedConversation)}`}
+                    onChange={(e) => {
+                      setMessageInput(e.target.value);
+                      handleTyping();
+                      e.target.style.height = 'auto';
+                      e.target.style.height = e.target.scrollHeight + 'px';
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSendMessage(e);
+                      }
+                    }}
+                    placeholder={`Nhập tin nhắn tới ${getConversationName(selectedConversation)}...`}
                     style={{
                       flex: 1,
                       background: 'transparent',
                       border: 'none',
                       outline: 'none',
-                      color: '#1a1d21',
+                      color: 'var(--text-main)',
                       fontSize: '15px',
-                      padding: '10px 0'
+                      padding: '6px 0',
+                      resize: 'none',
+                      maxHeight: '150px'
                     }}
                   />
 
-                  <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                    <button type="button" onClick={() => setShowStickerPicker(!showStickerPicker)} style={{ background: 'transparent', border: 'none', color: '#616061', cursor: 'pointer' }}><Smile size={20} /></button>
-                    <button type="submit" style={{ background: 'transparent', border: 'none', color: messageInput.trim() ? '#007bff' : '#616061', cursor: 'pointer' }}><Send size={20} /></button>
+                  <div style={{ display: 'flex', gap: '4px', alignItems: 'center', marginBottom: '2px' }}>
+                    <button type="button" onClick={() => setShowStickerPicker(v => !v)}
+                      style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', padding: '4px' }}>
+                      <Smile size={24} />
+                    </button>
+                    <button type="submit"
+                      disabled={!messageInput.trim() && !selectedFile}
+                      style={{
+                        background: (messageInput.trim() || selectedFile) ? 'var(--primary)' : 'transparent',
+                        border: 'none',
+                        color: (messageInput.trim() || selectedFile) ? '#fff' : 'var(--text-secondary)',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        borderRadius: '10px',
+                        padding: '10px',
+                        transition: 'all 0.2s',
+                        boxShadow: (messageInput.trim() || selectedFile) ? '0 4px 12px var(--shadow-primary)' : 'none'
+                      }}>
+                      <Send size={20} />
+                    </button>
                   </div>
                 </div>
+
+                {/* Footer Hint */}
                 <div style={{ marginTop: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '12px', color: '#616061' }}>
-                    Return to send, <b>Shift + Return</b> for new line
-                  </span>
-                  <div style={{ display: 'flex', gap: '15px' }}>
-                    <AtSign size={16} color="#616061" style={{ cursor: 'pointer' }} />
-                    <Paperclip size={16} color="#616061" style={{ cursor: 'pointer' }} />
+                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)', display: 'flex', gap: '12px' }}>
+                    <span><b>Enter</b> để gửi</span>
+                    <span><b>Shift + Enter</b> xuống dòng</span>
+                  </div>
+                  <div style={{ fontSize: '11px', color: messageInput.length > 4000 ? '#ef4444' : 'var(--text-secondary)', fontWeight: '600' }}>
+                    {messageInput.length > 0 && `${messageInput.length}/4096`}
                   </div>
                 </div>
               </form>
@@ -1974,8 +2292,7 @@ export default function UserHomePage() {
               </div>
             </>
           </div>
-        )
-        }
+        )}
 
         {/* New Chat Modal */}
         {
@@ -2289,6 +2606,180 @@ export default function UserHomePage() {
             </Modal>
           )
         }
+
+        {showPollModal && (
+          <PollModal
+            onClose={() => setShowPollModal(false)}
+            onCreate={async (pollData) => {
+              try {
+                const content = `📊 Bình chọn: ${pollData.question}\n\n${pollData.options.map((o, i) => `${i + 1}. ${o}`).join('\n')}`;
+                // Using a generic message for now, in a real app this would be a structured 'poll' type
+                await handleSendMessage(null, content);
+                setShowPollModal(false);
+              } catch (err) {
+                alert('Không thể tạo bình chọn: ' + err.message);
+              }
+            }}
+          />
+        )}
+
+        {/* File Version History Modal */}
+        {showVersionModal && (
+          <Modal title="Version History" onClose={() => setShowVersionModal(false)}>
+            <div style={{ padding: '20px', minWidth: '400px' }}>
+              {loadingVersions ? (
+                <div style={{ textAlign: 'center', padding: '30px', color: 'var(--text-secondary)' }}>Loading history...</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                  <div style={{ padding: '15px', background: 'var(--bg-primary-soft)', borderRadius: '12px', border: '1px solid var(--border-primary-soft)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <div style={{ fontSize: '13px', fontWeight: '800', color: 'var(--primary)', textTransform: 'uppercase' }}>Current Version</div>
+                        <div style={{ fontSize: '16px', fontWeight: '700', color: 'var(--text-main)', marginTop: '4px' }}>v{selectedFileVersionData?.current?.versionNumber}</div>
+                        <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>Latest: {new Date(selectedFileVersionData?.current?.updatedAt).toLocaleString()}</div>
+                      </div>
+                      <div style={{ fontSize: '12px', background: 'var(--green-color)', color: '#fff', padding: '4px 8px', borderRadius: '4px', fontWeight: '800' }}>LATEST</div>
+                    </div>
+                  </div>
+
+                  <div style={{ marginTop: '10px' }}>
+                    <div style={{ fontSize: '11px', fontWeight: '900', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '10px' }}>Historical Snapshots</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '300px', overflowY: 'auto', paddingRight: '5px' }}>
+                      {selectedFileVersionData?.versions?.length > 0 ? (
+                        selectedFileVersionData.versions.map(v => (
+                          <div key={v.id} style={{ padding: '12px', background: 'var(--bg-light)', borderRadius: '10px', border: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                              <div style={{ fontSize: '14px', fontWeight: '700', color: 'var(--text-main)' }}>Version {v.versionNumber}</div>
+                              <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>{new Date(v.createdAt).toLocaleString()}</div>
+                              {v.changesDescription && (
+                                <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontStyle: 'italic', marginTop: '4px' }}>"{v.changesDescription}"</div>
+                              )}
+                            </div>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                              <button
+                                onClick={() => handleRestoreVersion(selectedFileVersionData.current.id, v.versionNumber)}
+                                style={{ background: 'var(--bg-primary-soft)', border: 'none', color: 'var(--primary)', padding: '6px 12px', borderRadius: '6px', fontSize: '11px', fontWeight: '700', cursor: 'pointer' }}
+                              >
+                                Restore
+                              </button>
+                              <button
+                                onClick={() => handleDeleteVersion(selectedFileVersionData.current.id, v.versionNumber)}
+                                style={{ background: 'var(--bg-red-soft)', border: 'none', color: 'var(--red-color)', padding: '6px', borderRadius: '6px', cursor: 'pointer' }}
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)', fontSize: '13px' }}>No previous versions found</div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </Modal>
+        )}
+
+        {/* File Sharing Management Modal */}
+        {showShareModal && (
+          <Modal title={`Sharing: ${sharingFile?.name}`} onClose={() => setShowShareModal(false)}>
+            <div style={{ padding: '20px', minWidth: '450px' }}>
+              <div style={{ marginBottom: '20px' }}>
+                <div style={{ fontSize: '11px', fontWeight: '900', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '10px' }}>Add New Collaborator</div>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <select
+                    value={shareTargetUserId}
+                    onChange={(e) => setShareTargetUserId(e.target.value)}
+                    style={{
+                      flex: 1,
+                      background: 'var(--bg-light)',
+                      border: '1px solid var(--border-color)',
+                      color: 'var(--text-main)',
+                      padding: '10px',
+                      borderRadius: '8px',
+                      outline: 'none'
+                    }}
+                  >
+                    <option value="">Select a user...</option>
+                    {availableUsers
+                      .filter(u => u.id !== user?.id)
+                      .map(u => (
+                        <option key={u.id} value={u.id}>{u.firstName} {u.lastName} ({u.email})</option>
+                      ))}
+                  </select>
+                  <select
+                    value={sharePermission}
+                    onChange={(e) => setSharePermission(e.target.value)}
+                    style={{
+                      background: 'var(--bg-light)',
+                      border: '1px solid var(--border-color)',
+                      color: 'var(--text-main)',
+                      padding: '10px',
+                      borderRadius: '8px',
+                      outline: 'none'
+                    }}
+                  >
+                    <option value="view">View Only</option>
+                    <option value="edit">Editor</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                  <button
+                    onClick={handleShareFile}
+                    disabled={!shareTargetUserId}
+                    style={{
+                      background: 'var(--primary)',
+                      color: '#fff',
+                      border: 'none',
+                      padding: '0 20px',
+                      borderRadius: '8px',
+                      fontWeight: '600',
+                      cursor: shareTargetUserId ? 'pointer' : 'not-allowed'
+                    }}
+                  >
+                    Share
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <div style={{ fontSize: '11px', fontWeight: '900', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '10px' }}>Current Access</div>
+                <div style={{ maxHeight: '250px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {sharesLoading ? (
+                    <div style={{ textAlign: 'center', padding: '20px', color: 'var(--text-secondary)' }}>Loading...</div>
+                  ) : currentShares.length > 0 ? (
+                    currentShares.map(s => {
+                      const u = availableUsers.find(au => au.id === s.sharedWithId);
+                      return (
+                        <div key={s.id} style={{ padding: '12px', background: 'var(--bg-light)', borderRadius: '10px', border: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'var(--bg-selected)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: '800', color: '#fff' }}>
+                              {u?.firstName?.charAt(0) || '?'}
+                            </div>
+                            <div>
+                              <div style={{ fontSize: '14px', fontWeight: '700', color: 'var(--text-main)' }}>{u ? `${u.firstName} ${u.lastName}` : 'Unknown User'}</div>
+                              <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Permission: <span style={{ color: 'var(--primary)', fontWeight: '800', textTransform: 'uppercase' }}>{s.permissionLevel}</span></div>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => handleRevokeShare(s.id)}
+                            style={{ background: 'var(--bg-red-soft)', border: 'none', color: 'var(--red-color)', padding: '6px', borderRadius: '6px', cursor: 'pointer' }}
+                            title="Revoke access"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)', fontSize: '13px' }}>This file hasn't been shared yet.</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </Modal>
+        )}
 
         {/* Calling Modal (Premium & Dynamic) */}
         {
@@ -2714,6 +3205,68 @@ export default function UserHomePage() {
             />
           )
         }
+
+        {/* Vault Unlock Modal */}
+        {showVaultUnlockModal && (
+          <Modal title="Secure Vault Access" onClose={() => setShowVaultUnlockModal(false)}>
+            <div style={{ padding: '30px', textAlign: 'center' }}>
+              <div style={{
+                width: '70px', height: '70px', borderRadius: '20px',
+                background: 'var(--bg-primary-soft)', display: 'flex',
+                alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px'
+              }}>
+                <Lock size={30} color="var(--primary)" />
+              </div>
+              <h3 style={{ fontSize: '20px', fontWeight: '900', color: 'var(--text-main)', margin: '0 0 10px 0', textTransform: 'uppercase' }}>Identity Verification</h3>
+              <p style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '25px', fontWeight: '500' }}>
+                Please confirm your password to access the end-to-end encrypted storage vault.
+              </p>
+
+              <form onSubmit={async (e) => {
+                e.preventDefault();
+                setUnlockLoading(true);
+                try {
+                  await api.verifyPassword(unlockPassword);
+                  setIsVaultLocked(false);
+                  setShowVaultUnlockModal(false);
+                  setActiveTab('vault');
+                  setUnlockPassword('');
+                } catch (err) {
+                  alert('Verification failed. System access denied.');
+                  setUnlockPassword('');
+                } finally {
+                  setUnlockLoading(false);
+                }
+              }}>
+                <input
+                  type="password"
+                  autoFocus
+                  placeholder="Enter your password"
+                  value={unlockPassword}
+                  onChange={(e) => setUnlockPassword(e.target.value)}
+                  style={{
+                    width: '100%', padding: '15px', borderRadius: '12px',
+                    background: 'var(--bg-panel)', border: '1px solid var(--border-color)',
+                    color: 'var(--text-main)', fontSize: '15px', outline: 'none',
+                    textAlign: 'center', marginBottom: '20px', fontWeight: '700'
+                  }}
+                />
+                <button
+                  type="submit"
+                  disabled={unlockLoading || !unlockPassword}
+                  style={{
+                    width: '100%', padding: '15px', borderRadius: '12px',
+                    background: 'var(--primary)', color: '#fff', border: 'none',
+                    fontWeight: '900', cursor: 'pointer', transition: 'all 0.2s',
+                    opacity: unlockPassword ? 1 : 0.5
+                  }}
+                >
+                  {unlockLoading ? 'VERIFYING...' : 'UNLOCK VAULT'}
+                </button>
+              </form>
+            </div>
+          </Modal>
+        )}
 
         {/* Context Menu */}
         <ContextMenu

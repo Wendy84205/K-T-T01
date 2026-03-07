@@ -53,6 +53,9 @@ export class Message {
   @Column({ name: 'delete_reason', length: 100, nullable: true })
   deleteReason: string;
 
+  @Column({ name: 'expires_at', nullable: true })
+  expiresAt: Date;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

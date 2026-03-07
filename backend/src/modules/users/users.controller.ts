@@ -118,6 +118,7 @@ export class UsersController {
   }
 
   @Post(':id/reset-password')
+  @UseGuards(RolesGuard)
   @Roles('Admin')
   resetPassword(@Param('id') id: string) {
     return this.usersService.resetPassword(id);
@@ -135,5 +136,19 @@ export class UsersController {
   @Roles('Admin')
   globalLockdown() {
     return this.usersService.globalLockdown();
+  }
+
+  @Get(':id/sessions')
+  @UseGuards(RolesGuard)
+  @Roles('Admin', 'Manager')
+  async getUserSessions(@Param('id') userId: string) {
+    return this.usersService.getUserSessions(userId);
+  }
+
+  @Delete('sessions/:sessionId/admin')
+  @UseGuards(RolesGuard)
+  @Roles('Admin', 'Manager')
+  async adminRevokeSession(@Param('sessionId') sessionId: string) {
+    return this.usersService.revokeSessionById(sessionId);
   }
 }
