@@ -14,8 +14,11 @@ import { ChatService } from './chat.service';
 
 @WebSocketGateway({
     cors: {
-        origin: '*',
+        origin: true,
+        credentials: true,
     },
+    transports: ['polling', 'websocket'],
+    allowUpgrades: true,
 })
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @WebSocketServer()
@@ -138,10 +141,14 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         });
         this.activeCalls.set(data.conversationId, log.id);
 
+        console.log(`[ChatGateway] Call invite received from ${userId} for conversation ${data.conversationId}`);
+
         // Broadcast to all members in their private user rooms
         const members = await this.chatService.getConversationMembers(data.conversationId);
+        console.log(`[ChatGateway] Conversation members:`, members.map(m => m.userId));
         for (const member of members) {
             if (member.userId !== userId) {
+                console.log(`[ChatGateway] Emitting 'call-made' to user room user_${member.userId}`);
                 this.server.to(`user_${member.userId}`).emit('call-made', {
                     offer: data.offer,
                     conversationId: data.conversationId,

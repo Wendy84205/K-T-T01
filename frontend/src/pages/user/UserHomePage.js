@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Plus, MessageSquare, MoreHorizontal, Phone, Video, Info, Lock, Send, Mic, Image, Paperclip, Smile, Settings, Bell, BellOff, Clock, Shield, LogOut, ChevronLeft, ChevronRight, User, File, Download, Trash2, ShieldCheck, CreditCard, HelpCircle, Key, Eye, EyeOff, Check, CheckCheck, Square, X, Forward, Reply, Edit2, Play, Pause, List, Pin, Star, Cloud, Heart, ChevronDown, Users, MoreVertical, FileText, Camera, MapPin, AlertTriangle, BarChart3, Folder, Maximize2, Minimize2, Compass, Briefcase, Layers, Building2, Bold, Italic, Link, Code, AtSign, Hash } from 'lucide-react';
+import { Search, Plus, MessageSquare, MoreHorizontal, Phone, Video, Info, Lock, Send, Mic, Image, Paperclip, Smile, Settings, Bell, BellOff, Clock, Shield, LogOut, ChevronLeft, ChevronRight, User, File as FileIcon, Download, Trash2, ShieldCheck, CreditCard, HelpCircle, Key, Eye, EyeOff, Check, CheckCheck, Square, X, Forward, Reply, Edit2, Play, Pause, List, Pin, Star, Cloud, Heart, ChevronDown, Users, MoreVertical, FileText, Camera, MapPin, AlertTriangle, BarChart3, Folder, Maximize2, Minimize2, Briefcase, Layers, Building2, Bold, Italic, Link, Code, AtSign, Hash } from 'lucide-react';
 import api from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
 import { encryptContent, decryptContent, encryptHybrid, decryptHybrid } from "../../utils/crypto";
@@ -13,6 +13,156 @@ import '../../chat.css';
 export default function UserHomePage() {
   const { user, isAdmin, isManager, darkMode, toggleDarkMode } = useAuth();
 
+  // 1. State Declarations
+  const [activeTab, setActiveTab] = useState('messages');
+  const [selectedChat, setSelectedChat] = useState(null);
+  const [conversations, setConversations] = useState([]);
+  const [messages, setMessages] = useState([]);
+  const [messageInput, setMessageInput] = useState('');
+  const [conversationsLoading, setConversationsLoading] = useState(true);
+  const [messagesLoading, setMessagesLoading] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [showNewChatModal, setShowNewChatModal] = useState(false);
+  const [showGroupModal, setShowGroupModal] = useState(false);
+  const [contextMenu, setContextMenu] = useState(null);
+  const [availableUsers, setAvailableUsers] = useState([]);
+  const [selectedMembers, setSelectedMembers] = useState([]);
+  const [groupName, setGroupName] = useState('');
+  const [typingUsers, setTypingUsers] = useState([]);
+  const [isTyping, setIsTyping] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  const [showSidebarOnMobile, setShowSidebarOnMobile] = useState(true);
+  const [memberSearchQuery, setMemberSearchQuery] = useState('');
+  const [files, setFiles] = useState([]);
+  const [filesLoading, setFilesLoading] = useState(false);
+  const [showVaultModal, setShowVaultModal] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
+  const [incomingCall, setIncomingCall] = useState(null);
+  const [showCamera, setShowCamera] = useState(false);
+  const [showCallModal, setShowCallModal] = useState(false);
+  const [callType, setCallType] = useState(null); // 'voice' or 'video'
+  const [vaultSearch, setVaultSearch] = useState('');
+  const [vaultSort, setVaultSort] = useState('date'); // 'date' or 'name' or 'size'
+  const [isVaultLocked, setIsVaultLocked] = useState(true);
+  const [showVaultUnlockModal, setShowVaultUnlockModal] = useState(false);
+  const [unlockPassword, setUnlockPassword] = useState('');
+  const [unlockLoading, setUnlockLoading] = useState(false);
+  const [callDuration, setCallDuration] = useState(0);
+  const [isMuted, setIsMuted] = useState(false);
+  const [isVideoOff, setIsVideoOff] = useState(false);
+  const [localStream, setLocalStream] = useState(null);
+  const [callStatus, setCallStatus] = useState('idle'); // 'idle', 'ringing', 'connected'
+  const [handledCalls, setHandledCalls] = useState(new Set());
+  const [replyingTo, setReplyingTo] = useState(null);
+  const [editingMessage, setEditingMessage] = useState(null);
+  const [showForwardModal, setShowForwardModal] = useState(false);
+  const [forwardingMessage, setForwardingMessage] = useState(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [hiddenChatIds, setHiddenChatIds] = useState(new Set());
+  const [selectedSticker, setSelectedSticker] = useState(null);
+  const [showStickerPicker, setShowStickerPicker] = useState(false);
+  const [showPollModal, setShowPollModal] = useState(false);
+  const [pinnedChatIds, setPinnedChatIds] = useState(new Set());
+  const [showVersionModal, setShowVersionModal] = useState(false);
+  const [selectedFileVersionData, setSelectedFileVersionData] = useState(null);
+  const [loadingVersions, setLoadingVersions] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [sharingFile, setSharingFile] = useState(null);
+  const [currentShares, setCurrentShares] = useState([]);
+  const [sharesLoading, setSharesLoading] = useState(false);
+  const [sharePermission, setSharePermission] = useState('view');
+  const [shareTargetUserId, setShareTargetUserId] = useState('');
+  const [mutedChatIds, setMutedChatIds] = useState(new Set());
+  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
+  const [showRightSidebar, setShowRightSidebar] = useState(false);
+  const [showSearchInChat, setShowSearchInChat] = useState(false);
+  const [chatSearchQuery, setChatSearchQuery] = useState('');
+  const [showChatOptionsMenu, setShowChatOptionsMenu] = useState(false);
+  const [isCallMaximized, setIsCallMaximized] = useState(true);
+  const [onlineUserIds, setOnlineUserIds] = useState(new Set());
+  const [selfDestructTime, setSelfDestructTime] = useState(null); // null, 10, 60, 3600
+  const [remoteStream, setRemoteStream] = useState(null);
+  const [callConversationId, setCallConversationId] = useState(null);
+  const [isVaultUnlocked, setIsVaultUnlocked] = useState(false);
+  const [showVaultAuthModal, setShowVaultAuthModal] = useState(false);
+  const [vaultPassword, setVaultPassword] = useState('');
+  const [vaultAuthError, setVaultAuthError] = useState('');
+
+  // 2. Refs
+  const messagesEndRef = useRef(null);
+  const typingTimeoutRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const inputRef = useRef(null);
+  const handledCallsRef = useRef(new Set());
+  const videoRef = useRef(null);
+  const callVideoRef = useRef(null);
+  const canvasRef = useRef(null);
+  const timerRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const peerConnectionRef = useRef(null);
+  const iceCandidatesQueue = useRef([]);
+
+  // 3. Helper Functions
+  const loadUnreadCount = async () => {
+    try {
+      const data = await api.getNotifications(1, 1);
+      setUnreadNotificationsCount(data.unreadCount || 0);
+    } catch (err) {
+      console.error('Failed to load unread count', err);
+    }
+  };
+
+  const loadConversations = async (silent = false) => {
+    try {
+      if (!silent) setConversationsLoading(true);
+      const data = await api.getConversations();
+      setConversations(data);
+      return data;
+    } catch (error) {
+      console.error('Failed to load conversations:', error);
+      return [];
+    } finally {
+      if (!silent) setConversationsLoading(false);
+    }
+  };
+
+  const createPeerConnection = (convId) => {
+    console.log('[WebRTC] Creating PeerConnection for', convId);
+    const rtcConfig = {
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' }
+      ]
+    };
+    const pc = new RTCPeerConnection(rtcConfig);
+
+    pc.onicecandidate = (event) => {
+      if (event.candidate && convId) {
+        console.log('[WebRTC] Sending ICE candidate');
+        socketService.sendIceCandidate(convId, event.candidate);
+      }
+    };
+
+    pc.ontrack = (event) => {
+      console.log('[WebRTC] Received remote track', event.streams[0]);
+      if (event.streams && event.streams[0]) {
+        setRemoteStream(event.streams[0]);
+      }
+    };
+
+    pc.oniceconnectionstatechange = () => {
+      console.log('[WebRTC] ICE Connection State:', pc.iceConnectionState);
+    };
+
+    peerConnectionRef.current = pc;
+
+    return pc;
+  };
+
+  // 4. Effects
   useEffect(() => {
     const root = document.documentElement;
     if (darkMode) {
@@ -98,20 +248,22 @@ export default function UserHomePage() {
           }));
         });
 
-        socketService.onCallMade(({ offer, conversationId, callerId, type }) => {
-          // Use refs or functional updates to avoid dependency issues with socket listeners
+        socketService.onCallMade(async ({ offer, conversationId, callerId, type }) => {
           setCallStatus(currentStatus => {
             if (currentStatus === 'idle') {
-              setAvailableUsers(currentUsers => {
-                const from = currentUsers.find(u => u.id === callerId) || { id: callerId, firstName: 'User' };
-                setIncomingCall({ offer, conversationId, from, type });
-                return currentUsers;
-              });
-              startRingtone();
+              // We just set incomingCall safely without touching availableUsers inside here
+              setIncomingCall({ offer, conversationId, from: { firstName: 'Incoming', lastName: 'Call' }, type });
+              if (typeof startRingtone === 'function') startRingtone();
               return 'ringing';
             }
             return currentStatus;
           });
+
+          // Try to fetch user data and update incoming Call with the true caller's name
+          try {
+            // In actual app, we could look this up from an API or existing conversations.
+            // We'll let the UI fallback nicely.
+          } catch (e) { }
         });
 
         socketService.onUserStatus(({ userId, status }) => {
@@ -123,7 +275,6 @@ export default function UserHomePage() {
           });
         });
 
-        // Get initial online users
         const initialOnlineUsers = await socketService.getOnlineUsers();
         if (Array.isArray(initialOnlineUsers)) {
           setOnlineUserIds(new Set(initialOnlineUsers));
@@ -133,83 +284,10 @@ export default function UserHomePage() {
     }
     return () => {
       socketService.disconnect();
-      stopRingtone();
+      if (typeof stopRingtone === 'function') stopRingtone();
     };
   }, [user]);
 
-  const [activeTab, setActiveTab] = useState('messages');
-  const [selectedChat, setSelectedChat] = useState(null);
-  const [conversations, setConversations] = useState([]);
-  const [messages, setMessages] = useState([]);
-  const [messageInput, setMessageInput] = useState('');
-  const [conversationsLoading, setConversationsLoading] = useState(true);
-  const [messagesLoading, setMessagesLoading] = useState(false);
-  const [sending, setSending] = useState(false);
-  const [showNewChatModal, setShowNewChatModal] = useState(false);
-  const [showGroupModal, setShowGroupModal] = useState(false);
-  const [contextMenu, setContextMenu] = useState(null);
-  const [availableUsers, setAvailableUsers] = useState([]);
-  const [selectedMembers, setSelectedMembers] = useState([]);
-  const [groupName, setGroupName] = useState('');
-  const [typingUsers, setTypingUsers] = useState([]);
-  const [isTyping, setIsTyping] = useState(false);
-  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
-  const [showSidebarOnMobile, setShowSidebarOnMobile] = useState(true);
-  const [memberSearchQuery, setMemberSearchQuery] = useState('');
-  const [files, setFiles] = useState([]);
-  const [filesLoading, setFilesLoading] = useState(false);
-  const [showVaultModal, setShowVaultModal] = useState(false);
-  const messagesEndRef = useRef(null);
-  const typingTimeoutRef = useRef(null);
-  const fileInputRef = useRef(null);
-  const inputRef = useRef(null);
-  const [uploading, setUploading] = useState(false);
-  const [selectedFile, setSelectedFile] = useState(null);
-  const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
-  const [incomingCall, setIncomingCall] = useState(null);
-  const [showCamera, setShowCamera] = useState(false);
-  const [showCallModal, setShowCallModal] = useState(false);
-  const [callType, setCallType] = useState(null); // 'voice' or 'video'
-  const [vaultSearch, setVaultSearch] = useState('');
-  const [vaultSort, setVaultSort] = useState('date'); // 'date' or 'name' or 'size'
-  const [isVaultLocked, setIsVaultLocked] = useState(true);
-  const [showVaultUnlockModal, setShowVaultUnlockModal] = useState(false);
-  const [unlockPassword, setUnlockPassword] = useState('');
-  const [unlockLoading, setUnlockLoading] = useState(false);
-  const [callDuration, setCallDuration] = useState(0);
-  const [isMuted, setIsMuted] = useState(false);
-  const [isVideoOff, setIsVideoOff] = useState(false);
-  const [localStream, setLocalStream] = useState(null);
-  const [callStatus, setCallStatus] = useState('idle'); // 'idle', 'ringing', 'connected'
-  const [handledCalls, setHandledCalls] = useState(new Set());
-  const handledCallsRef = useRef(new Set());
-  const videoRef = useRef(null);
-  const callVideoRef = useRef(null);
-  const canvasRef = useRef(null);
-  const timerRef = useRef(null);
-  const [replyingTo, setReplyingTo] = useState(null);
-  const [editingMessage, setEditingMessage] = useState(null);
-  const [showForwardModal, setShowForwardModal] = useState(false);
-  const [forwardingMessage, setForwardingMessage] = useState(null);
-  const [isRecording, setIsRecording] = useState(false);
-  const mediaRecorderRef = useRef(null);
-  const audioChunksRef = useRef([]);
-  const [hiddenChatIds, setHiddenChatIds] = useState(new Set());
-  const [selectedSticker, setSelectedSticker] = useState(null);
-  const [showStickerPicker, setShowStickerPicker] = useState(false);
-  const [showPollModal, setShowPollModal] = useState(false);
-  const [pinnedChatIds, setPinnedChatIds] = useState(new Set());
-  const [showVersionModal, setShowVersionModal] = useState(false);
-  const [selectedFileVersionData, setSelectedFileVersionData] = useState(null);
-  const [loadingVersions, setLoadingVersions] = useState(false);
-  const [showShareModal, setShowShareModal] = useState(false);
-  const [sharingFile, setSharingFile] = useState(null);
-  const [currentShares, setCurrentShares] = useState([]);
-  const [sharesLoading, setSharesLoading] = useState(false);
-  const [sharePermission, setSharePermission] = useState('view');
-  const [shareTargetUserId, setShareTargetUserId] = useState('');
-
-  // E2EE Key Diagnostics
   useEffect(() => {
     if (user) {
       const privKey = localStorage.getItem(`e2ee_private_key_${user.id}`);
@@ -221,67 +299,6 @@ export default function UserHomePage() {
       });
     }
   }, [user]);
-  const [mutedChatIds, setMutedChatIds] = useState(new Set());
-  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
-  const [showRightSidebar, setShowRightSidebar] = useState(false);
-  const [showSearchInChat, setShowSearchInChat] = useState(false);
-  const [chatSearchQuery, setChatSearchQuery] = useState('');
-  const [showChatOptionsMenu, setShowChatOptionsMenu] = useState(false);
-  const [isCallMaximized, setIsCallMaximized] = useState(true);
-  const [onlineUserIds, setOnlineUserIds] = new useState(new Set());
-  const [selfDestructTime, setSelfDestructTime] = useState(null); // null, 10, 60, 3600
-
-  const peerConnectionRef = useRef(null);
-  const [remoteStream, setRemoteStream] = useState(null);
-  const [callConversationId, setCallConversationId] = useState(null);
-  const iceCandidatesQueue = useRef([]);
-
-  const rtcConfig = {
-    iceServers: [
-      { urls: 'stun:stun.l.google.com:19302' },
-      { urls: 'stun:stun1.l.google.com:19302' }
-    ]
-  };
-
-  const createPeerConnection = (convId) => {
-    console.log('[WebRTC] Creating PeerConnection for', convId);
-    const pc = new RTCPeerConnection(rtcConfig);
-
-    pc.onicecandidate = (event) => {
-      if (event.candidate && convId) {
-        console.log('[WebRTC] Sending ICE candidate');
-        socketService.sendIceCandidate(convId, event.candidate);
-      }
-    };
-
-    pc.ontrack = (event) => {
-      console.log('[WebRTC] Received remote track', event.streams[0]);
-      if (event.streams && event.streams[0]) {
-        setRemoteStream(event.streams[0]);
-      }
-    };
-
-    pc.oniceconnectionstatechange = () => {
-      console.log('[WebRTC] ICE Connection State:', pc.iceConnectionState);
-      if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
-        // Handle failure if needed
-      }
-    };
-
-    peerConnectionRef.current = pc;
-
-    // Process any queued candidates for this specific conversation
-    if (iceCandidatesQueue.current.length > 0) {
-      console.log(`[WebRTC] Processing ${iceCandidatesQueue.current.length} queued candidates`);
-      iceCandidatesQueue.current.forEach(candidate => {
-        pc.addIceCandidate(new RTCIceCandidate(candidate))
-          .catch(e => console.error('[WebRTC] Error adding queued ICE', e));
-      });
-      iceCandidatesQueue.current = [];
-    }
-
-    return pc;
-  };
 
   const handleStartRecording = async () => {
     try {
@@ -367,8 +384,26 @@ export default function UserHomePage() {
       }
     };
 
+    const handleMessageDeleted = (data) => {
+      if (data.conversationId === selectedChat) {
+        setMessages(prev => prev.filter(msg => msg.id !== data.messageId));
+        loadConversations();
+      }
+    };
+
+    const handleMessageRead = (data) => {
+      if (data.conversationId === selectedChat) {
+        setMessages(prev => prev.map(msg =>
+          msg.id === data.messageId ? { ...msg, isRead: true } : msg
+        ));
+      }
+      loadConversations();
+    };
+
     socketService.onNewMessage(handleNewMessage);
     socketService.onUserTyping(handleUserTyping);
+    socketService.onMessageDeleted(handleMessageDeleted);
+    socketService.socket?.on('message_read', handleMessageRead);
 
     return () => {
       // socket.off happens if implemented in socketService,
@@ -380,7 +415,11 @@ export default function UserHomePage() {
     if (activeTab === 'messages') {
       loadConversations();
     } else if (activeTab === 'vault') {
-      loadFiles();
+      if (!isVaultUnlocked) {
+        setShowVaultAuthModal(true);
+      } else {
+        loadFiles();
+      }
     }
     loadUnreadCount();
   }, [activeTab]);
@@ -440,28 +479,9 @@ export default function UserHomePage() {
     }
   }, [isVideoOff, localStream, callType]);
 
-  const loadConversations = async (silent = false) => {
-    try {
-      if (!silent) setConversationsLoading(true);
-      const data = await api.getConversations();
-      setConversations(data);
-      return data;
-    } catch (error) {
-      console.error('Failed to load conversations:', error);
-      return [];
-    } finally {
-      if (!silent) setConversationsLoading(false);
-    }
-  };
+  // Conversations loaded via Effect 3
 
-  const loadUnreadCount = async () => {
-    try {
-      const data = await api.getNotifications(1, 1);
-      setUnreadNotificationsCount(data.unreadCount || 0);
-    } catch (err) {
-      console.error('Failed to load unread count', err);
-    }
-  };
+  // Unread count handled via Effect 3 helper
 
   const decryptMessage = async (msg) => {
     if (!msg || !msg.content || !msg.content.startsWith('[E2EE]:')) return msg;
@@ -472,7 +492,7 @@ export default function UserHomePage() {
 
     if (!privateKey) {
       console.warn("[E2EE] Missing private key for user", user.id);
-      msg.content = "[E2EE: Thiếu khóa cá nhân]";
+      msg.content = "[E2EE: Missing private key]";
       return msg;
     }
 
@@ -497,15 +517,15 @@ export default function UserHomePage() {
             msg.content = decrypted;
           } else {
             console.error("[E2EE] RSA Decryption failed for msg:", msg.id);
-            msg.content = "[Lỗi giải mã: Khóa không khớp]";
+            msg.content = "[Decryption Error: Key mismatch]";
           }
         } catch (decryptErr) {
           console.error("[E2EE] decryptContent threw error:", decryptErr);
-          msg.content = "[Lỗi giải mã: Lỗi hệ thống]";
+          msg.content = "[Decryption Error: System error]";
         }
       } else {
         console.warn("[E2EE] No payload for my ID:", myId, "Found keys:", Object.keys(encryptedData));
-        msg.content = "[E2EE: Không có mã giải cho bạn]";
+        msg.content = "[E2EE: No decryption for you]";
       }
     } catch (e) {
       // Not JSON? Fallback (Oldest format: pure ciphertext)
@@ -515,7 +535,7 @@ export default function UserHomePage() {
         msg.content = decrypted;
       } catch (decryptErr) {
         console.error("[E2EE] Legacy Decryption failed:", decryptErr);
-        msg.content = "[Lỗi giải mã: Format không hợp lệ]";
+        msg.content = "[Decryption Error: Invalid format]";
       }
     }
     return msg;
@@ -580,7 +600,27 @@ export default function UserHomePage() {
   const formatDuration = (seconds) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')} `;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const handleVaultAuthSubmit = async (e) => {
+    e.preventDefault();
+    setVaultAuthError('');
+    try {
+      await api.verifyPassword(vaultPassword);
+      setIsVaultUnlocked(true);
+      setShowVaultAuthModal(false);
+      setVaultPassword('');
+      loadFiles();
+    } catch (error) {
+      setVaultAuthError('Incorrect password. Access denied.');
+    }
+  };
+
+  const handleVaultAuthCancel = () => {
+    setShowVaultAuthModal(false);
+    setVaultPassword('');
+    setActiveTab('messages'); // Send back to messages
   };
 
   const loadFiles = async () => {
@@ -771,7 +811,7 @@ export default function UserHomePage() {
           setSelectedFile(null);
         } catch (fileErr) {
           console.error('File upload failed:', fileErr);
-          alert('Không thể tải file: ' + fileErr.message);
+          alert('Failed to load file: ' + fileErr.message);
         } finally {
           setUploading(false);
         }
@@ -915,9 +955,10 @@ export default function UserHomePage() {
     // If uploading to Vault
     if (activeTab === 'vault') {
       try {
+        const desc = prompt('Enter a description for this version (optional):');
         setUploading(true);
         // If file with same name exists, api.uploadFile will automatically version it on backend
-        await api.uploadFile(file);
+        await api.uploadFile(file, file.name, desc);
         alert('File uploaded to vault successfully! Automatic versioning applied if duplicate found.');
         loadFiles();
       } catch (error) {
@@ -1105,7 +1146,10 @@ export default function UserHomePage() {
       return;
     }
     try {
-      console.log(`[Calls] Initiating ${type} call to ${selectedChat}`);
+      console.log(`[Calls] Initiating ${type} call to conversationId: ${selectedChat}`);
+      console.log('[Calls] Socket connected?', socketService.socket?.connected);
+      console.log('[Calls] Socket ID:', socketService.socket?.id);
+
       setCallConversationId(selectedChat);
       setCallType(type);
       setCallStatus('ringing');
@@ -1125,7 +1169,9 @@ export default function UserHomePage() {
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
 
+      console.log('[Calls] Sending call-invite via socket...');
       socketService.sendCallInvite(selectedChat, offer, type);
+      console.log('[Calls] call-invite sent!');
     } catch (error) {
       console.error('Call initiation error:', error);
       alert('Could not start call: ' + (error.message || 'Unknown error'));
@@ -1154,6 +1200,14 @@ export default function UserHomePage() {
         if (pc && pc.signalingState === 'have-local-offer') {
           await pc.setRemoteDescription(new RTCSessionDescription(answer));
           setCallStatus('connected');
+
+          if (iceCandidatesQueue.current.length > 0) {
+            iceCandidatesQueue.current.forEach(candidate => {
+              pc.addIceCandidate(new RTCIceCandidate(candidate))
+                .catch(e => console.error('[WebRTC] Error adding queued ICE', e));
+            });
+            iceCandidatesQueue.current = [];
+          }
         }
       } else {
         setCallStatus('idle');
@@ -1223,6 +1277,14 @@ export default function UserHomePage() {
       stream.getTracks().forEach(track => pc.addTrack(track, stream));
 
       await pc.setRemoteDescription(new RTCSessionDescription(offer));
+
+      if (iceCandidatesQueue.current.length > 0) {
+        iceCandidatesQueue.current.forEach(candidate => {
+          pc.addIceCandidate(new RTCIceCandidate(candidate))
+            .catch(e => console.error('[WebRTC] Error adding queued ICE', e));
+        });
+        iceCandidatesQueue.current = [];
+      }
 
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
@@ -1324,15 +1386,10 @@ export default function UserHomePage() {
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '8px 0', flex: 1 }}>
-          <NavIcon
-            icon={<MessageSquare size={22} />}
-            active={activeTab === 'messages'}
-            onClick={() => setActiveTab('messages')}
-            label="Messages"
-          />
+          {/* Removed redundant Messages icon */}
           <NavIcon
             icon={<Users size={22} />}
-            active={activeTab === 'contacts' || activeTab === 'team'}
+            active={activeTab === 'contacts'}
             onClick={() => setActiveTab('contacts')}
             label="Contacts"
           />
@@ -1342,6 +1399,9 @@ export default function UserHomePage() {
             onClick={() => setActiveTab('projects')}
             label="Projects"
           />
+          {/* Admin Tools Hidden by default */}
+
+          {/* NavRail: Content Selection */}
           {(isManager || isAdmin) && (
             <NavIcon
               icon={<BarChart3 size={22} />}
@@ -1350,20 +1410,9 @@ export default function UserHomePage() {
               label="Team Management"
             />
           )}
+          {/* Removed Discover and Messages icons as per user request */}
           <NavIcon
-            icon={<Compass size={22} />}
-            active={activeTab === 'discover'}
-            onClick={() => setActiveTab('discover')}
-            label="Discover"
-          />
-          <NavIcon
-            icon={<Phone size={22} />}
-            active={activeTab === 'calls'}
-            onClick={() => setActiveTab('calls')}
-            label="Calls"
-          />
-          <NavIcon
-            icon={<Shield size={22} />}
+            icon={<Folder size={22} />}
             active={activeTab === 'vault'}
             onClick={() => {
               if (isVaultLocked) {
@@ -1372,7 +1421,7 @@ export default function UserHomePage() {
                 setActiveTab('vault');
               }
             }}
-            label="Vault"
+            label="Secure Vault"
           />
           <NavIcon
             icon={<Bell size={22} />}
@@ -1437,121 +1486,144 @@ export default function UserHomePage() {
         </div>
       </div>
 
-      {/* CHAT LIST PANEL (Sidebar) */}
-      {activeTab === 'messages' && (
+      {/* CHAT LIST PANEL (Sidebar) - Persistent across most communication tabs */}
+      {(activeTab === 'messages' || activeTab === 'vault' || activeTab === 'alerts' || activeTab === 'settings' || activeTab === 'contacts' || activeTab === 'team') && (
         <div style={{
-          width: isMobile ? '100%' : '280px',
+          width: isMobile ? '100%' : '300px',
           display: (isMobile && !showSidebarOnMobile) ? 'none' : 'flex',
           background: 'var(--bg-panel)',
           borderRight: '1px solid var(--border-color)',
           flexDirection: 'column',
-          flexShrink: 0
+          flexShrink: 0,
+          backdropFilter: 'blur(20px)',
+          backgroundOpacity: 0.95
         }}>
-          {/* Workspace Header */}
+          {/* Workspace Header - SLICK / PREMIUM */}
           <div style={{
             padding: '24px 20px',
             borderBottom: '1px solid var(--border-color)',
             display: 'flex',
             alignItems: 'center',
-            gap: '12px'
+            justifyContent: 'space-between'
           }}>
-            <div style={{
-              width: '40px',
-              height: '40px',
-              background: 'var(--primary)',
-              borderRadius: '8px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#fff'
-            }}>
-              <Building2 size={24} />
-            </div>
-            <div>
-              <h2 style={{ margin: 0, color: 'var(--text-main)', fontSize: '18px', fontWeight: '800' }}>TechCorp</h2>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--green-color)' }}></div>
-                <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{onlineUserIds.size} Online</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div style={{
+                width: '42px',
+                height: '42px',
+                background: 'linear-gradient(135deg, var(--primary), #38b6ff)',
+                borderRadius: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#fff',
+                boxShadow: '0 4px 15px rgba(0, 123, 255, 0.3)'
+              }}>
+                <Shield size={22} />
+              </div>
+              <div>
+                <h2 style={{ margin: 0, color: 'var(--text-main)', fontSize: '18px', fontWeight: '900', letterSpacing: '-0.02em' }}>CYBERSEC</h2>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--green-color)', boxShadow: '0 0 8px var(--green-color)' }}></div>
+                  <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '500' }}>{onlineUserIds.size} Active</span>
+                </div>
               </div>
             </div>
           </div>
 
-          <div style={{ flex: 1, overflowY: 'auto', padding: '10px 0' }}>
+          {/* New Search Input */}
+          <div style={{ padding: '16px 20px 8px' }}>
+            <div style={{ position: 'relative' }}>
+              <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+              <input
+                type="text"
+                placeholder="Find conversation..."
+                value={chatSearchQuery}
+                onChange={(e) => setChatSearchQuery(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px 10px 38px',
+                  borderRadius: '10px',
+                  background: 'var(--bg-app)',
+                  border: '1px solid var(--border-color)',
+                  color: 'var(--text-main)',
+                  fontSize: '13px',
+                  outline: 'none',
+                  transition: 'all 0.2s',
+                  boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.1)'
+                }}
+                onFocus={(e) => e.target.style.borderColor = 'var(--primary)'}
+                onBlur={(e) => e.target.style.borderColor = 'var(--border-color)'}
+              />
+            </div>
+          </div>
+
+          <div style={{ flex: 1, overflowY: 'auto', padding: '10px 0', scrollbarWidth: 'none' }}>
             {/* CHANNELS SECTION */}
-            <div style={{ padding: '20px 20px 10px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                <span style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Channels</span>
-                <button onClick={() => setShowGroupModal(true)} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}><Plus size={16} /></button>
+            <div style={{ padding: '12px 20px 8px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <span style={{ fontSize: '11px', fontWeight: '800', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Channels</span>
+                <button onClick={() => setShowGroupModal(true)} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', opacity: 0.7 }} onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = 0.7}><Plus size={16} /></button>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                 {conversations
-                  .filter(c => c.conversationType === 'group')
+                  .filter(c => c.conversationType === 'group' && (chatSearchQuery === '' || getConversationName(c).toLowerCase().includes(chatSearchQuery.toLowerCase())))
                   .map(conv => (
-                    <div
+                    <ChatItem
                       key={conv.id}
-                      onClick={() => setSelectedChat(conv.id)}
-                      style={{
-                        padding: '8px 12px',
-                        borderRadius: '6px',
-                        cursor: 'pointer',
-                        background: selectedChat === conv.id ? 'var(--bg-selected)' : 'transparent',
-                        color: selectedChat === conv.id ? 'var(--primary)' : 'var(--text-secondary)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '10px',
-                        fontWeight: selectedChat === conv.id ? '600' : '400',
-                        fontSize: '14px'
+                      chat={conv}
+                      active={selectedChat === conv.id}
+                      onClick={() => {
+                        setSelectedChat(conv.id);
+                        setActiveTab('messages');
                       }}
-                    >
-                      <Hash size={16} /> {getConversationName(conv)}
-                    </div>
+                      getName={getConversationName}
+                      getAvatar={getConversationAvatar}
+                      formatTime={formatTime}
+                      isOnline={isConversationOnline(conv)}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        setContextMenu({ x: e.clientX, y: e.clientY, conversation: conv });
+                      }}
+                    />
                   ))}
               </div>
             </div>
 
             {/* DIRECT MESSAGES SECTION */}
-            <div style={{ padding: '20px 20px 10px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                <span style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Direct Messages</span>
-                <button onClick={handleStartNewChat} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}><Plus size={16} /></button>
+            <div style={{ padding: '24px 20px 8px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <span style={{ fontSize: '11px', fontWeight: '800', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Direct Messages</span>
+                <button onClick={handleStartNewChat} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', opacity: 0.7 }} onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = 0.7}><Plus size={16} /></button>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                 {conversations
-                  .filter(c => c.conversationType === 'direct')
+                  .filter(c => c.conversationType === 'direct' && (chatSearchQuery === '' || getConversationName(c).toLowerCase().includes(chatSearchQuery.toLowerCase())))
                   .map(conv => (
-                    <div
+                    <ChatItem
                       key={conv.id}
-                      onClick={() => setSelectedChat(conv.id)}
-                      style={{
-                        padding: '8px 12px',
-                        borderRadius: '6px',
-                        cursor: 'pointer',
-                        background: selectedChat === conv.id ? 'var(--bg-selected)' : 'transparent',
-                        color: selectedChat === conv.id ? 'var(--primary)' : 'var(--text-secondary)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '10px',
-                        fontWeight: selectedChat === conv.id ? '600' : '400',
-                        fontSize: '14px'
+                      chat={conv}
+                      active={selectedChat === conv.id}
+                      onClick={() => {
+                        setSelectedChat(conv.id);
+                        setActiveTab('messages');
                       }}
-                    >
-                      <div style={{ position: 'relative' }}>
-                        <div style={{ width: '24px', height: '24px', borderRadius: '4px', background: 'var(--bg-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: '700' }}>
-                          {getConversationAvatar(conv)}
-                        </div>
-                        {isConversationOnline(conv) && (
-                          <div style={{ position: 'absolute', bottom: '-2px', right: '-2px', width: '8px', height: '8px', background: 'var(--green-color)', borderRadius: '50%', border: '2px solid var(--bg-panel)' }}></div>
-                        )}
-                      </div>
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{getConversationName(conv)}</span>
-                    </div>
+                      getName={getConversationName}
+                      getAvatar={getConversationAvatar}
+                      formatTime={formatTime}
+                      isOnline={isConversationOnline(conv)}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        setContextMenu({ x: e.clientX, y: e.clientY, conversation: conv });
+                      }}
+                    />
                   ))}
               </div>
             </div>
           </div>
 
-          {/* Sidebar Footer - Cleaned up per user request */}
-          <div style={{ padding: '16px 20px', borderTop: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          {/* Sidebar Footer */}
+          <div style={{ padding: '16px 20px', borderTop: '1px solid var(--border-color)', display: 'flex', justifyContent: 'center', background: 'var(--bg-app)', opacity: 0.5 }}>
+            <span style={{ fontSize: '10px', fontWeight: '700', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Secure Workspace</span>
           </div>
         </div>
       )}
@@ -1606,7 +1678,6 @@ export default function UserHomePage() {
             onSelect={(id) => { setActiveTab('messages'); handleSelectUser(id); }}
           />
         )}
-        {activeTab === 'discover' && <DiscoverContent />}
         {activeTab === 'alerts' && <AlertsContent onUpdateCount={loadUnreadCount} />}
         {activeTab === 'calls' && <CallsContent />}
         {activeTab === 'vault' && !selectedChat && (
@@ -1908,7 +1979,7 @@ export default function UserHomePage() {
                         {getConversationName(selectedConversation)}
                       </div>
                       <div style={{ fontSize: '12px', color: isConversationOnline(selectedConversation) ? '#4ade80' : 'var(--text-secondary)' }}>
-                        {isConversationOnline(selectedConversation) ? 'Đang hoạt động' : 'Ngoại tuyến'}
+                        {isConversationOnline(selectedConversation) ? 'Online' : 'Offline'}
                       </div>
                     </div>
                   </div>
@@ -1916,7 +1987,7 @@ export default function UserHomePage() {
                   {/* Right: Action buttons */}
                   <div style={{ display: 'flex', gap: '2px', alignItems: 'center' }}>
                     <button
-                      title="Gọi thoại"
+                      title="Voice Call"
                       onClick={() => initiateCall('voice')}
                       style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', padding: '8px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', transition: 'all 0.15s' }}
                       onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-light)'; e.currentTarget.style.color = '#667eea'; }}
@@ -1925,7 +1996,7 @@ export default function UserHomePage() {
                       <Phone size={20} />
                     </button>
                     <button
-                      title="Gọi video"
+                      title="Video Call"
                       onClick={() => initiateCall('video')}
                       style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', padding: '8px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', transition: 'all 0.15s' }}
                       onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-light)'; e.currentTarget.style.color = '#667eea'; }}
@@ -1934,7 +2005,7 @@ export default function UserHomePage() {
                       <Video size={20} />
                     </button>
                     <button
-                      title="Tìm kiếm tin nhắn"
+                      title="Search Messages"
                       onClick={() => setShowSearchInChat && setShowSearchInChat(v => !v)}
                       style={{ background: showSearchInChat ? 'rgba(102,126,234,0.12)' : 'transparent', border: 'none', color: showSearchInChat ? '#667eea' : 'var(--text-secondary)', padding: '8px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', transition: 'all 0.15s' }}
                       onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-light)'}
@@ -1943,7 +2014,7 @@ export default function UserHomePage() {
                       <Search size={20} />
                     </button>
                     <button
-                      title="Thông tin hội thoại"
+                      title="Conversation Info"
                       onClick={() => setShowRightSidebar(v => !v)}
                       style={{ background: showRightSidebar ? 'rgba(102,126,234,0.12)' : 'transparent', border: 'none', color: showRightSidebar ? '#667eea' : 'var(--text-secondary)', padding: '8px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', transition: 'all 0.15s' }}
                       onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-light)'}
@@ -1964,7 +2035,7 @@ export default function UserHomePage() {
                         type="text"
                         value={chatSearchQuery || ''}
                         onChange={e => setChatSearchQuery && setChatSearchQuery(e.target.value)}
-                        placeholder="Tìm kiếm trong cuộc trò chuyện..."
+                        placeholder="Search for messages..."
                         style={{ width: '100%', background: 'var(--bg-light)', border: '1px solid var(--border-color)', borderRadius: '20px', padding: '7px 14px 7px 34px', fontSize: '13px', outline: 'none', color: 'var(--text-main)', boxSizing: 'border-box' }}
                       />
                     </div>
@@ -2093,18 +2164,18 @@ export default function UserHomePage() {
                     return (
                       <>
                         <button type="button" onClick={() => setShowStickerPicker(!showStickerPicker)} style={toolbarButtonStyle} title="Emoji & Stickers" onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-light)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}><Smile size={20} /></button>
-                        <button type="button" onClick={() => { const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*'; inp.onchange = ev => { if (ev.target.files[0]) setSelectedFile(ev.target.files[0]); }; inp.click(); }} style={toolbarButtonStyle} title="Gửi ảnh" onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-light)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}><Image size={20} /></button>
-                        <button type="button" onClick={handleFileClick} style={toolbarButtonStyle} title="Gửi file" onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-light)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}><Paperclip size={20} /></button>
-                        <button type="button" onClick={startCamera} style={toolbarButtonStyle} title="Chụp ảnh" onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-light)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}><Camera size={20} /></button>
-                        <button type="button" onClick={() => setShowPollModal(true)} style={toolbarButtonStyle} title="Bình chọn" onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-light)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}><BarChart3 size={20} /></button>
-                        <button type="button" style={toolbarButtonStyle} title="Tin nhắn tự xóa" onClick={() => setSelfDestructTime(v => v ? null : 30)} onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-light)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}><Clock size={20} color={selfDestructTime ? 'var(--primary)' : 'inherit'} /></button>
+                        <button type="button" onClick={() => { const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*'; inp.onchange = ev => { if (ev.target.files[0]) setSelectedFile(ev.target.files[0]); }; inp.click(); }} style={toolbarButtonStyle} title="Send Image" onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-light)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}><Image size={20} /></button>
+                        <button type="button" onClick={handleFileClick} style={toolbarButtonStyle} title="Send File" onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-light)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}><Paperclip size={20} /></button>
+                        <button type="button" onClick={startCamera} style={toolbarButtonStyle} title="Take Photo" onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-light)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}><Camera size={20} /></button>
+                        <button type="button" onClick={() => setShowPollModal(true)} style={toolbarButtonStyle} title="Poll" onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-light)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}><BarChart3 size={20} /></button>
+                        <button type="button" style={toolbarButtonStyle} title="Self-destruct messages" onClick={() => setSelfDestructTime(v => v ? null : 30)} onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-light)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}><Clock size={20} color={selfDestructTime ? 'var(--primary)' : 'inherit'} /></button>
 
                         <div style={{ width: '1px', height: '18px', background: 'var(--border-color)', margin: '0 8px' }} />
 
-                        <button type="button" onClick={() => setMessageInput(v => v + '@')} style={toolbarButtonStyle} title="Nhắc tên" onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-light)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}><AtSign size={20} /></button>
-                        <button type="button" onClick={() => setMessageInput(v => v + '**bold**')} style={toolbarButtonStyle} title="Chữ đậm" onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-light)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}><Bold size={20} /></button>
-                        <button type="button" onClick={() => setMessageInput(v => v + '*italic*')} style={toolbarButtonStyle} title="Chữ nghiêng" onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-light)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}><Italic size={20} /></button>
-                        <button type="button" onClick={() => setMessageInput(v => v + '`code`')} style={toolbarButtonStyle} title="Mã code" onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-light)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}><Code size={20} /></button>
+                        <button type="button" onClick={() => setMessageInput(v => v + '@')} style={toolbarButtonStyle} title="Mention Name" onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-light)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}><AtSign size={20} /></button>
+                        <button type="button" onClick={() => setMessageInput(v => v + '**bold**')} style={toolbarButtonStyle} title="Bold Text" onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-light)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}><Bold size={20} /></button>
+                        <button type="button" onClick={() => setMessageInput(v => v + '*italic*')} style={toolbarButtonStyle} title="Italic Text" onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-light)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}><Italic size={20} /></button>
+                        <button type="button" onClick={() => setMessageInput(v => v + '`code`')} style={toolbarButtonStyle} title="Code Block" onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-light)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}><Code size={20} /></button>
                       </>
                     );
                   })()}
@@ -2123,7 +2194,7 @@ export default function UserHomePage() {
                   }}>
                     <div style={{ minWidth: 0 }}>
                       <div style={{ fontSize: '12px', fontWeight: '800', color: 'var(--primary)', marginBottom: '2px' }}>
-                        {editingMessage ? 'Đang sửa tin nhắn' : `Đang trả lời ${replyingTo.sender?.firstName || 'người dùng'}`}
+                        {editingMessage ? 'Editing Message' : `Replying to ${replyingTo.sender?.firstName || 'user'}`}
                       </div>
                       <div style={{ fontSize: '13px', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {editingMessage ? editingMessage.content : replyingTo.content}
@@ -2174,7 +2245,7 @@ export default function UserHomePage() {
                         handleSendMessage(e);
                       }
                     }}
-                    placeholder={`Nhập tin nhắn tới ${getConversationName(selectedConversation)}...`}
+                    placeholder={`Type a message to ${getConversationName(selectedConversation)}...`}
                     style={{
                       flex: 1,
                       background: 'transparent',
@@ -2214,8 +2285,8 @@ export default function UserHomePage() {
                 {/* Footer Hint */}
                 <div style={{ marginTop: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div style={{ fontSize: '11px', color: 'var(--text-secondary)', display: 'flex', gap: '12px' }}>
-                    <span><b>Enter</b> để gửi</span>
-                    <span><b>Shift + Enter</b> xuống dòng</span>
+                    <span><b>Enter</b> to send</span>
+                    <span><b>Shift + Enter</b> to newline</span>
                   </div>
                   <div style={{ fontSize: '11px', color: messageInput.length > 4000 ? '#ef4444' : 'var(--text-secondary)', fontWeight: '600' }}>
                     {messageInput.length > 0 && `${messageInput.length}/4096`}
@@ -2247,6 +2318,7 @@ export default function UserHomePage() {
                     }),
                     onDelete: () => handleDeleteConversation({ id: selectedChat })
                   }}
+                  onOpenGroupModal={() => setShowGroupModal(true)}
                   onlineUserIds={onlineUserIds}
                   onClose={() => setShowRightSidebar(false)}
                   currentUserId={user.id}
@@ -2612,15 +2684,49 @@ export default function UserHomePage() {
             onClose={() => setShowPollModal(false)}
             onCreate={async (pollData) => {
               try {
-                const content = `📊 Bình chọn: ${pollData.question}\n\n${pollData.options.map((o, i) => `${i + 1}. ${o}`).join('\n')}`;
+                const content = `📊 Poll: ${pollData.question}\n\n${pollData.options.map((o, i) => `${i + 1}. ${o}`).join('\n')}`;
                 // Using a generic message for now, in a real app this would be a structured 'poll' type
                 await handleSendMessage(null, content);
                 setShowPollModal(false);
-              } catch (err) {
-                alert('Không thể tạo bình chọn: ' + err.message);
+              } catch (error) {
+                alert('Failed to create poll');
               }
             }}
           />
+        )}
+
+        {showVaultAuthModal && (
+          <Modal title="Secure Vault Authentication" onClose={handleVaultAuthCancel}>
+            <div style={{ padding: '20px' }}>
+              <p style={{ color: 'var(--text-secondary)', marginBottom: '20px', fontSize: '14px', lineHeight: '1.5' }}>
+                Your Secure Vault is protected by state-of-the-art encryption. Please verify your identity to access your private files.
+              </p>
+              <form onSubmit={handleVaultAuthSubmit}>
+                <div style={{ marginBottom: '20px' }}>
+                  <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-main)', fontSize: '13px', fontWeight: '500' }}>Password</label>
+                  <input
+                    type="password"
+                    value={vaultPassword}
+                    onChange={(e) => setVaultPassword(e.target.value)}
+                    style={{
+                      width: '100%', padding: '12px', borderRadius: '8px',
+                      background: 'var(--bg-main)', border: '1px solid var(--border-color)',
+                      color: 'var(--text-main)', outline: 'none'
+                    }}
+                    placeholder="Enter your current password"
+                    required
+                  />
+                </div>
+                {vaultAuthError && (
+                  <div style={{ color: '#ef4444', fontSize: '13px', marginBottom: '15px' }}>{vaultAuthError}</div>
+                )}
+                <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                  <button type="button" onClick={handleVaultAuthCancel} style={{ padding: '10px 20px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent', color: 'var(--text-main)', cursor: 'pointer' }}>Cancel</button>
+                  <button type="submit" style={{ padding: '10px 20px', borderRadius: '8px', border: 'none', background: 'var(--primary)', color: '#fff', cursor: 'pointer', fontWeight: '500' }}>Unlock Vault</button>
+                </div>
+              </form>
+            </div>
+          </Modal>
         )}
 
         {/* File Version History Modal */}
@@ -3314,33 +3420,59 @@ export default function UserHomePage() {
           }
         `}
         </style>
-      </div >
-    </div >
+        {/* Hidden inputs for functional triggers */}
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={handleFileChange}
+          style={{ display: 'none' }}
+        />
+      </div>
+    </div>
   );
 }
 
 // HELPER COMPONENTS
 function NavIcon({ icon, active, onClick, label, badge }) {
+  const [hovered, setHovered] = useState(false);
   return (
     <div
       onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       title={label}
       style={{
-        width: '50px',
-        height: '50px',
-        borderRadius: '12px',
+        width: '54px',
+        height: '54px',
+        borderRadius: '16px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         cursor: 'pointer',
-        background: active ? 'rgba(102, 126, 234, 0.15)' : 'transparent',
-        color: active ? '#667eea' : '#8b98a5',
-        transition: 'all 0.2s',
-        border: active ? '1px solid rgba(102, 126, 234, 0.3)' : '1px solid transparent',
-        position: 'relative'
+        background: active ? 'linear-gradient(135deg, var(--primary), #38b6ff)' : (hovered ? 'var(--bg-panel-hover)' : 'transparent'),
+        color: active ? '#fff' : 'var(--text-muted)',
+        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+        position: 'relative',
+        boxShadow: active ? '0 8px 20px rgba(0, 123, 255, 0.4)' : 'none',
+        transform: hovered && !active ? 'scale(1.05)' : 'scale(1)',
+        marginBottom: '6px'
       }}
     >
+      {/* Active Indicator Bar */}
+      {active && (
+        <div style={{
+          position: 'absolute',
+          left: '-14px',
+          width: '5px',
+          height: '24px',
+          background: '#fff',
+          borderRadius: '0 5px 5px 0',
+          boxShadow: '0 0 10px #fff'
+        }} />
+      )}
+
       {icon}
+
       {badge > 0 && (
         <div style={{
           position: 'absolute',
@@ -3349,14 +3481,16 @@ function NavIcon({ icon, active, onClick, label, badge }) {
           background: '#ef4444',
           color: '#fff',
           fontSize: '10px',
-          fontWeight: 'bold',
-          width: '18px',
+          fontWeight: '900',
+          minWidth: '18px',
           height: '18px',
-          borderRadius: '50%',
+          padding: '0 4px',
+          borderRadius: '10px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          border: '2px solid #0e1621'
+          border: '2px solid var(--bg-app)',
+          boxShadow: '0 2px 4px rgba(239, 68, 68, 0.4)'
         }}>
           {badge > 99 ? '99+' : badge}
         </div>
@@ -3367,6 +3501,7 @@ function NavIcon({ icon, active, onClick, label, badge }) {
 
 function ChatItem({ chat, active, onClick, getName, getAvatar, formatTime, onContextMenu, isPinned, isMuted, isOnline }) {
   const [hovered, setHovered] = useState(false);
+  const isGroup = chat.conversationType === 'group';
 
   return (
     <div
@@ -3375,42 +3510,48 @@ function ChatItem({ chat, active, onClick, getName, getAvatar, formatTime, onCon
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        padding: '10px 16px',
-        margin: '1px 8px',
-        borderRadius: '8px',
+        padding: '10px 14px',
+        margin: '2px 8px',
+        borderRadius: '12px',
         cursor: 'pointer',
-        background: active ? '#007bff15' : (hovered ? '#f1f3f5' : 'transparent'),
-        transition: 'all 0.15s ease',
+        background: active ? 'var(--bg-selected)' : (hovered ? 'rgba(255, 255, 255, 0.03)' : 'transparent'),
+        transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
         display: 'flex',
         gap: '12px',
-        alignItems: 'center'
+        alignItems: 'center',
+        position: 'relative',
+        transform: active ? 'scale(1.02)' : 'scale(1)',
+        borderLeft: active ? '3px solid var(--primary)' : '3px solid transparent'
       }}
     >
       <div style={{ position: 'relative' }}>
         <div style={{
-          width: '36px',
-          height: '36px',
-          background: active ? '#007bff' : '#f1f3f5',
-          borderRadius: '6px',
+          width: '42px',
+          height: '42px',
+          background: active ? 'var(--primary)' : 'var(--bg-app)',
+          borderRadius: '12px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          fontSize: '14px',
-          fontWeight: '800',
-          color: active ? '#fff' : '#1a1d21'
+          fontSize: '15px',
+          fontWeight: '900',
+          color: active ? '#fff' : 'var(--text-main)',
+          boxShadow: active ? '0 4px 10px rgba(0, 123, 255, 0.2)' : 'none',
+          border: '1px solid var(--border-color)'
         }}>
-          {getAvatar(chat)}
+          {isGroup ? <Hash size={20} /> : getAvatar(chat)}
         </div>
-        {isOnline && (
+        {isOnline && !isGroup && (
           <div style={{
             position: 'absolute',
-            bottom: '-1px',
-            right: '-1px',
-            width: '10px',
-            height: '10px',
-            background: '#4ade80',
-            border: '2px solid #fff',
-            borderRadius: '50%'
+            bottom: '-2px',
+            right: '-2px',
+            width: '12px',
+            height: '12px',
+            background: 'var(--green-color)',
+            border: '2px solid var(--bg-panel)',
+            borderRadius: '50%',
+            boxShadow: '0 0 5px var(--green-color)'
           }} />
         )}
       </div>
@@ -3419,47 +3560,49 @@ function ChatItem({ chat, active, onClick, getName, getAvatar, formatTime, onCon
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h4 style={{
             margin: 0,
-            color: '#1a1d21',
+            color: active ? 'var(--primary)' : 'var(--text-main)',
             fontSize: '14px',
-            fontWeight: chat.unreadCount > 0 ? '800' : (active ? '700' : '400'),
+            fontWeight: chat.unreadCount > 0 ? '900' : (active ? '800' : '600'),
             overflow: 'hidden',
             textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap'
+            whiteSpace: 'nowrap',
+            letterSpacing: '-0.01em'
           }}>
             {getName(chat)}
           </h4>
-          <span style={{ color: '#616061', fontSize: '11px' }}>
+          <span style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: '500' }}>
             {chat.lastMessage ? formatTime(chat.lastMessage.createdAt) : ''}
           </span>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2px' }}>
           <p style={{
             margin: 0,
-            color: chat.unreadCount > 0 ? '#1a1d21' : '#616061',
+            color: chat.unreadCount > 0 ? 'var(--text-main)' : 'var(--text-muted)',
             fontSize: '12px',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
-            fontWeight: chat.unreadCount > 0 ? '600' : '400'
+            fontWeight: chat.unreadCount > 0 ? '700' : '400',
+            opacity: active ? 0.9 : 0.7
           }}>
             {chat.lastMessage?.content || 'No messages yet'}
           </p>
           {chat.unreadCount > 0 && (
             <div style={{
-              background: '#ef4444',
-              borderRadius: '20px',
-              minWidth: '18px',
+              background: 'var(--primary)',
+              borderRadius: '8px',
+              minWidth: '20px',
               height: '18px',
-              padding: '0 5px',
+              padding: '0 6px',
               fontSize: '10px',
               color: '#fff',
-              fontWeight: '700',
+              fontWeight: '900',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               flexShrink: 0,
               marginLeft: '8px',
-              boxShadow: '0 2px 4px rgba(239, 68, 68, 0.3)'
+              boxShadow: '0 2px 8px rgba(0, 123, 255, 0.4)'
             }}>
               {chat.unreadCount}
             </div>
@@ -4390,7 +4533,7 @@ function TeamContent({ users, currentUser, onSelect, isAdmin }) {
         {[
           { label: 'Team Size', val: teamMembers.length, color: '#667eea', icon: <Users /> },
           { label: 'Online Now', val: teamMembers.length, color: '#10b981', icon: <Clock /> },
-          { label: 'Files Shared', val: '42', color: '#f59e0b', icon: <File /> },
+          { label: 'Files Shared', val: '42', color: '#f59e0b', icon: <FileIcon /> },
           { label: 'Security Level', val: 'SECURED', color: '#ef4444', icon: <Shield /> },
         ].map(s => (
           <div key={s.label} style={{ background: 'var(--bg-panel)', padding: '25px', borderRadius: '24px', border: '1px solid var(--border-color)' }}>

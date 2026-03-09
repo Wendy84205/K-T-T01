@@ -8,6 +8,7 @@ import { User } from '../database/entities/core/user.entity';
 import { SecurityIncident } from '../database/entities/security/security-incident.entity';
 import { Message } from '../database/entities/chat/message.entity';
 import { MessageCleanupJob } from './message-cleanup.job';
+import { ChatModule } from '../modules/chat/chat.module';
 
 @Module({
     imports: [
@@ -18,6 +19,7 @@ import { MessageCleanupJob } from './message-cleanup.job';
             SecurityIncident,
             Message,
         ]),
+        ChatModule,
     ],
     providers: [
         KeyRotationJob,

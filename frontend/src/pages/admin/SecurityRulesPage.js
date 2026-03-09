@@ -61,25 +61,25 @@ export default function SecurityRulesPage() {
 
     const getSeverityColor = (sev) => {
         switch (sev) {
-            case 'CRITICAL': return '#ef4444';
-            case 'HIGH': return '#f59e0b';
-            case 'MEDIUM': return '#3b82f6';
-            case 'LOW': return '#10b981';
-            default: return '#64748b';
+            case 'CRITICAL': return 'var(--red-color)';
+            case 'HIGH': return 'var(--accent-amber)';
+            case 'MEDIUM': return 'var(--primary)';
+            case 'LOW': return 'var(--green-color)';
+            default: return 'var(--text-muted)';
         }
     };
 
     if (loading) {
         return (
-            <div style={{ display: 'flex', flexDirection: 'column', height: '100%', alignItems: 'center', justifyContent: 'center', background: '#030712' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', height: '100%', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-app)' }}>
                 <div className="soc-dot-pulse" style={{ marginBottom: '20px' }}></div>
-                <div style={{ color: '#8b949e', fontFamily: 'JetBrains Mono', fontSize: '12px', letterSpacing: '2px' }}>CALIBRATING DEFENSE SYSTEMS...</div>
+                <div style={{ color: 'var(--text-secondary)', fontFamily: 'JetBrains Mono', fontSize: '12px', letterSpacing: '2px' }}>CALIBRATING DEFENSE SYSTEMS...</div>
             </div>
         );
     }
 
     return (
-        <div className="soc-dashboard" style={{ padding: '32px', background: '#030712' }}>
+        <div className="soc-dashboard" style={{ padding: '32px', background: 'var(--bg-app)' }}>
             <div className="soc-title-section">
                 <div className="soc-title-left">
                     <h1 style={{ color: '#fff', fontSize: '28px', fontWeight: '800' }}>
@@ -92,7 +92,7 @@ export default function SecurityRulesPage() {
                     <button
                         onClick={() => setShowModal(true)}
                         style={{
-                            background: '#3b82f6',
+                            background: 'var(--primary)',
                             color: '#fff',
                             border: 'none',
                             padding: '10px 20px',
@@ -126,7 +126,7 @@ export default function SecurityRulesPage() {
                                 style={{
                                     position: 'absolute',
                                     left: '14px',
-                                    color: '#64748b',
+                                    color: 'var(--text-muted)',
                                     zIndex: 2
                                 }}
                             />
@@ -159,7 +159,7 @@ export default function SecurityRulesPage() {
                             <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '4px', background: getSeverityColor(rule.severity) }}></div>
 
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
-                                <span style={{ fontSize: '11px', fontWeight: '800', fontFamily: 'JetBrains Mono', color: '#64748b' }}>{rule.id}</span>
+                                <span style={{ fontSize: '11px', fontWeight: '800', fontFamily: 'JetBrains Mono', color: 'var(--text-muted)' }}>{rule.id}</span>
                                 <div style={{ display: 'flex', gap: '8px' }}>
                                     <span style={{
                                         fontSize: '9px',
@@ -172,27 +172,27 @@ export default function SecurityRulesPage() {
                                     }}>
                                         {rule.severity}
                                     </span>
-                                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: rule.status === 'ACTIVE' ? '#10b981' : '#64748b', alignSelf: 'center', boxShadow: rule.status === 'ACTIVE' ? '0 0 10px #10b981' : 'none' }}></div>
+                                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: rule.status === 'ACTIVE' ? 'var(--green-color)' : 'var(--text-muted)', alignSelf: 'center', boxShadow: rule.status === 'ACTIVE' ? '0 0 10px var(--green-color)' : 'none' }}></div>
                                 </div>
                             </div>
 
                             <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#fff', marginBottom: '8px' }}>{rule.name}</h3>
-                            <p style={{ fontSize: '13px', color: '#94a3b8', lineHeight: '1.5', height: '40px', overflow: 'hidden', textOverflow: 'ellipsis', marginBottom: '20px' }}>
+                            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.5', height: '40px', overflow: 'hidden', textOverflow: 'ellipsis', marginBottom: '20px' }}>
                                 {rule.description}
                             </p>
 
                             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', background: 'rgba(0,0,0,0.2)', padding: '12px', borderRadius: '10px', marginBottom: '20px' }}>
-                                <div style={{ fontSize: '11px', color: '#64748b', fontWeight: '600' }}>ACTION:</div>
-                                <div style={{ fontSize: '12px', fontWeight: '800', color: rule.value === 'BLOCK' ? '#ef4444' : '#fff', fontFamily: 'JetBrains Mono' }}>{rule.value}</div>
+                                <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '600' }}>ACTION:</div>
+                                <div style={{ fontSize: '12px', fontWeight: '800', color: rule.value === 'BLOCK' ? 'var(--red-color)' : '#fff', fontFamily: 'JetBrains Mono' }}>{rule.value}</div>
                                 <div style={{ marginLeft: 'auto', opacity: 0.3 }}><Lock size={14} /></div>
                             </div>
 
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <div style={{ display: 'flex', gap: '8px' }}>
-                                    <button className="icon-btn" style={{ background: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6' }}><Edit3 size={16} /></button>
+                                    <button className="icon-btn" style={{ background: 'rgba(59, 130, 246, 0.1)', color: 'var(--primary)' }}><Edit3 size={16} /></button>
                                     <button
                                         className="icon-btn"
-                                        style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444' }}
+                                        style={{ background: 'rgba(239, 68, 68, 0.1)', color: 'var(--red-color)' }}
                                         onClick={() => handleDeleteRule(rule.id)}
                                     >
                                         <Trash2 size={16} />
@@ -202,7 +202,7 @@ export default function SecurityRulesPage() {
                                     onClick={() => handleToggleRule(rule.id)}
                                     style={{
                                         background: rule.status === 'ACTIVE' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(16, 185, 129, 0.1)',
-                                        color: rule.status === 'ACTIVE' ? '#ef4444' : '#10b981',
+                                        color: rule.status === 'ACTIVE' ? 'var(--red-color)' : 'var(--green-color)',
                                         border: 'none',
                                         padding: '6px 12px',
                                         borderRadius: '6px',
@@ -220,22 +220,22 @@ export default function SecurityRulesPage() {
 
                 {filteredRules.length === 0 && (
                     <div style={{ padding: '80px', textAlign: 'center' }}>
-                        <AlertCircle size={48} style={{ color: '#64748b', marginBottom: '16px' }} />
-                        <div style={{ color: '#94a3b8', fontSize: '16px' }}>No rules found matching your selection.</div>
+                        <AlertCircle size={48} style={{ color: 'var(--text-muted)', marginBottom: '16px' }} />
+                        <div style={{ color: 'var(--text-secondary)', fontSize: '16px' }}>No rules found matching your selection.</div>
                     </div>
                 )}
             </div>
 
             <div style={{ marginTop: '30px', display: 'flex', gap: '20px' }}>
-                <div className="content-card" style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '20px', background: 'linear-gradient(90deg, #1e1b4b 0%, #111827 100%)', border: '1px solid rgba(59, 130, 246, 0.2)' }}>
+                <div className="content-card" style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '20px', background: 'linear-gradient(90deg, #1e1b4b 0%, var(--bg-panel) 100%)', border: '1px solid rgba(59, 130, 246, 0.2)' }}>
                     <div style={{ background: 'rgba(59, 130, 246, 0.2)', width: '60px', height: '60px', borderRadius: '15px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         <Shield className="text-blue-400" size={30} />
                     </div>
                     <div>
                         <div style={{ fontWeight: '700', fontSize: '16px' }}>Safe Mode Active</div>
-                        <div style={{ fontSize: '13px', color: '#94a3b8' }}>All inbound traffic is being filtered through the global firewall.</div>
+                        <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>All inbound traffic is being filtered through the global firewall.</div>
                     </div>
-                    <button style={{ marginLeft: 'auto', background: '#3b82f6', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '8px', fontSize: '13px', fontWeight: '600' }}>VIEW POLICY</button>
+                    <button style={{ marginLeft: 'auto', background: 'var(--primary)', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '8px', fontSize: '13px', fontWeight: '600' }}>VIEW POLICY</button>
                 </div>
             </div>
 
@@ -252,7 +252,7 @@ export default function SecurityRulesPage() {
                     backdropFilter: 'blur(5px)'
                 }}>
                     <div style={{
-                        background: '#111827',
+                        background: 'var(--bg-panel)',
                         padding: '32px',
                         borderRadius: '20px',
                         width: '500px',
@@ -261,20 +261,20 @@ export default function SecurityRulesPage() {
                         <h2 style={{ marginBottom: '24px', color: '#fff' }}>Deploy New Security Rule</h2>
                         <form onSubmit={handleAddRule}>
                             <div style={{ marginBottom: '16px' }}>
-                                <label style={{ display: 'block', fontSize: '12px', color: '#64748b', marginBottom: '8px' }}>RULE NAME</label>
+                                <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px' }}>RULE NAME</label>
                                 <input
                                     type="text"
                                     required
-                                    style={{ width: '100%', padding: '12px', background: '#030712', border: '1px solid #1f2937', color: '#fff', borderRadius: '8px' }}
+                                    style={{ width: '100%', padding: '12px', background: 'var(--bg-app)', border: '1px solid var(--border-color)', color: '#fff', borderRadius: '8px' }}
                                     value={newRule.name}
                                     onChange={e => setNewRule({ ...newRule, name: e.target.value })}
                                 />
                             </div>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
                                 <div>
-                                    <label style={{ display: 'block', fontSize: '12px', color: '#64748b', marginBottom: '8px' }}>SEVERITY</label>
+                                    <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px' }}>SEVERITY</label>
                                     <select
-                                        style={{ width: '100%', padding: '12px', background: '#030712', border: '1px solid #1f2937', color: '#fff', borderRadius: '8px' }}
+                                        style={{ width: '100%', padding: '12px', background: 'var(--bg-app)', border: '1px solid var(--border-color)', color: '#fff', borderRadius: '8px' }}
                                         value={newRule.severity}
                                         onChange={e => setNewRule({ ...newRule, severity: e.target.value })}
                                     >
@@ -285,9 +285,9 @@ export default function SecurityRulesPage() {
                                     </select>
                                 </div>
                                 <div>
-                                    <label style={{ display: 'block', fontSize: '12px', color: '#64748b', marginBottom: '8px' }}>ACTION</label>
+                                    <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px' }}>ACTION</label>
                                     <select
-                                        style={{ width: '100%', padding: '12px', background: '#030712', border: '1px solid #1f2937', color: '#fff', borderRadius: '8px' }}
+                                        style={{ width: '100%', padding: '12px', background: 'var(--bg-app)', border: '1px solid var(--border-color)', color: '#fff', borderRadius: '8px' }}
                                         value={newRule.value}
                                         onChange={e => setNewRule({ ...newRule, value: e.target.value })}
                                     >
@@ -299,10 +299,10 @@ export default function SecurityRulesPage() {
                                 </div>
                             </div>
                             <div style={{ marginBottom: '24px' }}>
-                                <label style={{ display: 'block', fontSize: '12px', color: '#64748b', marginBottom: '8px' }}>DESCRIPTION</label>
+                                <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px' }}>DESCRIPTION</label>
                                 <textarea
                                     rows="3"
-                                    style={{ width: '100%', padding: '12px', background: '#030712', border: '1px solid #1f2937', color: '#fff', borderRadius: '8px' }}
+                                    style={{ width: '100%', padding: '12px', background: 'var(--bg-app)', border: '1px solid var(--border-color)', color: '#fff', borderRadius: '8px' }}
                                     value={newRule.description}
                                     onChange={e => setNewRule({ ...newRule, description: e.target.value })}
                                 />
@@ -311,13 +311,13 @@ export default function SecurityRulesPage() {
                                 <button
                                     type="button"
                                     onClick={() => setShowModal(false)}
-                                    style={{ flex: 1, padding: '12px', background: 'transparent', border: '1px solid #1f2937', color: '#fff', borderRadius: '10px', cursor: 'pointer' }}
+                                    style={{ flex: 1, padding: '12px', background: 'transparent', border: '1px solid var(--border-color)', color: '#fff', borderRadius: '10px', cursor: 'pointer' }}
                                 >
                                     CANCEL
                                 </button>
                                 <button
                                     type="submit"
-                                    style={{ flex: 1, padding: '12px', background: '#3b82f6', border: 'none', color: '#fff', borderRadius: '10px', fontWeight: '700', cursor: 'pointer' }}
+                                    style={{ flex: 1, padding: '12px', background: 'var(--primary)', border: 'none', color: '#fff', borderRadius: '10px', fontWeight: '700', cursor: 'pointer' }}
                                 >
                                     DEPLOY RULE
                                 </button>
@@ -348,7 +348,7 @@ export default function SecurityRulesPage() {
                     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
                 }
                 .search-input-modern:focus {
-                    border-color: #3b82f6 !important;
+                    border-color: var(--primary) !important;
                     background: rgba(59, 130, 246, 0.08) !important;
                     box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15);
                 }

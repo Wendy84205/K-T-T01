@@ -5,11 +5,20 @@ class SocketService {
     constructor() {
         this.socket = null;
         this.userId = null;
+        // Store all registered callbacks so we can re-register them on reconnect
+        this._callbacks = {};
     }
 
     async connect(token, userId) {
+        // If already connected with same user, skip to avoid re-connection loop
+        if (this.socket && this.socket.connected && this.userId === userId) {
+            console.log('[Socket] Already connected, skipping reconnect');
+            return this.socket;
+        }
+
         if (this.socket) {
             this.socket.disconnect();
+            this.socket = null;
         }
 
         this.userId = userId;
@@ -32,24 +41,54 @@ class SocketService {
         if (io) {
             this.socket = io(socketUrl, {
                 auth: { token },
-                transports: ['websocket', 'polling'],
+                transports: ['polling'], // Force polling ONLY for Cloudflare Tunnel compatibility
+                upgrade: false,
+                reconnectionAttempts: 10,
+                reconnectionDelay: 2000,
+                timeout: 20000,
             });
 
             this.socket.on('connect', () => {
-                console.log('[Socket] Connected to gateway');
+                console.log('[Socket] Connected to gateway:', this.socket.id);
+                // Re-register all stored callbacks on reconnect
+                this._reRegisterCallbacks();
             });
 
             this.socket.on('connect_error', (err) => {
                 console.error('[Socket] Connection error:', err.message);
+            });
+
+            this.socket.on('disconnect', (reason) => {
+                console.warn('[Socket] Disconnected:', reason);
             });
         }
 
         return this.socket;
     }
 
-    disconnect() {
+    // Store and register a callback for an event
+    _on(event, callback) {
+        this._callbacks[event] = callback;
         if (this.socket) {
-            this.removeListeners();
+            this.socket.off(event); // remove old listener first
+            this.socket.on(event, callback);
+        }
+    }
+
+    // Re-register all stored callbacks onto the current socket
+    _reRegisterCallbacks() {
+        Object.entries(this._callbacks).forEach(([event, callback]) => {
+            if (this.socket) {
+                this.socket.off(event);
+                this.socket.on(event, callback);
+                console.log('[Socket] Re-registered listener for:', event);
+            }
+        });
+    }
+
+    disconnect() {
+        this._callbacks = {};
+        if (this.socket) {
             this.socket.disconnect();
             this.socket = null;
         }
@@ -57,16 +96,11 @@ class SocketService {
 
     removeListeners() {
         if (this.socket) {
-            this.socket.off('newMessage');
-            this.socket.off('userTyping');
-            this.socket.off('notification');
-            this.socket.off('call-made');
-            this.socket.off('call-answered');
-            this.socket.off('ice-candidate');
-            this.socket.off('call-ended');
-            this.socket.off('reaction-updated');
-            this.socket.off('user-status');
+            Object.keys(this._callbacks).forEach(event => {
+                this.socket.off(event);
+            });
         }
+        this._callbacks = {};
     }
 
     joinConversation(conversationId) {
@@ -88,28 +122,29 @@ class SocketService {
     }
 
     onNewMessage(callback) {
-        if (this.socket) {
-            this.socket.on('newMessage', callback);
-        }
+        this._on('newMessage', callback);
     }
 
     onUserTyping(callback) {
-        if (this.socket) {
-            this.socket.on('userTyping', callback);
-        }
+        this._on('userTyping', callback);
     }
 
     onNotification(callback) {
-        if (this.socket) {
-            this.socket.on('notification', callback);
-        }
+        this._on('notification', callback);
+    }
+
+    onMessageDeleted(callback) {
+        this._on('message_deleted', callback);
     }
 
     // --- WebRTC Signaling ---
 
     sendCallInvite(conversationId, offer, type = 'voice') {
         if (this.socket) {
+            console.log('[Socket] Sending call-invite to conversation:', conversationId);
             this.socket.emit('call-invite', { conversationId, offer, type });
+        } else {
+            console.error('[Socket] Cannot send call-invite: socket is null or disconnected!');
         }
     }
 
@@ -132,27 +167,20 @@ class SocketService {
     }
 
     onCallMade(callback) {
-        if (this.socket) {
-            this.socket.on('call-made', callback);
-        }
+        console.log('[Socket] Registering call-made listener');
+        this._on('call-made', callback);
     }
 
     onCallAnswered(callback) {
-        if (this.socket) {
-            this.socket.on('call-answered', callback);
-        }
+        this._on('call-answered', callback);
     }
 
     onIceCandidate(callback) {
-        if (this.socket) {
-            this.socket.on('ice-candidate', callback);
-        }
+        this._on('ice-candidate', callback);
     }
 
     onCallEnded(callback) {
-        if (this.socket) {
-            this.socket.on('call-ended', callback);
-        }
+        this._on('call-ended', callback);
     }
 
     // --- Reactions ---
@@ -164,15 +192,11 @@ class SocketService {
     }
 
     onReactionUpdated(callback) {
-        if (this.socket) {
-            this.socket.on('reaction-updated', callback);
-        }
+        this._on('reaction-updated', callback);
     }
 
     onUserStatus(callback) {
-        if (this.socket) {
-            this.socket.on('user-status', callback);
-        }
+        this._on('user-status', callback);
     }
 
     getOnlineUsers() {
