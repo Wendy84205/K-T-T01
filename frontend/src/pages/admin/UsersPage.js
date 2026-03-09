@@ -398,10 +398,10 @@ export default function UsersPage() {
             <tr style={{ borderBottom: '1px solid var(--border-color)', background: 'var(--bg-app)' }}>
               <th style={{ padding: '16px 24px', width: '40px' }}><input type="checkbox" style={{ accentColor: 'var(--primary)' }} /></th>
               <th style={{ padding: '16px 24px', fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)' }}>USER PROFILE</th>
-              <th style={{ padding: '16px 24px', fontSize: '12px', fontWeight: '600', color: '#8b949e' }}>ROLE</th>
-              <th style={{ padding: '16px 24px', fontSize: '12px', fontWeight: '600', color: '#8b949e' }}>STATUS</th>
-              <th style={{ padding: '16px 24px', fontSize: '12px', fontWeight: '600', color: '#8b949e' }}>LAST ACTIVE</th>
-              <th style={{ padding: '16px 24px', fontSize: '12px', fontWeight: '600', color: '#8b949e', textAlign: 'right' }}>ACTIONS</th>
+              <th style={{ padding: '16px 24px', fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)' }}>ROLE</th>
+              <th style={{ padding: '16px 24px', fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)' }}>STATUS</th>
+              <th style={{ padding: '16px 24px', fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)' }}>LAST ACTIVE</th>
+              <th style={{ padding: '16px 24px', fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)', textAlign: 'right' }}>ACTIONS</th>
             </tr>
           </thead>
           <tbody>
@@ -409,18 +409,18 @@ export default function UsersPage() {
               <tr>
                 <td colSpan="6" style={{ padding: '80px', textAlign: 'center' }}>
                   <div className="soc-dot-pulse"></div>
-                  <div style={{ marginTop: '24px', color: '#8b949e' }}>FETCHING USER DATA...</div>
+                  <div style={{ marginTop: '24px', color: 'var(--text-secondary)' }}>FETCHING USER DATA...</div>
                 </td>
               </tr>
             ) : (users || []).length === 0 ? (
               <tr>
-                <td colSpan="6" style={{ padding: '80px', textAlign: 'center', color: '#8b949e' }}>No users found matching your criteria.</td>
+                <td colSpan="6" style={{ padding: '80px', textAlign: 'center', color: 'var(--text-secondary)' }}>No users found matching your criteria.</td>
               </tr>
             ) : (users || []).map(user => {
               const statusInfo = getStatusColor(user?.status);
               return (
-                <tr key={user.id} style={{ borderBottom: '1px solid #30363d', transition: 'background 0.2s' }}>
-                  <td style={{ padding: '16px 24px' }}><input type="checkbox" style={{ accentColor: '#2f81f7' }} /></td>
+                <tr key={user.id} style={{ borderBottom: '1px solid var(--border-color)', transition: 'background 0.2s' }}>
+                  <td style={{ padding: '16px 24px' }}><input type="checkbox" style={{ accentColor: 'var(--primary)' }} /></td>
                   <td style={{ padding: '16px 24px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                       <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#fd9745', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '14px', fontWeight: '700', overflow: 'hidden' }}>
@@ -432,8 +432,8 @@ export default function UsersPage() {
                       </div>
                       <div>
                         <div style={{ fontWeight: '700', color: 'var(--text-main)', fontSize: '14px' }}>{user.firstName} {user.lastName || ''}</div>
-                        <div style={{ fontSize: '12px', color: '#8b949e', marginTop: '2px' }}>{user.email}</div>
-                        {user.jobTitle && <div style={{ fontSize: '10px', color: '#58a6ff', marginTop: '2px', fontWeight: '600' }}>{user.jobTitle.toUpperCase()}</div>}
+                        <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>{user.email}</div>
+                        {user.jobTitle && <div style={{ fontSize: '10px', color: 'var(--primary)', marginTop: '2px', fontWeight: '600' }}>{user.jobTitle.toUpperCase()}</div>}
                       </div>
                     </div>
                   </td>
@@ -459,30 +459,30 @@ export default function UsersPage() {
                       <span style={{ fontSize: '12px', fontWeight: '700', color: statusInfo.color }}>{statusInfo.label}</span>
                     </div>
                   </td>
-                  <td style={{ padding: '16px 24px', fontSize: '13px', color: '#8b949e' }}>
+                  <td style={{ padding: '16px 24px', fontSize: '13px', color: 'var(--text-secondary)' }}>
                     {user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleTimeString() : 'Never'}
                   </td>
                   <td style={{ padding: '16px 24px', textAlign: 'right' }}>
                     {user.status === 'pending' ? (
                       <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-                        <button style={{ background: '#238636', color: '#fff', border: 'none', padding: '6px 16px', borderRadius: '6px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }} onClick={() => handleApprove(user.id)}>Approve</button>
-                        <button style={{ background: 'transparent', color: '#ef4444', border: 'none', padding: '6px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }} onClick={() => handleReject(user.id)}>Reject</button>
+                        <button style={{ background: 'var(--green-color)', color: '#fff', border: 'none', padding: '6px 16px', borderRadius: '6px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }} onClick={() => handleApprove(user.id)}>Approve</button>
+                        <button style={{ background: 'transparent', color: 'var(--red-color)', border: 'none', padding: '6px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }} onClick={() => handleReject(user.id)}>Reject</button>
                       </div>
                     ) : (
-                      <div style={{ display: 'flex', gap: '16px', justifyContent: 'flex-end', color: '#8b949e' }}>
+                      <div style={{ display: 'flex', gap: '16px', justifyContent: 'flex-end', color: 'var(--text-secondary)' }}>
                         {user.status === 'active' && (
                           <i className='bx bx-lock-alt' style={{ cursor: 'pointer', fontSize: '18px' }} title="Emergency Lock" onClick={() => handleEmergencyLock(user.id)}></i>
                         )}
                         {user.status === 'banned' && (
-                          <i className='bx bx-undo' style={{ cursor: 'pointer', fontSize: '18px', color: '#2f81f7' }} title="Restore User" onClick={() => handleApprove(user.id)}></i>
+                          <i className='bx bx-undo' style={{ cursor: 'pointer', fontSize: '18px', color: 'var(--primary)' }} title="Restore User" onClick={() => handleApprove(user.id)}></i>
                         )}
-                        <i className='bx bx-trash' style={{ cursor: 'pointer', fontSize: '18px', color: '#ef4444' }} title="Permanent Purge" onClick={() => handleDelete(user.id, true)}></i>
+                        <i className='bx bx-trash' style={{ cursor: 'pointer', fontSize: '18px', color: 'var(--red-color)' }} title="Permanent Purge" onClick={() => handleDelete(user.id, true)}></i>
 
                         {/* THREE DOTS MENU */}
                         <div style={{ position: 'relative' }}>
                           <i
                             className='bx bx-dots-vertical-rounded'
-                            style={{ cursor: 'pointer', fontSize: '18px', color: activeMenu === user.id ? '#fff' : '#8b949e' }}
+                            style={{ cursor: 'pointer', fontSize: '18px', color: activeMenu === user.id ? '#fff' : 'var(--text-secondary)' }}
                             onClick={(e) => {
                               e.stopPropagation();
                               setActiveMenu(activeMenu === user.id ? null : user.id);
@@ -494,8 +494,8 @@ export default function UsersPage() {
                               position: 'absolute',
                               right: 0,
                               top: '100%',
-                              background: '#161b22',
-                              border: '1px solid #30363d',
+                              background: 'var(--bg-panel)',
+                              border: '1px solid var(--border-color)',
                               borderRadius: '8px',
                               width: '180px',
                               zIndex: 100,
@@ -504,38 +504,38 @@ export default function UsersPage() {
                             }}>
                               <button
                                 onClick={() => { setSelectedUserForProfile(user); setActiveMenu(null); }}
-                                style={{ width: '100%', padding: '10px 16px', background: 'transparent', border: 'none', color: '#c9d1d9', textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}
+                                style={{ width: '100%', padding: '10px 16px', background: 'transparent', border: 'none', color: 'var(--text-main)', textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}
                               >
                                 <i className='bx bx-user-circle'></i> View Full Profile
                               </button>
                               <button
                                 onClick={() => handleEditClick(user)}
-                                style={{ width: '100%', padding: '10px 16px', background: 'transparent', border: 'none', color: '#c9d1d9', textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}
+                                style={{ width: '100%', padding: '10px 16px', background: 'transparent', border: 'none', color: 'var(--text-main)', textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}
                               >
                                 <i className='bx bx-edit-alt'></i> Edit Identity
                               </button>
                               <button
                                 onClick={() => { navigate('/admin/logs', { state: { userId: user.id } }); setActiveMenu(null); }}
-                                style={{ width: '100%', padding: '10px 16px', background: 'transparent', border: 'none', color: '#c9d1d9', textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}
+                                style={{ width: '100%', padding: '10px 16px', background: 'transparent', border: 'none', color: 'var(--text-main)', textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}
                               >
                                 <i className='bx bx-list-ul'></i> View User Logs
                               </button>
                               <button
                                 onClick={() => handleResetPassword(user.id)}
-                                style={{ width: '100%', padding: '10px 16px', background: 'transparent', border: 'none', color: '#c9d1d9', textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}
+                                style={{ width: '100%', padding: '10px 16px', background: 'transparent', border: 'none', color: 'var(--text-main)', textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}
                               >
                                 <i className='bx bx-key'></i> Reset Password
                               </button>
                               <button
                                 onClick={() => { handleManageSessions(user); setActiveMenu(null); }}
-                                style={{ width: '100%', padding: '10px 16px', background: 'transparent', border: 'none', color: '#c9d1d9', textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}
+                                style={{ width: '100%', padding: '10px 16px', background: 'transparent', border: 'none', color: 'var(--text-main)', textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}
                               >
                                 <i className='bx bx-shield-quarter'></i> Manage Active Sessions
                               </button>
-                              <div style={{ height: '1px', background: '#30363d', margin: '4px 0' }}></div>
+                              <div style={{ height: '1px', background: 'var(--border-color)', margin: '4px 0' }}></div>
                               <button
                                 onClick={() => handleDelete(user.id, true)}
-                                style={{ width: '100%', padding: '10px 16px', background: 'transparent', border: 'none', color: '#ef4444', textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}
+                                style={{ width: '100%', padding: '10px 16px', background: 'transparent', border: 'none', color: 'var(--red-color)', textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}
                               >
                                 <i className='bx bx-shield-x'></i> Permanent Purge
                               </button>
@@ -552,14 +552,14 @@ export default function UsersPage() {
         </table>
 
         {/* FOOTER */}
-        <div style={{ padding: '16px 24px', borderTop: '1px solid #30363d', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ fontSize: '13px', color: '#8b949e' }}>
+        <div style={{ padding: '16px 24px', borderTop: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
             Showing <strong>{users.length}</strong> of <strong>{totalRecords}</strong> users
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
             <button
               className="pg-btn"
-              style={{ background: '#161b22', border: '1px solid #30363d', color: '#c9d1d9', padding: '6px 12px', borderRadius: '6px', fontSize: '13px', cursor: page === 1 ? 'not-allowed' : 'pointer', opacity: page === 1 ? 0.5 : 1 }}
+              style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-color)', color: 'var(--text-main)', padding: '6px 12px', borderRadius: '6px', fontSize: '13px', cursor: page === 1 ? 'not-allowed' : 'pointer', opacity: page === 1 ? 0.5 : 1 }}
               disabled={page === 1}
               onClick={() => handlePageChange(page - 1)}
             >
@@ -572,9 +572,9 @@ export default function UsersPage() {
                   style={{
                     minWidth: '32px',
                     height: '32px',
-                    background: page === i + 1 ? '#2f81f7' : 'transparent',
+                    background: page === i + 1 ? 'var(--primary)' : 'transparent',
                     border: 'none',
-                    color: page === i + 1 ? '#fff' : '#c9d1d9',
+                    color: page === i + 1 ? '#fff' : 'var(--text-main)',
                     borderRadius: '6px',
                     fontSize: '13px',
                     fontWeight: '700',
@@ -588,7 +588,7 @@ export default function UsersPage() {
             </div>
             <button
               className="pg-btn"
-              style={{ background: '#161b22', border: '1px solid #30363d', color: '#c9d1d9', padding: '6px 16px', borderRadius: '8px', fontSize: '13px', cursor: page === totalPages ? 'not-allowed' : 'pointer', opacity: page === totalPages ? 0.5 : 1, transition: 'all 0.2s' }}
+              style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-color)', color: 'var(--text-main)', padding: '6px 16px', borderRadius: '8px', fontSize: '13px', cursor: page === totalPages ? 'not-allowed' : 'pointer', opacity: page === totalPages ? 0.5 : 1, transition: 'all 0.2s' }}
               disabled={page === totalPages}
               onClick={() => handlePageChange(page + 1)}
             >
@@ -605,11 +605,11 @@ export default function UsersPage() {
           onClick={() => setSelectedUserForProfile(null)}
         >
           <div
-            style={{ background: '#161b22', border: '1px solid #30363d', borderRadius: '24px', width: '100%', maxWidth: '800px', overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)' }}
+            style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-color)', borderRadius: '24px', width: '100%', maxWidth: '800px', overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)' }}
             onClick={e => e.stopPropagation()}
           >
             {/* Modal Header */}
-            <div style={{ padding: '32px', background: 'linear-gradient(to right, #1f2937, #111827)', borderBottom: '1px solid #30363d', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ padding: '32px', background: 'linear-gradient(to right, var(--border-color), var(--bg-panel))', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
                 <div style={{ width: '80px', height: '80px', borderRadius: '24px', background: '#fd9745', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '32px', fontWeight: '800', overflow: 'hidden' }}>
                   {selectedUserForProfile.avatarUrl ? (
@@ -620,12 +620,12 @@ export default function UsersPage() {
                 </div>
                 <div>
                   <h2 style={{ margin: 0, color: '#fff', fontSize: '24px', fontWeight: '800' }}>{selectedUserForProfile.firstName} {selectedUserForProfile.lastName}</h2>
-                  <p style={{ margin: '4px 0 0 0', color: '#8b949e', fontSize: '14px' }}>@{selectedUserForProfile.username} • Sentinel Identity</p>
+                  <p style={{ margin: '4px 0 0 0', color: 'var(--text-secondary)', fontSize: '14px' }}>@{selectedUserForProfile.username} • Sentinel Identity</p>
                 </div>
               </div>
               <button
                 onClick={() => setSelectedUserForProfile(null)}
-                style={{ background: 'rgba(255,255,255,0.05)', border: 'none', color: '#8b949e', width: '40px', height: '40px', borderRadius: '12px', cursor: 'pointer', fontSize: '24px' }}
+                style={{ background: 'rgba(255,255,255,0.05)', border: 'none', color: 'var(--text-secondary)', width: '40px', height: '40px', borderRadius: '12px', cursor: 'pointer', fontSize: '24px' }}
               >×</button>
             </div>
 
@@ -633,7 +633,7 @@ export default function UsersPage() {
             <div style={{ padding: '32px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px' }}>
               {/* Left Column: Identity & Professional */}
               <div>
-                <h3 style={{ fontSize: '12px', fontWeight: '800', color: '#2f81f7', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '16px' }}>Identity & Professional</h3>
+                <h3 style={{ fontSize: '12px', fontWeight: '800', color: 'var(--primary)', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '16px' }}>Identity & Professional</h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                   {[
                     { label: 'Email Address', value: selectedUserForProfile.email, icon: 'bx-envelope' },
@@ -643,9 +643,9 @@ export default function UsersPage() {
                     { label: 'Department', value: selectedUserForProfile.department || 'N/A', icon: 'bx-buildings' },
                   ].map((item, i) => (
                     <div key={i} style={{ display: 'flex', gap: '12px' }}>
-                      <i className={`bx ${item.icon}`} style={{ fontSize: '18px', color: '#8b949e', marginTop: '2px' }}></i>
+                      <i className={`bx ${item.icon}`} style={{ fontSize: '18px', color: 'var(--text-secondary)', marginTop: '2px' }}></i>
                       <div>
-                        <div style={{ fontSize: '12px', color: '#8b949e' }}>{item.label}</div>
+                        <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{item.label}</div>
                         <div style={{ fontSize: '14px', color: '#f0f6fc', fontWeight: '600' }}>{item.value}</div>
                       </div>
                     </div>
@@ -655,15 +655,15 @@ export default function UsersPage() {
 
               {/* Right Column: Security & Activity */}
               <div>
-                <h3 style={{ fontSize: '12px', fontWeight: '800', color: '#2f81f7', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '16px' }}>Security & Clearance</h3>
+                <h3 style={{ fontSize: '12px', fontWeight: '800', color: 'var(--primary)', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '16px' }}>Security & Clearance</h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  <div style={{ background: '#0d1117', padding: '16px', borderRadius: '12px', border: '1px solid #30363d' }}>
+                  <div style={{ background: 'var(--bg-app)', padding: '16px', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
-                      <span style={{ fontSize: '13px', color: '#8b949e' }}>Security Clearance</span>
+                      <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Security Clearance</span>
                       <span style={{ fontSize: '13px', color: '#fff', fontWeight: '800' }}>LEVEL {selectedUserForProfile.securityClearanceLevel || 1}</span>
                     </div>
-                    <div style={{ height: '6px', background: '#30363d', borderRadius: '3px', overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: `${(selectedUserForProfile.securityClearanceLevel || 1) * 20}%`, background: '#238636' }}></div>
+                    <div style={{ height: '6px', background: 'var(--border-color)', borderRadius: '3px', overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${(selectedUserForProfile.securityClearanceLevel || 1) * 20}%`, background: 'var(--green-color)' }}></div>
                     </div>
                   </div>
 
@@ -675,9 +675,9 @@ export default function UsersPage() {
                     { label: 'Last System Access', value: selectedUserForProfile.lastLoginAt ? new Date(selectedUserForProfile.lastLoginAt).toLocaleString() : 'Never', icon: 'bx-time' },
                   ].map((item, i) => (
                     <div key={i} style={{ display: 'flex', gap: '12px' }}>
-                      <i className={`bx ${item.icon}`} style={{ fontSize: '18px', color: '#8b949e', marginTop: '2px' }}></i>
+                      <i className={`bx ${item.icon}`} style={{ fontSize: '18px', color: 'var(--text-secondary)', marginTop: '2px' }}></i>
                       <div>
-                        <div style={{ fontSize: '12px', color: '#8b949e' }}>{item.label}</div>
+                        <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{item.label}</div>
                         <div style={{ fontSize: '14px', color: '#f0f6fc', fontWeight: '600' }}>{item.value}</div>
                       </div>
                     </div>
@@ -687,14 +687,14 @@ export default function UsersPage() {
             </div>
 
             {/* Modal Footer */}
-            <div style={{ padding: '24px 32px', background: '#0d1117', borderTop: '1px solid #30363d', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+            <div style={{ padding: '24px 32px', background: 'var(--bg-app)', borderTop: '1px solid var(--border-color)', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
               <button
                 onClick={() => setSelectedUserForProfile(null)}
-                style={{ padding: '10px 24px', background: 'transparent', border: '1px solid #30363d', color: '#c9d1d9', borderRadius: '8px', fontWeight: '700', cursor: 'pointer' }}
+                style={{ padding: '10px 24px', background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-main)', borderRadius: '8px', fontWeight: '700', cursor: 'pointer' }}
               >Close Report</button>
               <button
                 onClick={() => { navigate('/admin/logs', { state: { userId: selectedUserForProfile.id } }); setSelectedUserForProfile(null); }}
-                style={{ padding: '10px 24px', background: '#2f81f7', border: 'none', color: '#fff', borderRadius: '8px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
+                style={{ padding: '10px 24px', background: 'var(--primary)', border: 'none', color: '#fff', borderRadius: '8px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
               >
                 <i className='bx bx-list-ul'></i> Investigate Logs
               </button>
@@ -710,84 +710,84 @@ export default function UsersPage() {
           onClick={() => setSelectedUserForEdit(null)}
         >
           <div
-            style={{ background: '#161b22', border: '1px solid #30363d', borderRadius: '24px', width: '100%', maxWidth: '700px', overflow: 'hidden' }}
+            style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-color)', borderRadius: '24px', width: '100%', maxWidth: '700px', overflow: 'hidden' }}
             onClick={e => e.stopPropagation()}
           >
-            <div style={{ padding: '24px 32px', borderBottom: '1px solid #30363d', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ padding: '24px 32px', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h2 style={{ margin: 0, color: '#fff', fontSize: '20px' }}>Modify Sentinel Identity</h2>
               <button
                 onClick={() => setSelectedUserForEdit(null)}
-                style={{ background: 'transparent', border: 'none', color: '#8b949e', fontSize: '24px', cursor: 'pointer' }}
+                style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', fontSize: '24px', cursor: 'pointer' }}
               >×</button>
             </div>
 
             <form onSubmit={handleEditSubmit}>
               {/* Avatar Section */}
               <div style={{ padding: '0 32px', display: 'flex', alignItems: 'center', gap: '24px', marginBottom: '24px' }}>
-                <div style={{ width: '80px', height: '80px', borderRadius: '24px', background: '#30363d', overflow: 'hidden', border: '2px solid #2f81f7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ width: '80px', height: '80px', borderRadius: '24px', background: 'var(--border-color)', overflow: 'hidden', border: '2px solid var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   {editFormData.avatarUrl ? (
                     <img src={editFormData.avatarUrl} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   ) : (
-                    <i className='bx bx-user' style={{ fontSize: '40px', color: '#8b949e' }}></i>
+                    <i className='bx bx-user' style={{ fontSize: '40px', color: 'var(--text-secondary)' }}></i>
                   )}
                 </div>
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', gap: '12px', marginBottom: '8px' }}>
-                    <label style={{ background: '#21262d', border: '1px solid #30363d', color: '#c9d1d9', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: '600' }}>
+                    <label style={{ background: '#21262d', border: '1px solid var(--border-color)', color: 'var(--text-main)', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: '600' }}>
                       Browse Sentinel Image
                       <input type="file" accept="image/*" hidden onChange={handleAvatarChange} />
                     </label>
                     <button
                       type="button"
                       onClick={() => setEditFormData({ ...editFormData, avatarUrl: '' })}
-                      style={{ background: 'transparent', border: 'none', color: '#ef4444', fontSize: '12px', cursor: 'pointer' }}
+                      style={{ background: 'transparent', border: 'none', color: 'var(--red-color)', fontSize: '12px', cursor: 'pointer' }}
                     >Remove Image</button>
                   </div>
-                  <p style={{ margin: 0, fontSize: '11px', color: '#8b949e' }}>Maximum size 2MB. Recommendation: Square aspect ratio.</p>
+                  <p style={{ margin: 0, fontSize: '11px', color: 'var(--text-secondary)' }}>Maximum size 2MB. Recommendation: Square aspect ratio.</p>
                 </div>
               </div>
 
               <div style={{ padding: '32px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', maxHeight: '50vh', overflowY: 'auto' }}>
                 <div className="form-group">
-                  <label style={{ display: 'block', fontSize: '12px', color: '#8b949e', marginBottom: '8px' }}>First Name</label>
+                  <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px' }}>First Name</label>
                   <input
                     type="text"
-                    style={{ width: '100%', background: '#0d1117', border: '1px solid #30363d', color: '#fff', padding: '10px', borderRadius: '8px' }}
+                    style={{ width: '100%', background: 'var(--bg-app)', border: '1px solid var(--border-color)', color: '#fff', padding: '10px', borderRadius: '8px' }}
                     value={editFormData.firstName}
                     onChange={(e) => setEditFormData({ ...editFormData, firstName: e.target.value })}
                   />
                 </div>
                 <div className="form-group">
-                  <label style={{ display: 'block', fontSize: '12px', color: '#8b949e', marginBottom: '8px' }}>Last Name</label>
+                  <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px' }}>Last Name</label>
                   <input
                     type="text"
-                    style={{ width: '100%', background: '#0d1117', border: '1px solid #30363d', color: '#fff', padding: '10px', borderRadius: '8px' }}
+                    style={{ width: '100%', background: 'var(--bg-app)', border: '1px solid var(--border-color)', color: '#fff', padding: '10px', borderRadius: '8px' }}
                     value={editFormData.lastName}
                     onChange={(e) => setEditFormData({ ...editFormData, lastName: e.target.value })}
                   />
                 </div>
                 <div className="form-group">
-                  <label style={{ display: 'block', fontSize: '12px', color: '#8b949e', marginBottom: '8px' }}>Email</label>
+                  <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px' }}>Email</label>
                   <input
                     type="email"
-                    style={{ width: '100%', background: '#0d1117', border: '1px solid #30363d', color: '#fff', padding: '10px', borderRadius: '8px' }}
+                    style={{ width: '100%', background: 'var(--bg-app)', border: '1px solid var(--border-color)', color: '#fff', padding: '10px', borderRadius: '8px' }}
                     value={editFormData.email}
                     onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })}
                   />
                 </div>
                 <div className="form-group">
-                  <label style={{ display: 'block', fontSize: '12px', color: '#8b949e', marginBottom: '8px' }}>Phone</label>
+                  <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px' }}>Phone</label>
                   <input
                     type="text"
-                    style={{ width: '100%', background: '#0d1117', border: '1px solid #30363d', color: '#fff', padding: '10px', borderRadius: '8px' }}
+                    style={{ width: '100%', background: 'var(--bg-app)', border: '1px solid var(--border-color)', color: '#fff', padding: '10px', borderRadius: '8px' }}
                     value={editFormData.phone}
                     onChange={(e) => setEditFormData({ ...editFormData, phone: e.target.value })}
                   />
                 </div>
                 <div className="form-group">
-                  <label style={{ display: 'block', fontSize: '12px', color: '#8b949e', marginBottom: '8px' }}>Role</label>
+                  <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px' }}>Role</label>
                   <select
-                    style={{ width: '100%', background: '#0d1117', border: '1px solid #30363d', color: '#fff', padding: '10px', borderRadius: '8px' }}
+                    style={{ width: '100%', background: 'var(--bg-app)', border: '1px solid var(--border-color)', color: '#fff', padding: '10px', borderRadius: '8px' }}
                     value={editFormData.role}
                     onChange={(e) => setEditFormData({ ...editFormData, role: e.target.value })}
                   >
@@ -797,9 +797,9 @@ export default function UsersPage() {
                   </select>
                 </div>
                 <div className="form-group">
-                  <label style={{ display: 'block', fontSize: '12px', color: '#8b949e', marginBottom: '8px' }}>Clearance Level</label>
+                  <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px' }}>Clearance Level</label>
                   <select
-                    style={{ width: '100%', background: '#0d1117', border: '1px solid #30363d', color: '#fff', padding: '10px', borderRadius: '8px' }}
+                    style={{ width: '100%', background: 'var(--bg-app)', border: '1px solid var(--border-color)', color: '#fff', padding: '10px', borderRadius: '8px' }}
                     value={editFormData.securityClearanceLevel}
                     onChange={(e) => setEditFormData({ ...editFormData, securityClearanceLevel: parseInt(e.target.value) })}
                   >
@@ -811,33 +811,33 @@ export default function UsersPage() {
                   </select>
                 </div>
                 <div className="form-group">
-                  <label style={{ display: 'block', fontSize: '12px', color: '#8b949e', marginBottom: '8px' }}>Job Title</label>
+                  <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px' }}>Job Title</label>
                   <input
                     type="text"
-                    style={{ width: '100%', background: '#0d1117', border: '1px solid #30363d', color: '#fff', padding: '10px', borderRadius: '8px' }}
+                    style={{ width: '100%', background: 'var(--bg-app)', border: '1px solid var(--border-color)', color: '#fff', padding: '10px', borderRadius: '8px' }}
                     value={editFormData.jobTitle}
                     onChange={(e) => setEditFormData({ ...editFormData, jobTitle: e.target.value })}
                   />
                 </div>
                 <div className="form-group">
-                  <label style={{ display: 'block', fontSize: '12px', color: '#8b949e', marginBottom: '8px' }}>Department</label>
+                  <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px' }}>Department</label>
                   <input
                     type="text"
-                    style={{ width: '100%', background: '#0d1117', border: '1px solid #30363d', color: '#fff', padding: '10px', borderRadius: '8px' }}
+                    style={{ width: '100%', background: 'var(--bg-app)', border: '1px solid var(--border-color)', color: '#fff', padding: '10px', borderRadius: '8px' }}
                     value={editFormData.department}
                     onChange={(e) => setEditFormData({ ...editFormData, department: e.target.value })}
                   />
                 </div>
-                <div className="form-group" style={{ gridColumn: 'span 2', marginTop: '10px', padding: '16px', background: '#0d1117', borderRadius: '12px', border: '1px solid #30363d' }}>
+                <div className="form-group" style={{ gridColumn: 'span 2', marginTop: '10px', padding: '16px', background: 'var(--bg-app)', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
                       <div style={{ fontSize: '13px', fontWeight: '700', color: '#f0f6fc' }}>Authenticator Secret (2FA)</div>
-                      <div style={{ fontSize: '11px', color: '#8b949e' }}>Manual secret for TOTP apps.</div>
+                      <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Manual secret for TOTP apps.</div>
                     </div>
                     <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                       <input
                         type="text"
-                        style={{ background: '#161b22', border: '1px solid #30363d', color: '#58a6ff', padding: '8px 12px', borderRadius: '6px', fontSize: '12px', width: '180px', fontFamily: 'monospace' }}
+                        style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-color)', color: 'var(--primary)', padding: '8px 12px', borderRadius: '6px', fontSize: '12px', width: '180px', fontFamily: 'monospace' }}
                         value={editFormData.totpSecret}
                         onChange={(e) => setEditFormData({ ...editFormData, totpSecret: e.target.value })}
                       />
@@ -849,21 +849,21 @@ export default function UsersPage() {
                           for (let i = 0; i < 32; i++) secret += chars.charAt(Math.floor(Math.random() * chars.length));
                           setEditFormData({ ...editFormData, totpSecret: secret });
                         }}
-                        style={{ background: '#21262d', border: '1px solid #30363d', color: '#c9d1d9', padding: '8px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '11px' }}
+                        style={{ background: '#21262d', border: '1px solid var(--border-color)', color: 'var(--text-main)', padding: '8px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '11px' }}
                       >Generate</button>
                     </div>
                   </div>
                 </div>
               </div>
-              <div style={{ padding: '24px 32px', background: '#0d1117', borderTop: '1px solid #30363d', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+              <div style={{ padding: '24px 32px', background: 'var(--bg-app)', borderTop: '1px solid var(--border-color)', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
                 <button
                   type="button"
                   onClick={() => setSelectedUserForEdit(null)}
-                  style={{ padding: '10px 24px', background: 'transparent', border: '1px solid #30363d', color: '#c9d1d9', borderRadius: '8px', cursor: 'pointer' }}
+                  style={{ padding: '10px 24px', background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-main)', borderRadius: '8px', cursor: 'pointer' }}
                 >Cancel</button>
                 <button
                   type="submit"
-                  style={{ padding: '10px 24px', background: '#238636', border: 'none', color: '#fff', borderRadius: '8px', fontWeight: '700', cursor: 'pointer' }}
+                  style={{ padding: '10px 24px', background: 'var(--green-color)', border: 'none', color: '#fff', borderRadius: '8px', fontWeight: '700', cursor: 'pointer' }}
                 >Save Changes</button>
               </div>
             </form>
@@ -878,8 +878,8 @@ export default function UsersPage() {
         >
           <div
             style={{
-              background: '#0d1117',
-              border: '1px solid #30363d',
+              background: 'var(--bg-app)',
+              border: '1px solid var(--border-color)',
               borderRadius: '24px',
               width: '100%',
               maxWidth: '650px',
@@ -891,27 +891,27 @@ export default function UsersPage() {
             }}
             onClick={e => e.stopPropagation()}
           >
-            <div style={{ padding: '24px 32px', borderBottom: '1px solid #30363d', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'linear-gradient(to right, #161b22, #0d1117)' }}>
+            <div style={{ padding: '24px 32px', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'linear-gradient(to right, var(--bg-panel), var(--bg-app))' }}>
               <div>
                 <h2 style={{ margin: 0, color: '#fff', fontSize: '18px', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Active Signal Points</h2>
-                <p style={{ margin: '4px 0 0', color: '#8b949e', fontSize: '12px' }}>Managing sessions for: {selectedUserForSessions.firstName} {selectedUserForSessions.lastName}</p>
+                <p style={{ margin: '4px 0 0', color: 'var(--text-secondary)', fontSize: '12px' }}>Managing sessions for: {selectedUserForSessions.firstName} {selectedUserForSessions.lastName}</p>
               </div>
               <button
                 onClick={() => setSelectedUserForSessions(null)}
-                style={{ background: 'rgba(255,255,255,0.05)', border: 'none', color: '#8b949e', width: '36px', height: '36px', borderRadius: '10px', cursor: 'pointer', fontSize: '20px' }}
+                style={{ background: 'rgba(255,255,255,0.05)', border: 'none', color: 'var(--text-secondary)', width: '36px', height: '36px', borderRadius: '10px', cursor: 'pointer', fontSize: '20px' }}
               >×</button>
             </div>
 
             <div style={{ padding: '32px', overflowY: 'auto', flex: 1 }}>
               {loadingSessions ? (
-                <div style={{ textAlign: 'center', padding: '40px', color: '#58a6ff' }}>
+                <div style={{ textAlign: 'center', padding: '40px', color: 'var(--primary)' }}>
                   <i className='bx bx-loader-alt bx-spin' style={{ fontSize: '32px', marginBottom: '16px' }}></i>
                   <div style={{ fontSize: '12px', fontWeight: '800' }}>INTERCEPTING ACTIVE SIGNALS...</div>
                 </div>
               ) : userSessions.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '60px', borderRadius: '16px', border: '1px dashed #30363d' }}>
-                  <i className='bx bx-ghost' style={{ fontSize: '48px', color: '#30363d', marginBottom: '16px' }}></i>
-                  <p style={{ margin: 0, color: '#8b949e', fontWeight: '600' }}>No active intelligence signals detected.</p>
+                <div style={{ textAlign: 'center', padding: '60px', borderRadius: '16px', border: '1px dashed var(--border-color)' }}>
+                  <i className='bx bx-ghost' style={{ fontSize: '48px', color: 'var(--border-color)', marginBottom: '16px' }}></i>
+                  <p style={{ margin: 0, color: 'var(--text-secondary)', fontWeight: '600' }}>No active intelligence signals detected.</p>
                 </div>
               ) : (
                 <div style={{ display: 'grid', gap: '16px' }}>
@@ -919,24 +919,24 @@ export default function UsersPage() {
                     <div
                       key={session.id}
                       style={{
-                        background: '#161b22',
+                        background: 'var(--bg-panel)',
                         padding: '20px',
                         borderRadius: '16px',
-                        border: '1px solid #30363d',
+                        border: '1px solid var(--border-color)',
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'center',
                         transition: 'border-color 0.2s'
                       }}
                       onMouseEnter={e => e.currentTarget.style.borderColor = '#444'}
-                      onMouseLeave={e => e.currentTarget.style.borderColor = '#30363d'}
+                      onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border-color)'}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                         <div style={{
                           width: '44px', height: '44px', borderRadius: '12px',
                           background: 'rgba(59, 130, 246, 0.1)',
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          color: '#58a6ff'
+                          color: 'var(--primary)'
                         }}>
                           <i className={`bx ${session.deviceType === 'mobile' ? 'bx-mobile' : 'bx-laptop'}`} style={{ fontSize: '24px' }}></i>
                         </div>
@@ -944,12 +944,12 @@ export default function UsersPage() {
                           <div style={{ fontWeight: '700', color: '#f0f6fc', fontSize: '14px' }}>
                             {session.deviceName || 'UNIDENTIFIED UNIT'} • {session.browser}
                           </div>
-                          <div style={{ fontSize: '12px', color: '#8b949e', marginTop: '4px', display: 'flex', gap: '8px', alignItems: 'center' }}>
-                            <span style={{ color: '#58a6ff', fontWeight: '800' }}>{session.ipAddress}</span>
+                          <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px', display: 'flex', gap: '8px', alignItems: 'center' }}>
+                            <span style={{ color: 'var(--primary)', fontWeight: '800' }}>{session.ipAddress}</span>
                             <span>•</span>
                             <span>{session.city || 'Uknown Sector'}</span>
                           </div>
-                          <div style={{ fontSize: '11px', color: '#484f58', marginTop: '6px' }}>
+                          <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '6px' }}>
                             Pulse: {new Date(session.lastAccessedAt).toLocaleString()}
                           </div>
                         </div>
@@ -978,10 +978,10 @@ export default function UsersPage() {
               )}
             </div>
 
-            <div style={{ padding: '24px 32px', borderTop: '1px solid #30363d', background: '#0d1117', textAlign: 'center' }}>
+            <div style={{ padding: '24px 32px', borderTop: '1px solid var(--border-color)', background: 'var(--bg-app)', textAlign: 'center' }}>
               <button
                 onClick={() => setSelectedUserForSessions(null)}
-                style={{ padding: '12px 30px', background: 'transparent', border: '1px solid #30363d', color: '#c9d1d9', borderRadius: '12px', cursor: 'pointer', fontWeight: '700', fontSize: '13px' }}
+                style={{ padding: '12px 30px', background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-main)', borderRadius: '12px', cursor: 'pointer', fontWeight: '700', fontSize: '13px' }}
               >Return to Command Center</button>
             </div>
           </div>

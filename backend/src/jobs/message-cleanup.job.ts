@@ -3,6 +3,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, LessThan } from 'typeorm';
 import { Message } from '../database/entities/chat/message.entity';
+import { ChatGateway } from '../modules/chat/chat.gateway';
 
 @Injectable()
 export class MessageCleanupJob {
@@ -11,9 +12,10 @@ export class MessageCleanupJob {
     constructor(
         @InjectRepository(Message)
         private readonly messageRepository: Repository<Message>,
+        private readonly chatGateway: ChatGateway,
     ) { }
 
-    @Cron(CronExpression.EVERY_MINUTE)
+    @Cron(CronExpression.EVERY_10_SECONDS)
     async handleExpiredMessages() {
         this.logger.debug('Executing Protocol: SECURE_WIPE - Checking for expired self-destruct messages...');
 
@@ -38,6 +40,15 @@ export class MessageCleanupJob {
                     msg.encryptedContent = null;
                     msg.initializationVector = null;
                     msg.authTag = null;
+
+                    // Emit event to frontend
+                    if (this.chatGateway.server) {
+                        this.chatGateway.server.to(`conv_${msg.conversationId}`).emit('message_deleted', {
+                            messageId: msg.id,
+                            conversationId: msg.conversationId,
+                            reason: 'SELF_DESTRUCT_EXPIRED'
+                        });
+                    }
                 }
 
                 await this.messageRepository.save(expiredMessages);

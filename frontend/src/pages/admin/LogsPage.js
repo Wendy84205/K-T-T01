@@ -61,8 +61,8 @@ export default function LogsPage() {
             <div className="soc-title-section" style={{ marginBottom: '32px' }}>
                 <div className="soc-title-left">
                     <h1 style={{ fontSize: '28px', fontWeight: '700', letterSpacing: '-0.5px', marginBottom: '4px' }}>System Audit Trail</h1>
-                    <div style={{ color: '#8b949e', fontSize: '13px' }}>
-                        Viewing logs from server cluster: <span style={{ color: '#58a6ff' }}>us-east-1a</span>
+                    <div style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>
+                        Viewing logs from server cluster: <span style={{ color: 'var(--primary)' }}>us-east-1a</span>
                     </div>
                 </div>
             </div>
@@ -71,23 +71,23 @@ export default function LogsPage() {
             <div className="soc-filter-row" style={{ marginBottom: '24px' }}>
                 <div style={{ display: 'flex', gap: '16px', flex: 1, flexWrap: 'wrap' }}>
                     <div className="search-container-mobile" style={{ position: 'relative' }}>
-                        <i className='bx bx-group' style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: '#8b949e', fontSize: '18px' }}></i>
+                        <i className='bx bx-group' style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)', fontSize: '18px' }}></i>
                         <input
                             type="text"
                             placeholder="Filter by Actor..."
                             className="admin-input"
-                            style={{ background: '#0d1117', border: '1px solid #30363d', color: 'white', padding: '10px 16px 10px 48px', borderRadius: '6px', width: '100%', fontSize: '13px' }}
+                            style={{ background: 'var(--bg-app)', border: '1px solid var(--border-color)', color: 'white', padding: '10px 16px 10px 48px', borderRadius: '6px', width: '100%', fontSize: '13px' }}
                             value={filterActor}
                             onChange={(e) => setFilterActor(e.target.value)}
                         />
                     </div>
                     <div className="search-container-mobile" style={{ position: 'relative' }}>
-                        <i className='bx bx-list-check' style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: '#8b949e', fontSize: '18px', zIndex: 1 }}></i>
+                        <i className='bx bx-list-check' style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)', fontSize: '18px', zIndex: 1 }}></i>
                         <select
                             className="admin-input"
                             style={{
-                                background: '#0d1117',
-                                border: '1px solid #30363d',
+                                background: 'var(--bg-app)',
+                                border: '1px solid var(--border-color)',
                                 color: 'white',
                                 padding: '10px 16px 10px 48px',
                                 borderRadius: '6px',
@@ -112,10 +112,10 @@ export default function LogsPage() {
                             <option>BRUTE_FORCE_ATTEMPT</option>
                             <option>PERMISSION_DENIED</option>
                         </select>
-                        <i className='bx bx-chevron-down' style={{ position: 'absolute', right: '16px', top: '50%', transform: 'translateY(-50%)', color: '#8b949e' }}></i>
+                        <i className='bx bx-chevron-down' style={{ position: 'absolute', right: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }}></i>
                     </div>
                 </div>
-                <button className="admin-btn admin-btn-outline" onClick={handleExport} style={{ borderColor: '#30363d', color: '#c9d1d9', height: '42px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', fontWeight: '600' }}>
+                <button className="admin-btn admin-btn-outline" onClick={handleExport} style={{ borderColor: 'var(--border-color)', color: 'var(--text-main)', height: '42px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', fontWeight: '600' }}>
                     <i className='bx bx-export' style={{ fontSize: '18px' }}></i> EXPORT CSV
                 </button>
             </div>
@@ -134,7 +134,7 @@ export default function LogsPage() {
                 <div className="audit-table-container">
                     <table className="audit-table">
                         <thead>
-                            <tr style={{ background: '#0d1117' }}>
+                            <tr style={{ background: 'var(--bg-app)' }}>
                                 <th style={{ padding: '16px 20px' }}>TIMESTAMP (ISO 8601)</th>
                                 <th style={{ padding: '16px 20px' }}>ACTOR</th>
                                 <th style={{ padding: '16px 20px' }}>ACTION</th>
@@ -145,7 +145,7 @@ export default function LogsPage() {
                         <tbody>
                             {loading ? (
                                 <tr>
-                                    <td colSpan="5" style={{ textAlign: 'center', padding: '120px', color: '#8b949e' }}>
+                                    <td colSpan="5" style={{ textAlign: 'center', padding: '120px', color: 'var(--text-secondary)' }}>
                                         <div className="soc-dot-pulse" style={{ margin: '0 auto 20px', width: '12px', height: '12px' }}></div>
                                         SYNCING AUDIT DATA...
                                     </td>
@@ -157,19 +157,19 @@ export default function LogsPage() {
                                     onClick={() => setSelectedLog(log)}
                                     style={{ cursor: 'pointer' }}
                                 >
-                                    <td style={{ color: '#8b949e', fontSize: '13px' }}>
+                                    <td style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>
                                         {new Date(log.createdAt).toLocaleString()}
                                     </td>
                                     <td>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                            <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: '#30363d', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', color: '#fff' }}>
+                                            <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', color: '#fff' }}>
                                                 {log.user?.firstName?.charAt(0) || log.userId?.charAt(0) || 'U'}
                                             </div>
                                             <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                                <span style={{ fontSize: '13px', fontWeight: '700', color: '#c9d1d9' }}>
+                                                <span style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-main)' }}>
                                                     {log.user ? `${log.user.firstName} ${log.user.lastName}` : 'System/Anonymous'}
                                                 </span>
-                                                <span style={{ fontSize: '10px', color: '#8b949e' }}>@{log.user?.username || 'system'}</span>
+                                                <span style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>@{log.user?.username || 'system'}</span>
                                             </div>
                                         </div>
                                     </td>
@@ -178,12 +178,12 @@ export default function LogsPage() {
                                             <span className={log.severity === 'CRITICAL' || log.severity === 'HIGH' || log.eventType.includes('DENIED') || log.eventType.includes('FAILED') ? 'action-failed' : 'action-success'} style={{ fontSize: '12px', fontWeight: '800' }}>
                                                 {log.eventType}
                                             </span>
-                                            <span style={{ fontSize: '11px', color: '#8b949e', marginTop: '2px' }}>
+                                            <span style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>
                                                 {log.description}
                                             </span>
                                         </div>
                                     </td>
-                                    <td style={{ color: '#c9d1d9', fontSize: '13px', fontFamily: 'monospace' }}>{log.ipAddress || '127.0.0.1'}</td>
+                                    <td style={{ color: 'var(--text-main)', fontSize: '13px', fontFamily: 'monospace' }}>{log.ipAddress || '127.0.0.1'}</td>
                                     <td>
                                         <span className={`status-capsule ${log.severity === 'CRITICAL' || log.severity === 'HIGH' ? 'failed' : 'success'}`} style={{ fontSize: '10px', padding: '4px 10px', minWidth: '70px', textAlign: 'center' }}>
                                             {log.severity}
@@ -196,7 +196,7 @@ export default function LogsPage() {
                 </div>
 
                 <div className="terminal-footer" style={{ padding: '16px 20px' }}>
-                    <div style={{ fontSize: '13px', color: '#8b949e' }}>
+                    <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
                         Showing {logs.length > 0 ? ((page - 1) * 10) + 1 : 0}-{Math.min(page * 10, totalPages * 10)} of ~1,245 events
                     </div>
                     <div className="pagination-controls" style={{ gap: '8px' }}>
@@ -230,14 +230,14 @@ export default function LogsPage() {
                             </div>
                         </div>
                     ) : (
-                        <div style={{ color: '#8b949e', fontSize: '13px', padding: '20px 0' }}>Select a log entry to analyze session telemetry.</div>
+                        <div style={{ color: 'var(--text-secondary)', fontSize: '13px', padding: '20px 0' }}>Select a log entry to analyze session telemetry.</div>
                     )}
                 </div>
 
-                <div className="forensic-card" style={{ background: '#010409' }}>
+                <div className="forensic-card" style={{ background: 'var(--bg-app)' }}>
                     <h2 className="forensic-title">Raw Payload</h2>
                     {selectedLog ? (
-                        <pre className="payload-preview" style={{ background: 'transparent', border: 'none', padding: 0, fontSize: '12px', color: '#58a6ff' }}>
+                        <pre className="payload-preview" style={{ background: 'transparent', border: 'none', padding: 0, fontSize: '12px', color: 'var(--primary)' }}>
                             {JSON.stringify({
                                 event_id: selectedLog.id,
                                 timestamp: selectedLog.createdAt,
@@ -254,7 +254,7 @@ export default function LogsPage() {
                             }, null, 2)}
                         </pre>
                     ) : (
-                        <div style={{ color: '#8b949e', fontSize: '13px', padding: '20px 0' }}>Initial payloads are encrypted at rest. Select a log to decrypt.</div>
+                        <div style={{ color: 'var(--text-secondary)', fontSize: '13px', padding: '20px 0' }}>Initial payloads are encrypted at rest. Select a log to decrypt.</div>
                     )}
                 </div>
             </div>

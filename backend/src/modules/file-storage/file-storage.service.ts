@@ -6,6 +6,7 @@ import { Folder } from '../../database/entities/file-storage/folder.entity';
 import { FileVersion } from '../../database/entities/file-storage/file-version.entity';
 import { FileShare } from '../../database/entities/file-storage/file-share.entity';
 import { EncryptionService } from '../../common/service/encryption.service';
+import { AuditService } from '../../common/service/audit.service';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -23,6 +24,7 @@ export class FileStorageService {
         @InjectRepository(FileShare)
         private fileShareRepository: Repository<FileShare>,
         private encryptionService: EncryptionService,
+        private auditService: AuditService,
     ) {
         if (!fs.existsSync(this.uploadDir)) {
             fs.mkdirSync(this.uploadDir, { recursive: true });
@@ -94,7 +96,19 @@ export class FileStorageService {
             sharedWithType: 'user'
         });
 
-        return this.fileShareRepository.save(share);
+        const savedShare = await this.fileShareRepository.save(share);
+
+        // Security Audit
+        await this.auditService.createAuditLog({
+            userId: ownerId,
+            eventType: 'FILE_SHARE',
+            entityType: 'File',
+            entityId: fileId,
+            description: `File shared with user ${targetUserId} (Level: ${permissionLevel})`,
+            metadata: { targetUserId, permissionLevel }
+        });
+
+        return savedShare;
     }
 
     async getFileShares(fileId: string, userId: string): Promise<any[]> {
@@ -171,7 +185,18 @@ export class FileStorageService {
             existingFile.versionNumber = existingFile.versionNumber + 1;
             existingFile.metadata = { iv, tag, contentEncoding: 'aes-256-gcm' };
 
-            return this.fileRepository.save(existingFile);
+            const saved = await this.fileRepository.save(existingFile);
+
+            await this.auditService.createAuditLog({
+                userId,
+                eventType: 'FILE_VERSION_UPLOAD',
+                entityType: 'File',
+                entityId: saved.id,
+                description: `New version (v${saved.versionNumber}) uploaded for file: ${saved.originalName}`,
+                metadata: { version: saved.versionNumber }
+            });
+
+            return saved;
         }
 
         const newFile = this.fileRepository.create({
@@ -191,7 +216,18 @@ export class FileStorageService {
             metadata: { iv, tag, contentEncoding: 'aes-256-gcm' },
         });
 
-        return this.fileRepository.save(newFile);
+        const savedFile = await this.fileRepository.save(newFile);
+
+        await this.auditService.createAuditLog({
+            userId,
+            eventType: 'FILE_UPLOAD',
+            entityType: 'File',
+            entityId: savedFile.id,
+            description: `New secure file uploaded: ${savedFile.originalName}`,
+            metadata: { size: savedFile.sizeBytes }
+        });
+
+        return savedFile;
     }
 
     async downloadFile(fileId: string, userId: string, versionNumber?: number): Promise<{ buffer: Buffer; metadata: File | FileVersion }> {
@@ -214,6 +250,17 @@ export class FileStorageService {
         const key = Buffer.from(file.encryptionKeyId, 'base64');
         const { iv, tag } = file.metadata;
         const decrypted = this.encryptionService.decryptFile(encryptedBuffer, key, iv, tag);
+
+        // Security Audit
+        await this.auditService.createAuditLog({
+            userId,
+            eventType: 'FILE_DOWNLOAD',
+            entityType: 'File',
+            entityId: fileId,
+            description: `Secure file downloaded/accessed: ${file.originalName} (v${versionNumber || file.versionNumber})`,
+            metadata: { version: versionNumber || file.versionNumber }
+        });
+
         return { buffer: decrypted, metadata: file };
     }
 
@@ -288,7 +335,17 @@ export class FileStorageService {
 
         // Physical cleanup
         if (fs.existsSync(file.storagePath)) fs.unlinkSync(file.storagePath);
+        const fileName = file.originalName;
         await this.fileRepository.remove(file);
+
+        await this.auditService.createAuditLog({
+            userId,
+            eventType: 'FILE_DELETE',
+            entityType: 'File',
+            entityId: fileId,
+            description: `Secure file permanently deleted: ${fileName}`,
+            severity: 'WARN'
+        });
     }
 
     async verifyFileIntegrity(fileId: string, userId: string): Promise<any> {
@@ -298,6 +355,16 @@ export class FileStorageService {
         const { buffer } = await this.downloadFile(fileId, userId);
         const currentHash = this.encryptionService.hashSHA256(buffer);
         const isValid = currentHash === file.fileHash;
+
+        await this.auditService.createAuditLog({
+            userId,
+            eventType: 'FILE_INTEGRITY_VERIFY',
+            entityType: 'File',
+            entityId: fileId,
+            description: `Integrity check for ${file.originalName}: ${isValid ? 'PASSED' : 'FAILED'}`,
+            severity: isValid ? 'INFO' : 'CRITICAL',
+            metadata: { isValid, currentHash, originalHash: file.fileHash }
+        });
 
         return { isValid, originalHash: file.fileHash, currentHash, verifiedAt: new Date(), fileName: file.name, currentVersion: file.versionNumber };
     }

@@ -707,6 +707,18 @@ class ApiClient {
       body: JSON.stringify({ userId, role }),
     });
   }
+
+  async removeTeamMember(teamId, userId) {
+    return this.request(`/teams/${teamId}/members/${userId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async deleteTeam(teamId) {
+    return this.request(`/teams/${teamId}`, {
+      method: 'DELETE',
+    });
+  }
 }
 
 const api = new ApiClient();

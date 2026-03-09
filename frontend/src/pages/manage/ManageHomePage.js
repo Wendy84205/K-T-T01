@@ -88,7 +88,7 @@ function ChatPanel({ currentUser }) {
                         try { data.content = await decryptContent(rawContent, privateKey); } catch (err) { }
                     }
                 } else {
-                    data.content = " [E2EE: Thiếu khóa cá nhân]";
+                    data.content = " [E2EE: Missing Private Key]";
                 }
             }
 
@@ -125,7 +125,7 @@ function ChatPanel({ currentUser }) {
                     if (conv.lastMessage && conv.lastMessage.content && conv.lastMessage.content.startsWith('[E2EE]:')) {
                         const rawContent = conv.lastMessage.content.substring(7);
                         if (!privateKey) {
-                            conv.lastMessage.content = " [E2EE: Thiếu khóa cá nhân]";
+                            conv.lastMessage.content = " [E2EE: Missing Private Key]";
                         } else {
                             try {
                                 const encryptedData = JSON.parse(rawContent);
@@ -160,7 +160,7 @@ function ChatPanel({ currentUser }) {
                 if (msg.content && msg.content.startsWith('[E2EE]:')) {
                     const rawContent = msg.content.substring(7);
                     if (!privateKey) {
-                        msg.content = " [E2EE: Thiếu khóa cá nhân]";
+                        msg.content = " [E2EE: Missing Private Key]";
                     } else {
                         try {
                             const encryptedData = JSON.parse(rawContent);

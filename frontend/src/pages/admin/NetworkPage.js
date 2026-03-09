@@ -47,12 +47,12 @@ export default function NetworkPage() {
         return () => clearInterval(interval);
     }, [isLive, fetchData]);
 
-    const COLORS = ['#3b82f6', '#10b981', '#ef4444', '#f59e0b', '#8b5cf6', '#ec4899'];
+    const COLORS = ['var(--primary)', 'var(--green-color)', 'var(--red-color)', 'var(--accent-amber)', '#8b5cf6', '#ec4899'];
 
     if (loading) {
         return (
-            <div style={{ display: 'flex', flexDirection: 'column', height: '100%', alignItems: 'center', justifyContent: 'center', background: '#030712', color: '#8b949e' }}>
-                <RefreshCw className="animate-spin" size={48} style={{ marginBottom: '16px', color: '#3b82f6' }} />
+            <div style={{ display: 'flex', flexDirection: 'column', height: '100%', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-app)', color: 'var(--text-secondary)' }}>
+                <RefreshCw className="animate-spin" size={48} style={{ marginBottom: '16px', color: 'var(--primary)' }} />
                 <div style={{ fontSize: '18px', fontWeight: '600', letterSpacing: '2px' }}>INITIALIZING NETWORK ANALYTICS...</div>
             </div>
         );
@@ -77,7 +77,7 @@ export default function NetworkPage() {
     });
 
     return (
-        <div className="soc-dashboard" style={{ padding: '24px', background: '#030712' }}>
+        <div className="soc-dashboard" style={{ padding: '24px', background: 'var(--bg-app)' }}>
             {/* Header Section */}
             <div className="soc-title-section">
                 <div className="soc-title-left">
@@ -94,16 +94,16 @@ export default function NetworkPage() {
                         style={{
                             padding: '8px 16px',
                             background: isLive ? 'rgba(59, 130, 246, 0.2)' : 'rgba(255,255,255,0.05)',
-                            border: `1px solid ${isLive ? '#3b82f6' : 'rgba(255,255,255,0.1)'}`,
+                            border: `1px solid ${isLive ? 'var(--primary)' : 'rgba(255,255,255,0.1)'}`,
                             borderRadius: '8px',
-                            color: isLive ? '#3b82f6' : '#94a3b8',
+                            color: isLive ? 'var(--primary)' : 'var(--text-secondary)',
                             display: 'flex',
                             alignItems: 'center',
                             gap: '8px',
                             cursor: 'pointer'
                         }}
                     >
-                        <div className={`soc-dot ${isLive ? 'animate-pulse' : ''}`} style={{ width: '8px', height: '8px', background: isLive ? '#3b82f6' : '#94a3b8' }} />
+                        <div className={`soc-dot ${isLive ? 'animate-pulse' : ''}`} style={{ width: '8px', height: '8px', background: isLive ? 'var(--primary)' : 'var(--text-secondary)' }} />
                         {isLive ? 'LIVE CAPTURE' : 'PAUSED'}
                     </button>
                 </div>
@@ -115,12 +115,12 @@ export default function NetworkPage() {
                     <div className="stat-main">
                         <div>
                             <div className="stat-label">Throughput</div>
-                            <div className="stat-value">{metrics.totalBandwidth} <span style={{ fontSize: '14px', color: '#94a3b8' }}>Mbps</span></div>
+                            <div className="stat-value">{metrics.totalBandwidth} <span style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>Mbps</span></div>
                         </div>
-                        <Zap style={{ color: '#3b82f6', opacity: 0.5 }} size={32} />
+                        <Zap style={{ color: 'var(--primary)', opacity: 0.5 }} size={32} />
                     </div>
                     <div className="stat-progress">
-                        <div className="stat-progress-fill" style={{ width: '65%', background: '#3b82f6' }} />
+                        <div className="stat-progress-fill" style={{ width: '65%', background: 'var(--primary)' }} />
                     </div>
                 </div>
 
@@ -128,12 +128,12 @@ export default function NetworkPage() {
                     <div className="stat-main">
                         <div>
                             <div className="stat-label">Packet Flow</div>
-                            <div className="stat-value">{metrics.packetsPerSecond.toLocaleString()} <span style={{ fontSize: '14px', color: '#94a3b8' }}>pps</span></div>
+                            <div className="stat-value">{metrics.packetsPerSecond.toLocaleString()} <span style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>pps</span></div>
                         </div>
-                        <Activity style={{ color: '#10b981', opacity: 0.5 }} size={32} />
+                        <Activity style={{ color: 'var(--green-color)', opacity: 0.5 }} size={32} />
                     </div>
                     <div className="stat-progress">
-                        <div className="stat-progress-fill" style={{ width: '42%', background: '#10b981' }} />
+                        <div className="stat-progress-fill" style={{ width: '42%', background: 'var(--green-color)' }} />
                     </div>
                 </div>
 
@@ -156,10 +156,10 @@ export default function NetworkPage() {
                             <div className="stat-label">Threat Blocks</div>
                             <div className="stat-value">{metrics.threatBlocks}</div>
                         </div>
-                        <Shield style={{ color: '#ef4444', opacity: 0.5 }} size={32} />
+                        <Shield style={{ color: 'var(--red-color)', opacity: 0.5 }} size={32} />
                     </div>
                     <div className="stat-progress">
-                        <div className="stat-progress-fill" style={{ width: '12%', background: '#ef4444' }} />
+                        <div className="stat-progress-fill" style={{ width: '12%', background: 'var(--red-color)' }} />
                     </div>
                 </div>
             </div>
@@ -183,23 +183,23 @@ export default function NetworkPage() {
                             <AreaChart data={metrics.historicalData}>
                                 <defs>
                                     <linearGradient id="colorSent" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
-                                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                                        <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.3} />
+                                        <stop offset="95%" stopColor="var(--primary)" stopOpacity={0} />
                                     </linearGradient>
                                     <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
-                                        <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                                        <stop offset="5%" stopColor="var(--green-color)" stopOpacity={0.3} />
+                                        <stop offset="95%" stopColor="var(--green-color)" stopOpacity={0} />
                                     </linearGradient>
                                 </defs>
                                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-                                <XAxis dataKey="time" stroke="#64748b" fontSize={11} />
-                                <YAxis stroke="#64748b" fontSize={11} />
+                                <XAxis dataKey="time" stroke="var(--text-muted)" fontSize={11} />
+                                <YAxis stroke="var(--text-muted)" fontSize={11} />
                                 <Tooltip
-                                    contentStyle={{ background: '#111827', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }}
+                                    contentStyle={{ background: 'var(--bg-panel)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }}
                                     itemStyle={{ fontSize: '12px' }}
                                 />
-                                <Area type="monotone" dataKey="sent" stroke="#3b82f6" fillOpacity={1} fill="url(#colorSent)" />
-                                <Area type="monotone" dataKey="received" stroke="#10b981" fillOpacity={1} fill="url(#colorRev)" />
+                                <Area type="monotone" dataKey="sent" stroke="var(--primary)" fillOpacity={1} fill="url(#colorSent)" />
+                                <Area type="monotone" dataKey="received" stroke="var(--green-color)" fillOpacity={1} fill="url(#colorRev)" />
                             </AreaChart>
                         </ResponsiveContainer>
                     </div>
@@ -224,7 +224,7 @@ export default function NetworkPage() {
                                     ))}
                                 </Pie>
                                 <Tooltip
-                                    contentStyle={{ background: '#111827', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px' }}
+                                    contentStyle={{ background: 'var(--bg-panel)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px' }}
                                 />
                             </PieChart>
                         </ResponsiveContainer>
@@ -236,7 +236,7 @@ export default function NetworkPage() {
                             textAlign: 'center'
                         }}>
                             <div style={{ fontSize: '24px', fontWeight: '800', color: '#fff' }}>{metrics.activeConnections}</div>
-                            <div style={{ fontSize: '10px', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>Sockets</div>
+                            <div style={{ fontSize: '10px', color: 'var(--text-secondary)', fontWeight: '600', textTransform: 'uppercase' }}>Sockets</div>
                         </div>
                     </div>
                     {/* Dynamic Legend */}
@@ -244,7 +244,7 @@ export default function NetworkPage() {
                         {(metrics.protocolDistribution || []).map((entry, index) => (
                             <div key={entry.name} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                 <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: COLORS[index % COLORS.length] }} />
-                                <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '600' }}>{entry.name} ({entry.value})</span>
+                                <span style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: '600' }}>{entry.name} ({entry.value})</span>
                             </div>
                         ))}
                     </div>
@@ -268,7 +268,7 @@ export default function NetworkPage() {
                             <span style={{
                                 padding: '2px 8px',
                                 background: 'rgba(16, 185, 129, 0.1)',
-                                color: '#10b981',
+                                color: 'var(--green-color)',
                                 borderRadius: '100px',
                                 fontSize: '10px',
                                 fontWeight: '800',
@@ -284,7 +284,7 @@ export default function NetworkPage() {
                                 style={{
                                     position: 'absolute',
                                     left: '14px',
-                                    color: '#64748b',
+                                    color: 'var(--text-muted)',
                                     zIndex: 2
                                 }}
                             />
@@ -308,7 +308,7 @@ export default function NetworkPage() {
                             value={filter}
                             onChange={(e) => setFilter(e.target.value)}
                             style={{
-                                background: '#111827',
+                                background: 'var(--bg-panel)',
                                 color: '#fff',
                                 border: '1px solid rgba(255,255,255,0.1)',
                                 borderRadius: '12px',
@@ -343,25 +343,25 @@ export default function NetworkPage() {
                                     <td>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                                             <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'rgba(59, 130, 246, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                <Zap size={14} style={{ color: '#3b82f6' }} />
+                                                <Zap size={14} style={{ color: 'var(--primary)' }} />
                                             </div>
                                             <div style={{ display: 'flex', flexDirection: 'column' }}>
                                                 <span style={{ fontWeight: '700', color: '#fff', letterSpacing: '0.5px' }}>{conn.sourceIp}</span>
-                                                <span style={{ fontSize: '10px', color: '#64748b' }}>PORT: {conn.sourcePort}</span>
+                                                <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>PORT: {conn.sourcePort}</span>
                                             </div>
                                         </div>
                                     </td>
                                     <td>
                                         <div style={{ display: 'flex', flexDirection: 'column' }}>
                                             <span style={{ fontWeight: '700', color: '#e2e8f0' }}>{conn.destinationIp}</span>
-                                            <span style={{ fontSize: '10px', color: '#64748b' }}>PORT: {conn.destinationPort}</span>
+                                            <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>PORT: {conn.destinationPort}</span>
                                         </div>
                                     </td>
                                     <td>
                                         <span style={{
                                             padding: '4px 10px',
                                             background: conn.protocol === 'TCP' ? 'rgba(59, 130, 246, 0.1)' : 'rgba(139, 92, 246, 0.1)',
-                                            color: conn.protocol === 'TCP' ? '#3b82f6' : '#8b5cf6',
+                                            color: conn.protocol === 'TCP' ? 'var(--primary)' : '#8b5cf6',
                                             borderRadius: '6px',
                                             fontSize: '10px',
                                             fontWeight: '800'
@@ -373,7 +373,7 @@ export default function NetworkPage() {
                                         <span style={{
                                             padding: '4px 10px',
                                             background: conn.status === 'ESTABLISHED' ? 'rgba(16, 185, 129, 0.05)' : 'rgba(255, 255, 255, 0.05)',
-                                            color: conn.status === 'ESTABLISHED' ? '#10b981' : '#94a3b8',
+                                            color: conn.status === 'ESTABLISHED' ? 'var(--green-color)' : 'var(--text-secondary)',
                                             border: `1px solid ${conn.status === 'ESTABLISHED' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(255, 255, 255, 0.1)'}`,
                                             borderRadius: '6px',
                                             fontSize: '10px',
@@ -384,8 +384,8 @@ export default function NetworkPage() {
                                     </td>
                                     <td>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '11px' }}>
-                                            <span style={{ color: '#10b981', display: 'flex', alignItems: 'center', gap: '3px' }}><ArrowUp size={10} /> {conn.dataSent}B</span>
-                                            <span style={{ color: '#3b82f6', display: 'flex', alignItems: 'center', gap: '3px' }}><ArrowDown size={10} /> {conn.dataReceived}B</span>
+                                            <span style={{ color: 'var(--green-color)', display: 'flex', alignItems: 'center', gap: '3px' }}><ArrowUp size={10} /> {conn.dataSent}B</span>
+                                            <span style={{ color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '3px' }}><ArrowDown size={10} /> {conn.dataReceived}B</span>
                                         </div>
                                     </td>
                                     <td>
@@ -393,7 +393,7 @@ export default function NetworkPage() {
                                             display: 'flex',
                                             alignItems: 'center',
                                             gap: '8px',
-                                            color: conn.threatLevel === 'HIGH' ? '#ef4444' : '#10b981',
+                                            color: conn.threatLevel === 'HIGH' ? 'var(--red-color)' : 'var(--green-color)',
                                             fontSize: '11px',
                                             fontWeight: '700'
                                         }}>
@@ -412,7 +412,7 @@ export default function NetworkPage() {
                                 </tr>
                             )) : (
                                 <tr>
-                                    <td colSpan="7" style={{ textAlign: 'center', padding: '60px', color: '#64748b' }}>
+                                    <td colSpan="7" style={{ textAlign: 'center', padding: '60px', color: 'var(--text-muted)' }}>
                                         <Activity size={40} style={{ opacity: 0.2, marginBottom: '16px' }} />
                                         <div>No matching network signals detected.</div>
                                     </td>
@@ -426,7 +426,7 @@ export default function NetworkPage() {
             <style>{`
                 .block-btn-modern {
                     background: rgba(239, 68, 68, 0.05);
-                    color: #ef4444;
+                    color: var(--red-color);
                     border: 1px solid rgba(239, 68, 68, 0.2);
                     padding: 6px 14px;
                     border-radius: 8px;
@@ -437,7 +437,7 @@ export default function NetworkPage() {
                     letter-spacing: 0.5px;
                 }
                 .block-btn-modern:hover {
-                    background: #ef4444;
+                    background: var(--red-color);
                     color: #fff;
                     transform: translateY(-2px);
                     box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
@@ -448,7 +448,7 @@ export default function NetworkPage() {
                     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
                 }
                 .search-input-modern:focus {
-                    border-color: #3b82f6 !important;
+                    border-color: var(--primary) !important;
                     background: rgba(59, 130, 246, 0.08) !important;
                     box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15);
                 }

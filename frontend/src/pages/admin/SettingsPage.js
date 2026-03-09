@@ -56,15 +56,15 @@ export default function SettingsPage() {
 
     if (loading) {
         return (
-            <div style={{ display: 'flex', flexDirection: 'column', height: '100%', alignItems: 'center', justifyContent: 'center', background: '#030712' }}>
-                <RefreshCw className="animate-spin" size={48} style={{ marginBottom: '16px', color: '#3b82f6' }} />
-                <div style={{ color: '#8b949e', fontFamily: 'JetBrains Mono', fontSize: '12px', letterSpacing: '2px' }}>LOADING SYSTEM CONFIGURATION...</div>
+            <div style={{ display: 'flex', flexDirection: 'column', height: '100%', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-app)' }}>
+                <RefreshCw className="animate-spin" size={48} style={{ marginBottom: '16px', color: 'var(--primary)' }} />
+                <div style={{ color: 'var(--text-secondary)', fontFamily: 'JetBrains Mono', fontSize: '12px', letterSpacing: '2px' }}>LOADING SYSTEM CONFIGURATION...</div>
             </div>
         );
     }
 
     return (
-        <div className="soc-dashboard" style={{ padding: '32px', background: '#030712' }}>
+        <div className="soc-dashboard" style={{ padding: '32px', background: 'var(--bg-app)' }}>
             <div className="soc-title-section">
                 <div className="soc-title-left">
                     <h1 style={{ color: '#fff', fontSize: '28px', fontWeight: '800' }}>
@@ -78,7 +78,7 @@ export default function SettingsPage() {
                         onClick={handleSave}
                         disabled={saving}
                         style={{
-                            background: saving ? '#1e2937' : '#3b82f6',
+                            background: saving ? '#1e2937' : 'var(--primary)',
                             color: '#fff',
                             border: 'none',
                             padding: '10px 24px',
@@ -142,8 +142,8 @@ export default function SettingsPage() {
                             width: '60px', height: '60px', background: 'rgba(239, 68, 68, 0.1)',
                             borderRadius: '50%', filter: 'blur(20px)'
                         }} />
-                        <div style={{ color: '#ef4444', fontWeight: '800', fontSize: '12px', marginBottom: '12px', letterSpacing: '1px' }}>DANGER ZONE</div>
-                        <p style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '16px', lineHeight: '1.4' }}>Irrersible actions that affect the entire Node Core integrity.</p>
+                        <div style={{ color: 'var(--red-color)', fontWeight: '800', fontSize: '12px', marginBottom: '12px', letterSpacing: '1px' }}>DANGER ZONE</div>
+                        <p style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '16px', lineHeight: '1.4' }}>Irrersible actions that affect the entire Node Core integrity.</p>
                         <button
                             onClick={() => window.confirm('Are you sure? This will wipe all system data.')}
                             className="factory-reset-btn"
@@ -217,7 +217,7 @@ export default function SettingsPage() {
                             <div className="toggle-group">
                                 <div style={{ flex: 1 }}>
                                     <div style={{ fontWeight: '600' }}>Mandatory MFA Enforcement</div>
-                                    <div style={{ fontSize: '12px', color: '#64748b' }}>Require all accounts to verify via TOTP on every login attempt.</div>
+                                    <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Require all accounts to verify via TOTP on every login attempt.</div>
                                 </div>
                                 <div
                                     className={`switch ${config.mfa ? 'active' : ''}`}
@@ -228,7 +228,7 @@ export default function SettingsPage() {
                             <div className="toggle-group">
                                 <div style={{ flex: 1 }}>
                                     <div style={{ fontWeight: '600' }}>Brute Force Lockdown</div>
-                                    <div style={{ fontSize: '12px', color: '#64748b' }}>Automatically lock accounts for 30 minutes after 5 failed attempts.</div>
+                                    <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Automatically lock accounts for 30 minutes after 5 failed attempts.</div>
                                 </div>
                                 <div
                                     className={`switch ${config.bruteForce ? 'active' : ''}`}
@@ -239,7 +239,7 @@ export default function SettingsPage() {
                             <div className="toggle-group">
                                 <div style={{ flex: 1 }}>
                                     <div style={{ fontWeight: '600' }}>Session Fingerprinting</div>
-                                    <div style={{ fontSize: '12px', color: '#64748b' }}>Invalidate sessions if User-Agent or IP changes significantly.</div>
+                                    <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Invalidate sessions if User-Agent or IP changes significantly.</div>
                                 </div>
                                 <div
                                     className={`switch ${config.fingerprint ? 'active' : ''}`}
@@ -270,7 +270,7 @@ export default function SettingsPage() {
                             <div className="toggle-group">
                                 <div style={{ flex: 1 }}>
                                     <div style={{ fontWeight: '600' }}>Automatic Index Optimization</div>
-                                    <div style={{ fontSize: '12px', color: '#64748b' }}>Run background vacuum and indexing to maintain query speed.</div>
+                                    <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Run background vacuum and indexing to maintain query speed.</div>
                                 </div>
                                 <div
                                     className={`switch ${config.dbOptimize ? 'active' : ''}`}
@@ -287,7 +287,7 @@ export default function SettingsPage() {
                             <div className="toggle-group">
                                 <div style={{ flex: 1 }}>
                                     <div style={{ fontWeight: '600' }}>Email Security Alerts</div>
-                                    <div style={{ fontSize: '12px', color: '#64748b' }}>Send critical security events to the administrator email.</div>
+                                    <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Send critical security events to the administrator email.</div>
                                 </div>
                                 <div
                                     className={`switch ${config.emailAlerts ? 'active' : ''}`}
@@ -298,7 +298,7 @@ export default function SettingsPage() {
                             <div className="toggle-group">
                                 <div style={{ flex: 1 }}>
                                     <div style={{ fontWeight: '600' }}>SMS Urgent Notifications</div>
-                                    <div style={{ fontSize: '12px', color: '#64748b' }}>Send SMS for SEVERITY:CRITICAL alerts (Twilio API required).</div>
+                                    <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Send SMS for SEVERITY:CRITICAL alerts (Twilio API required).</div>
                                 </div>
                                 <div
                                     className={`switch ${config.smsAlerts ? 'active' : ''}`}
@@ -324,8 +324,8 @@ export default function SettingsPage() {
                             <h2 style={{ fontSize: '20px', fontWeight: '700', marginBottom: '32px' }}>Advanced Optimization</h2>
 
                             <div style={{ background: 'rgba(245, 158, 11, 0.05)', border: '1px solid rgba(245, 158, 11, 0.2)', padding: '20px', borderRadius: '12px', display: 'flex', gap: '16px', marginBottom: '32px' }}>
-                                <AlertCircle style={{ color: '#f59e0b' }} />
-                                <div style={{ fontSize: '14px', color: '#f59e0b', lineHeight: '1.5' }}>
+                                <AlertCircle style={{ color: 'var(--accent-amber)' }} />
+                                <div style={{ fontSize: '14px', color: 'var(--accent-amber)', lineHeight: '1.5' }}>
                                     Modifying advanced parameters can lead to system instability. Ensure you have a valid backup before committing changes.
                                 </div>
                             </div>
@@ -387,7 +387,7 @@ export default function SettingsPage() {
                     border-radius: 12px;
                     background: transparent;
                     border: 1px solid transparent;
-                    color: #94a3b8;
+                    color: var(--text-secondary);
                     cursor: pointer;
                     text-align: left;
                     font-size: 14px;
@@ -403,7 +403,7 @@ export default function SettingsPage() {
                 .settings-nav-item.active {
                     background: rgba(59, 130, 246, 0.08);
                     border-color: rgba(59, 130, 246, 0.2);
-                    color: #3b82f6;
+                    color: var(--primary);
                 }
                 .nav-icon-box {
                     width: 36px;
@@ -417,7 +417,7 @@ export default function SettingsPage() {
                 }
                 .active .nav-icon-box {
                     background: rgba(59, 130, 246, 0.2);
-                    color: #3b82f6;
+                    color: var(--primary);
                     box-shadow: 0 0 15px rgba(59, 130, 246, 0.1);
                 }
                 .active-glow {
@@ -426,14 +426,14 @@ export default function SettingsPage() {
                     top: 20%;
                     height: 60%;
                     width: 3px;
-                    background: #3b82f6;
+                    background: var(--primary);
                     border-radius: 0 4px 4px 0;
-                    box-shadow: 0 0 10px #3b82f6;
+                    box-shadow: 0 0 10px var(--primary);
                 }
                 .factory-reset-btn {
                     background: rgba(239, 68, 68, 0.1);
                     border: 1px solid rgba(239, 68, 68, 0.2);
-                    color: #ef4444;
+                    color: var(--red-color);
                     padding: 10px;
                     border-radius: 10px;
                     width: 100%;
@@ -447,7 +447,7 @@ export default function SettingsPage() {
                     transition: all 0.2s;
                 }
                 .factory-reset-btn:hover {
-                    background: #ef4444;
+                    background: var(--red-color);
                     color: #fff;
                     box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
                 }
@@ -480,7 +480,7 @@ export default function SettingsPage() {
                     font-family: 'Inter', sans-serif;
                 }
                 .settings-input:focus {
-                    border-color: #3b82f6;
+                    border-color: var(--primary);
                     background: rgba(59, 130, 246, 0.05);
                     box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
                 }
@@ -496,7 +496,7 @@ export default function SettingsPage() {
                 .switch {
                     width: 48px;
                     height: 26px;
-                    background: #1f2937;
+                    background: var(--border-color);
                     border-radius: 100px;
                     position: relative;
                     cursor: pointer;
@@ -509,13 +509,13 @@ export default function SettingsPage() {
                     left: 4px;
                     width: 18px;
                     height: 18px;
-                    background: #64748b;
+                    background: var(--text-muted);
                     border-radius: 50%;
                     transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
                     box-shadow: 0 2px 4px rgba(0,0,0,0.2);
                 }
                 .switch.active {
-                    background: #3b82f6;
+                    background: var(--primary);
                     box-shadow: 0 0 15px rgba(59, 130, 246, 0.3);
                 }
                 .switch.active::after {

@@ -95,6 +95,34 @@ export default function TeamsPage() {
     }
   };
 
+  const handleRemoveMember = async (userId) => {
+    if (!window.confirm('Are you sure you want to remove this operative from the unit?')) return;
+    try {
+      setActionLoading(true);
+      await api.removeTeamMember(selectedTeam.id, userId);
+      const members = await api.getTeamMembers(selectedTeam.id);
+      setTeamMembers(members || []);
+      await fetchData(true);
+    } catch (err) {
+      alert('Failed to remove member: ' + err.message);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleDeleteTeam = async (teamId) => {
+    if (!window.confirm('CRITICAL: Deploying unit decommissioning will permanently revoke access. Proceed?')) return;
+    try {
+      setActionLoading(true);
+      await api.deleteTeam(teamId);
+      await fetchData();
+    } catch (err) {
+      alert('Failed to decommission team: ' + err.message);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const filteredTeams = teams.filter(t =>
     t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     t.code?.toLowerCase().includes(searchQuery.toLowerCase())
@@ -243,6 +271,7 @@ export default function TeamsPage() {
                 <UserPlus size={16} /> Manage Team
               </button>
               <button
+                onClick={() => handleDeleteTeam(t.id)}
                 style={{
                   padding: '14px', background: 'var(--bg-light)', color: 'var(--text-secondary)',
                   border: '1px solid var(--border-color)', borderRadius: '12px', cursor: 'pointer'
@@ -354,7 +383,12 @@ export default function TeamsPage() {
                         </div>
                       </div>
                     </div>
-                    <button style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}><Trash2 size={18} /></button>
+                    <button
+                      onClick={() => handleRemoveMember(m.id)}
+                      style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
+                    >
+                      <Trash2 size={18} />
+                    </button>
                   </div>
                 ))}
               </div>

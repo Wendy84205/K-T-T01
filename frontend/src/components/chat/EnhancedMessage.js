@@ -121,20 +121,17 @@ const VoiceMessage = ({ fileId, isOwn }) => {
                         const isPlayed = (i / waveform.length) <= progress;
                         return (
                             <div key={i} style={{
-                                width: '3px',
+                                width: '3.5px',
                                 height: `${h}%`,
                                 minHeight: '4px',
                                 background: isPlayed
-                                    ? (isOwn ? '#fff' : 'var(--primary)')
-                                    : (isOwn ? 'rgba(255,255,255,0.4)' : 'var(--bg-light)'),
-                                borderRadius: '2px',
-                                transition: 'all 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
-                                boxShadow: isPlayed && isPlaying && (i === Math.floor(progress * waveform.length)) ? '0 0 10px var(--primary)' : 'none',
-                                transform: isPlayed && isPlaying && (i === Math.floor(progress * waveform.length)) ? 'scaleY(1.3)' : 'scaleY(1)'
-                            }}
-                                onMouseEnter={e => e.currentTarget.style.transform = 'scaleY(1.5)'}
-                                onMouseLeave={e => e.currentTarget.style.transform = (isPlayed && isPlaying && (i === Math.floor(progress * waveform.length))) ? 'scaleY(1.3)' : 'scaleY(1)'}
-                            />
+                                    ? (isOwn ? '#fff' : 'linear-gradient(to top, var(--primary), #38b6ff)')
+                                    : (isOwn ? 'rgba(255,255,255,0.3)' : 'var(--bg-light)'),
+                                borderRadius: '3px',
+                                transition: 'all 0.1s ease',
+                                transform: isPlayed && isPlaying && (Math.abs(i - Math.floor(progress * waveform.length)) < 2) ? 'scaleY(1.4)' : 'scaleY(1)',
+                                opacity: isPlayed ? 1 : 0.6
+                            }} />
                         );
                     })}
                 </div>
@@ -504,7 +501,7 @@ export function EnhancedMessageBubble({ message, isOwn, showAvatar, currentUserI
                     }}>
                         {message.createdAt ? new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                         {message.isEdited && <span style={{ opacity: 0.6 }}>(EDITED)</span>}
-                        {isOwn && (message.isRead ? <CheckCheck size={14} color="var(--primary)" /> : <Check size={14} color="var(--text-muted)" />)}
+                        {isOwn && (message.isRead ? <CheckCheck size={14} color="#38b6ff" /> : <Check size={14} color="var(--text-muted)" />)}
                     </div>
                 </div>
             </div>

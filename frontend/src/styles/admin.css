@@ -190,14 +190,14 @@ body,
     left: 14px;
     top: 50%;
     transform: translateY(-50%);
-    color: #8b949e;
+    color: var(--text-secondary);
     font-size: 18px;
 }
 
 .search-input {
     width: 100%;
-    background: #0d1117;
-    border: 1px solid #30363d;
+    background: var(--bg-app);
+    border: 1px solid var(--border-color);
     border-radius: 6px;
     padding: 8px 16px 8px 42px;
     color: white;
@@ -207,15 +207,15 @@ body,
 }
 
 .search-input:focus {
-    border-color: #58a6ff;
-    background: #161b22;
+    border-color: var(--primary);
+    background: var(--bg-panel);
     box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.1);
 }
 
 .admin-breadcrumb {
     font-size: 12px;
     font-weight: 500;
-    color: #8b949e;
+    color: var(--text-secondary);
     letter-spacing: 0.2px;
 }
 
@@ -346,7 +346,7 @@ body,
 }
 
 .soc-modal {
-    background: #0d1117;
+    background: var(--bg-app);
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 20px;
     width: 600px;
@@ -357,7 +357,7 @@ body,
 }
 
 .modal-header {
-    background: #161b22;
+    background: var(--bg-panel);
     padding: 20px 24px;
     display: flex;
     justify-content: space-between;
@@ -377,7 +377,7 @@ body,
 .close-modal {
     background: none;
     border: none;
-    color: #8b949e;
+    color: var(--text-secondary);
     font-size: 24px;
     cursor: pointer;
     padding: 5px;
@@ -399,13 +399,13 @@ body,
 }
 
 .doc-section h4 {
-    color: #58a6ff;
+    color: var(--primary);
     margin-bottom: 8px;
     font-size: 14px;
 }
 
 .doc-section p {
-    color: #8b949e;
+    color: var(--text-secondary);
     font-size: 13px;
     line-height: 1.6;
     margin: 0;
@@ -413,12 +413,12 @@ body,
 
 /* Console Styling */
 .console-body {
-    background: #010409;
+    background: var(--bg-app);
     padding: 24px;
     font-family: 'JetBrains Mono', monospace;
     font-size: 13px;
     min-height: 300px;
-    color: #c9d1d9;
+    color: var(--text-main);
 }
 
 .console-line {
@@ -433,14 +433,14 @@ body,
 }
 
 .c-output {
-    color: #8b949e;
+    color: var(--text-secondary);
 }
 
 .c-cursor {
     display: inline-block;
     width: 8px;
     height: 15px;
-    background: #58a6ff;
+    background: var(--primary);
     animation: blink 1s step-end infinite;
 }
 
@@ -756,7 +756,7 @@ body,
 
 /* AUDIT LOGS - Pixel Perfect Terminal UI */
 .terminal-window {
-    background: #0d1117;
+    background: var(--bg-app);
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 12px;
     overflow: hidden;
@@ -766,7 +766,7 @@ body,
 }
 
 .terminal-header {
-    background: #161b22;
+    background: var(--bg-panel);
     padding: 10px 16px;
     display: flex;
     align-items: center;
@@ -800,14 +800,14 @@ body,
 .terminal-title {
     font-family: 'JetBrains Mono', monospace;
     font-size: 11px;
-    color: #8b949e;
+    color: var(--text-secondary);
     flex: 1;
     text-align: center;
 }
 
 .audit-table-container {
     overflow-x: hidden;
-    background: #0d1117;
+    background: var(--bg-app);
     scrollbar-width: none;
     /* Firefox */
     -ms-overflow-style: none;
@@ -826,11 +826,11 @@ body,
 
 .audit-table th {
     text-align: left;
-    background: #0d1117;
+    background: var(--bg-app);
     padding: 12px 20px;
     font-family: 'JetBrains Mono', monospace;
     font-size: 10px;
-    color: #8b949e;
+    color: var(--text-secondary);
     letter-spacing: 0.5px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
     text-transform: uppercase;
@@ -853,7 +853,7 @@ body,
 }
 
 .actor-link {
-    color: #58a6ff;
+    color: var(--primary);
     text-decoration: none;
     font-weight: 600;
 }
@@ -899,7 +899,7 @@ body,
 
 .terminal-footer {
     padding: 12px 20px;
-    background: #0d1117;
+    background: var(--bg-app);
     border-top: 1px solid rgba(255, 255, 255, 0.1);
     display: flex;
     justify-content: space-between;
@@ -914,7 +914,7 @@ body,
 }
 
 .forensic-card {
-    background: #0d1117;
+    background: var(--bg-app);
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 12px;
     padding: 24px;
@@ -924,7 +924,7 @@ body,
     font-size: 11px;
     font-weight: 700;
     text-transform: uppercase;
-    color: #8b949e;
+    color: var(--text-secondary);
     margin-bottom: 20px;
     letter-spacing: 1px;
 }
@@ -938,7 +938,7 @@ body,
 
 .metadata-label {
     font-size: 12px;
-    color: #8b949e;
+    color: var(--text-secondary);
 }
 
 .metadata-value {
@@ -948,7 +948,7 @@ body,
 }
 
 .payload-preview {
-    background: #010409;
+    background: var(--bg-app);
     padding: 16px;
     border-radius: 8px;
     font-family: 'JetBrains Mono', monospace;
@@ -963,7 +963,7 @@ body,
     display: flex;
     gap: 8px;
     font-size: 12px;
-    color: #8b949e;
+    color: var(--text-secondary);
     margin-bottom: 24px;
 }
 
@@ -974,7 +974,7 @@ body,
 }
 
 .breadcrumb-active {
-    color: #58a6ff;
+    color: var(--primary);
 }
 
 .live-badge {
@@ -1023,7 +1023,7 @@ body,
 .pg-btn {
     background: #21262d;
     border: 1px solid rgba(240, 246, 252, 0.1);
-    color: #c9d1d9;
+    color: var(--text-main);
     padding: 4px 12px;
     border-radius: 6px;
     font-size: 12px;
@@ -1032,8 +1032,8 @@ body,
 }
 
 .pg-btn:hover:not(:disabled) {
-    background: #30363d;
-    border-color: #8b949e;
+    background: var(--border-color);
+    border-color: var(--text-secondary);
 }
 
 .pg-btn:disabled {
@@ -1200,7 +1200,7 @@ body,
 }
 
 .admin-btn-tag.success {
-    background: #238636;
+    background: var(--green-color);
     color: white;
 }
 

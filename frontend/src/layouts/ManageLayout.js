@@ -49,6 +49,10 @@ export default function ManageLayout() {
             root.style.setProperty('--shadow', '0 2px 10px rgba(0,0,0,0.3)');
             root.style.setProperty('--shadow-primary', 'rgba(102, 126, 234, 0.3)');
             root.style.setProperty('--primary-light', 'rgba(102, 126, 234, 0.1)');
+            root.style.setProperty('--bg-primary-soft', 'rgba(102, 126, 234, 0.1)');
+            root.style.setProperty('--border-primary-soft', 'rgba(102, 126, 234, 0.2)');
+            root.style.setProperty('--bg-green-soft', 'rgba(16, 185, 129, 0.1)');
+            root.style.setProperty('--bg-red-soft', 'rgba(239, 68, 68, 0.1)');
         } else {
             root.style.setProperty('--bg-app', '#f0f2f5');
             root.style.setProperty('--bg-panel', '#ffffff');
@@ -60,12 +64,15 @@ export default function ManageLayout() {
             root.style.setProperty('--text-secondary', '#65676b');
             root.style.setProperty('--text-muted', '#8d949e');
             root.style.setProperty('--primary', '#007bff');
-            root.style.setProperty('--green-color', '#28a745');
-            root.style.setProperty('--accent-amber', '#f59e0b');
-            root.style.setProperty('--red-color', '#dc3545');
+            root.style.setProperty('--primary-light', 'rgba(0, 123, 255, 0.1)');
             root.style.setProperty('--shadow', '0 2px 10px rgba(0,0,0,0.05)');
             root.style.setProperty('--shadow-primary', 'rgba(0, 123, 255, 0.3)');
-            root.style.setProperty('--primary-light', 'rgba(0, 123, 255, 0.1)');
+            root.style.setProperty('--bg-primary-soft', 'rgba(0, 123, 255, 0.05)');
+            root.style.setProperty('--border-primary-soft', 'rgba(0, 123, 255, 0.1)');
+            root.style.setProperty('--bg-green-soft', 'rgba(40, 167, 69, 0.1)');
+            root.style.setProperty('--green-color', '#28a745');
+            root.style.setProperty('--bg-red-soft', 'rgba(220, 53, 69, 0.1)');
+            root.style.setProperty('--red-color', '#dc3545');
         }
     }, [darkMode]);
 

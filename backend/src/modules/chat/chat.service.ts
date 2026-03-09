@@ -155,12 +155,12 @@ export class ChatService implements OnModuleInit {
                 } : null,
             } : null,
             members: members.map(m => ({
-                id: m.user.id,
-                firstName: m.user.firstName,
-                lastName: m.user.lastName,
-                email: m.user.email,
-                avatarUrl: m.user.avatarUrl,
-                publicKey: m.user.publicKey,
+                id: m.user?.id,
+                firstName: m.user?.firstName,
+                lastName: m.user?.lastName,
+                email: m.user?.email,
+                avatarUrl: m.user?.avatarUrl,
+                publicKey: m.user?.publicKey,
                 role: m.role,
                 lastReadAt: m.lastReadAt,
             })),
@@ -275,17 +275,16 @@ export class ChatService implements OnModuleInit {
 
     // Create group conversation
     async createGroupConversation(userId: string, name: string, memberIds: string[]) {
+        const allMemberIds = [...new Set([userId, ...memberIds])];
         const conversation = this.conversationRepository.create({
             name,
             conversationType: 'group',
-            isPrivate: true,
             encryptionRequired: true,
             createdBy: userId,
+            memberCount: allMemberIds.length,
         });
 
         const savedConv = await this.conversationRepository.save(conversation);
-
-        const allMemberIds = [...new Set([userId, ...memberIds])];
         const members = allMemberIds.map(memberId => ({
             conversationId: savedConv.id,
             userId: memberId,
@@ -945,5 +944,16 @@ export class ChatService implements OnModuleInit {
         const systemMessage = await this.createSystemMessage(conversationId, userId, `${user.firstName} joined the group via discovery`);
 
         return { success: true, systemMessage };
+    }
+
+    // Call Logging Methods
+    async createCallLog(data: Partial<CallLog>) {
+        const log = this.callLogRepository.create(data);
+        return await this.callLogRepository.save(log);
+    }
+
+    async updateCallLog(id: string, data: Partial<CallLog>) {
+        await this.callLogRepository.update(id, data);
+        return await this.callLogRepository.findOne({ where: { id } });
     }
 }
