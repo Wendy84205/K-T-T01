@@ -83,7 +83,7 @@ export default function NetworkPage() {
                 <div className="soc-title-left">
                     <h1 style={{ color: '#fff' }}>
                         <Activity className="text-blue-500" />
-                        Network Traffic Sentinel
+                        Network Traffic KTT01
                     </h1>
                     <div className="card-desc">Real-time packet analysis & deep session inspection</div>
                 </div>

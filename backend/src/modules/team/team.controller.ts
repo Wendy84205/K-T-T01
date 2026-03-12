@@ -38,6 +38,11 @@ export class TeamController {
     return this.teamService.getTeamMembers(id);
   }
 
+  @Get(':id/stats')
+  async getTeamStats(@Param('id') id: string) {
+    return this.teamService.getTeamStatistics(id);
+  }
+
   @Post(':id/members')
   async addTeamMember(
     @Param('id') teamId: string,

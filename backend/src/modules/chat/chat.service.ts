@@ -310,7 +310,7 @@ export class ChatService implements OnModuleInit {
 
         const [messages, total] = await this.messageRepository.findAndCount({
             where: { conversationId, isDeleted: false },
-            relations: ['sender'],
+            relations: ['sender', 'parentMessage', 'parentMessage.sender'],
             order: { createdAt: 'DESC' },
             take: limit,
             skip,
@@ -329,9 +329,6 @@ export class ChatService implements OnModuleInit {
                 // For direct chats, read status is based on the other person's lastReadAt
                 let isRead = false;
                 if (otherMembers.length > 0) {
-                    // It's "read" if AT LEAST ONE other person has read past this message's timestamp
-                    // In DM, it's the other person. In group, it's typically shown as read if you want Simplification. 
-                    // Let's check if the MOST RECENT read of any other member is after this message.
                     isRead = otherMembers.some(m => m.lastReadAt && m.lastReadAt >= msg.createdAt);
                 }
 
@@ -352,6 +349,14 @@ export class ChatService implements OnModuleInit {
                         lastName: msg.sender.lastName,
                         avatarUrl: msg.sender.avatarUrl,
                     },
+                    parentMessage: msg.parentMessage ? {
+                        id: msg.parentMessage.id,
+                        content: this.decryptIfNeeded(msg.parentMessage),
+                        sender: {
+                            id: msg.parentMessage.sender?.id,
+                            firstName: msg.parentMessage.sender?.firstName,
+                        }
+                    } : null
                 };
             }),
             total,

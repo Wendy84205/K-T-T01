@@ -313,6 +313,38 @@ export function EnhancedMessageBubble({ message, isOwn, showAvatar, currentUserI
                             boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
                             transition: 'all 0.2s'
                         }}>
+                            {message.parentMessage && (
+                                <div
+                                    onClick={() => {
+                                        const el = document.getElementById(`msg-${message.parentMessage.id}`);
+                                        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                    }}
+                                    style={{
+                                        background: isOwn ? 'rgba(0,0,0,0.1)' : 'var(--bg-light)',
+                                        borderLeft: `3px solid ${isOwn ? '#fff' : 'var(--primary)'}`,
+                                        padding: '6px 10px',
+                                        borderRadius: '8px',
+                                        marginBottom: '8px',
+                                        cursor: 'pointer',
+                                        fontSize: '12.5px',
+                                        opacity: 0.9
+                                    }}
+                                >
+                                    <div style={{ fontWeight: '800', fontSize: '11px', color: isOwn ? '#fff' : 'var(--primary)', marginBottom: '2px', textTransform: 'uppercase' }}>
+                                        {message.parentMessage.sender?.firstName || 'User'}
+                                    </div>
+                                    <div style={{
+                                        color: isOwn ? 'rgba(255,255,255,0.9)' : 'var(--text-secondary)',
+                                        whiteSpace: 'nowrap',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        maxWidth: '100%'
+                                    }}>
+                                        {message.parentMessage.content}
+                                    </div>
+                                </div>
+                            )}
+
                             {message.messageType === 'file' ? (
                                 <div style={{
                                     display: 'flex',

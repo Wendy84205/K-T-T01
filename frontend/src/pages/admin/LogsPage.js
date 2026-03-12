@@ -128,7 +128,7 @@ export default function LogsPage() {
                         <span className="yellow" style={{ width: '13px', height: '13px' }}></span>
                         <span className="green" style={{ width: '13px', height: '13px' }}></span>
                     </div>
-                    <div className="terminal-title" style={{ fontSize: '12px', letterSpacing: '0.5px' }}>root@sentinel:~/logs/audit.log</div>
+                    <div className="terminal-title" style={{ fontSize: '12px', letterSpacing: '0.5px' }}>root@ktt01:~/logs/audit.log</div>
                 </div>
 
                 <div className="audit-table-container">

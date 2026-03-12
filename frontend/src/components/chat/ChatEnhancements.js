@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, X, Pin, ChevronDown, ChevronRight, FileText, Bell, BellOff, Star, Trash2, Clock, MapPin, Users, Image, Hash, LogOut, Edit2, EyeOff, AlertTriangle, UserPlus, Settings, StickyNote } from 'lucide-react';
+import { Search, X, Pin, ChevronDown, ChevronRight, FileText, Bell, BellOff, Star, Trash2, Clock, MapPin, Users, Image, Hash, LogOut, Edit2, EyeOff, AlertTriangle, UserPlus, Settings, StickyNote, Smile, Heart } from 'lucide-react';
 
 export function SearchBar({ conversationId, onResultClick }) {
     const [query, setQuery] = useState('');
@@ -474,36 +474,43 @@ export function ConversationSidebar({ conversation, onOpenGroupModal, onClose, c
                     </div>
 
                     {/* Circle Actions */}
-                    <div style={{ display: 'flex', justifyContent: 'center', gap: '20px' }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', cursor: 'pointer', width: '65px' }} onClick={conversation.onToggleMute}>
-                            <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'var(--bg-light)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                {conversation.isMuted ? <BellOff size={18} color="var(--text-main)" /> : <Bell size={18} color="var(--text-main)" />}
+                    <div style={{ display: 'flex', justifyContent: 'center', gap: '20px', marginBottom: '20px' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', cursor: 'pointer', width: '70px' }} onClick={conversation.onToggleMute}>
+                            <div style={{
+                                width: '42px', height: '42px', borderRadius: '50%',
+                                background: 'rgba(255,255,255,0.08)',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                transition: 'all 0.2s'
+                            }} onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'} onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}>
+                                {conversation.isMuted ? <BellOff size={20} color="var(--text-main)" /> : <Bell size={20} color="var(--text-main)" />}
                             </div>
-                            <span style={{ fontSize: '12px', color: 'var(--text-main)', textAlign: 'center', lineHeight: '1.2' }}>{conversation.isMuted ? 'Mute' : 'Mute'}</span>
+                            <span style={{ fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center' }}>Mute</span>
                         </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', cursor: 'pointer', width: '65px' }} onClick={conversation.onTogglePin}>
-                            <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'var(--bg-light)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <Pin size={18} color="var(--text-main)" />
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', cursor: 'pointer', width: '70px' }} onClick={conversation.onTogglePin}>
+                            <div style={{
+                                width: '42px', height: '42px', borderRadius: '50%',
+                                background: 'rgba(255,255,255,0.08)',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                transition: 'all 0.2s'
+                            }} onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'} onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}>
+                                <Pin size={20} color="var(--text-main)" />
                             </div>
-                            <span style={{ fontSize: '12px', color: 'var(--text-main)', textAlign: 'center', lineHeight: '1.2' }}>{conversation.isPinned ? 'Unpin' : 'Pin chat'}</span>
+                            <span style={{ fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center' }}>Pin chat</span>
                         </div>
                         <div
-                            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', cursor: 'pointer', width: '65px' }}
+                            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', cursor: 'pointer', width: '70px' }}
                             onClick={isGroup ? () => showToast('Function coming soon', 'info') : () => onOpenGroupModal?.()}
                         >
-                            <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'var(--bg-light)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <UserPlus size={18} color="var(--text-main)" />
+                            <div style={{
+                                width: '42px', height: '42px', borderRadius: '50%',
+                                background: 'rgba(255,255,255,0.08)',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                transition: 'all 0.2s'
+                            }} onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'} onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}>
+                                <UserPlus size={20} color="var(--text-main)" />
                             </div>
-                            <span style={{ fontSize: '12px', color: 'var(--text-main)', textAlign: 'center', lineHeight: '1.2' }}>{isGroup ? 'Add member' : 'Create group chat'}</span>
+                            <span style={{ fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center' }}>{isGroup ? 'Add member' : 'Create group chat'}</span>
                         </div>
-                        {isGroup && (
-                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', cursor: 'pointer', width: '65px' }} onClick={() => showToast('Manage group', 'info')}>
-                                <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'var(--bg-light)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                    <Settings size={18} color="var(--text-main)" />
-                                </div>
-                                <span style={{ fontSize: '12px', color: 'var(--text-main)', textAlign: 'center', lineHeight: '1.2' }}>Manage group</span>
-                            </div>
-                        )}
                     </div>
                 </div>
 
@@ -562,10 +569,10 @@ export function ConversationSidebar({ conversation, onOpenGroupModal, onClose, c
                     </>
                 )}
 
-                {/* Sub Menu 1 (Only for Direct Chat) */}
+                {/* Sub Menu 1 (Direct Chat) */}
                 {!isGroup && (
                     <>
-                        <div style={{ padding: '4px 0' }}>
+                        <div style={{ padding: '0', borderTop: '1px solid var(--border-color)' }}>
                             <ActionItem icon={<Clock size={20} />} label="Appointment List" />
                             <ActionItem icon={<Users size={20} />} label="Common Groups" />
                         </div>
@@ -579,8 +586,8 @@ export function ConversationSidebar({ conversation, onOpenGroupModal, onClose, c
                         <div key={section.id}>
                             <ActionItem
                                 onClick={() => setActiveSection(activeSection === section.id ? null : section.id)}
-                                icon={<span style={{ fontWeight: '600' }}>{section.label}</span>}
-                                label=""
+                                icon={null}
+                                label={section.label}
                                 rightIcon={<ChevronRight size={18} style={{ transform: activeSection === section.id ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s' }} />}
                             />
                             {activeSection === section.id && (
@@ -603,29 +610,40 @@ export function ConversationSidebar({ conversation, onOpenGroupModal, onClose, c
                 <Divider />
 
                 {/* Privacy Settings */}
-                <div style={{ padding: '8px 0' }}>
+                <div>
                     <div style={{
                         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                        padding: '8px 16px', cursor: 'pointer'
+                        padding: '12px 16px', cursor: 'pointer'
                     }} onClick={() => setActiveSection(activeSection === 'privacy' ? null : 'privacy')}>
-                        <span style={{ fontSize: '14px', fontWeight: '600' }}>Privacy Settings</span>
+                        <span style={{ fontSize: '14px', fontWeight: '500' }}>Privacy Settings</span>
                         <ChevronDown size={18} color="var(--text-muted)" style={{ transform: activeSection === 'privacy' ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
                     </div>
 
-                    {activeSection !== 'privacy' && (
-                        <div>
-                            <ActionItem
-                                icon={<Clock size={20} />}
-                                label="Self-destruct Messages"
-                                subLabel={selfDestructTime}
-                                onClick={() => setSelfDestructTime(prev => prev === 'Never' ? '7 Days' : 'Never')}
-                            />
-                            <ActionItem
-                                icon={<EyeOff size={20} />}
-                                label="Hide Chat"
-                                hasToggle={isChatHidden}
-                                onClick={() => setIsChatHidden(!isChatHidden)}
-                            />
+                    {activeSection === 'privacy' && (
+                        <div style={{ background: 'var(--bg-panel-dark)' }}>
+                            <div style={{ padding: '0 0 12px 0' }}>
+                                <ActionItem
+                                    icon={<Clock size={20} />}
+                                    label="Self-destruct Messages"
+                                    subLabel={selfDestructTime}
+                                    onClick={() => {
+                                        const options = ['Never', '30 Seconds', '1 Minute', '1 Hour', '1 Day', '1 Week'];
+                                        const idx = options.indexOf(selfDestructTime);
+                                        const next = options[(idx + 1) % options.length];
+                                        setSelfDestructTime(next);
+                                        showToast(`Self-destruct: ${next}`);
+                                    }}
+                                />
+                                <ActionItem
+                                    icon={<EyeOff size={20} />}
+                                    label="Hide Chat"
+                                    hasToggle={isChatHidden}
+                                    onClick={() => {
+                                        setIsChatHidden(!isChatHidden);
+                                        showToast(isChatHidden ? 'Chat unhidden' : 'Chat hidden');
+                                    }}
+                                />
+                            </div>
                         </div>
                     )}
                 </div>
@@ -656,7 +674,7 @@ export function ConversationSidebar({ conversation, onOpenGroupModal, onClose, c
                 </div>
                 <div style={{ height: '20px' }} />
             </div>
-        </div>
+        </div >
     );
 }
 
@@ -758,34 +776,85 @@ export function PollModal({ onClose, onCreate }) {
 }
 
 export function StickerPicker({ onSelect, onClose }) {
-    const stickers = [
-        '👍', '❤️', '😂', '😯', '😭', '😡', '🙏', '🔥', '✨', '🎉',
-        '😎', '🤔', '👀', '🙌', '💯', '🚀', '🌈', '🍦', '🍕', '🐱'
+    const [currentCategory, setCurrentCategory] = useState('emotions');
+
+    const emojiCategories = {
+        emotions: ['🙂', '🤔', '😍', '😂', '😎', '😭', '😊', '😋', '🤫', '🥱', '🙄', '🤤', '😔', '😫', '😡', '🤬', '🥵', '🥶', '🤯', '🤢', '🤮', '🤧', '😵', '🧐', '🤓', '😇', '🤠', '🤡', '👺', '👹', '👻', '💀', '👽', '🤖', '💩', '😺', '😸', '😹', '😻', '😼', '😽', '🙀', '😿', '😾'],
+        animals: ['🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼', '🐨', '🐯', '🦁', '🐮', '🐷', '🐽', '🐸', '🐵', '🙈', '🙉', '🙊', '🐒', '🐔', '🐧', '🐦', '🐤', '🐣', '🐥', '🦆', '🦅', '🦉', '🦇', '🐺', '🐗', '🐴', '🦄', '🐝', '🐛', '🦋', '🐌', '🐞', '🐜', '🦟', '🦗', '🕷', '🕸', '🦂'],
+        food: ['🍎', '🍐', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🍈', '🍒', '🍑', '🥭', '🍍', '🥥', '🥝', '🍅', '🍆', '🥑', '🥦', '🥬', '🥒', '🌽', '🥕', '🥔', '🍠', '🥐', '🍞', '🥖', '🥨', '🥯', '🥞', '🧀', '🍖', '🍗', '🥩', '🥓', '🍔', '🍟', '🍕', '🌭', '🥪', '🌮', '🌯', '🥗', '🥘'],
+        activities: ['⚽', '🏀', '🏈', '⚾', '🥎', '🎾', '🏐', '🏉', '🎱', '🏓', '🏸', '🥅', '🏒', '🏑', '🏏', '⛳', '🏹', '🎣', '🥊', '🥋', '🎽', '⛸', '🥌', '🛷', '🛹', '⛷', '🏂', '🏋️', '🤼', '🤸', '⛹️', '🤺', '🤾', '🏌️', '🏇', '🧘', '🏄', '🏊', '🤽', '🚣', '🧗', '🚵', '🚴', '🏆', '🥇'],
+        travel: ['🚗', '🚕', '🚙', '🚌', '🚎', '🏎', '🚓', '🚑', '🚒', '🚐', '🚚', '🚛', '🚜', '🏍', '🚲', '🛴', '🛵', '🚏', '🛣', '🛤', '⛽', '🚨', '🚥', '🚦', '🛑', '🚧', '⚓', '⛵', '🛶', '🚤', '🛳', '⛴', '🛥', '✈️', '🛩', '🛫', '🛬', '💺', '🚁', '🚟', '🚠', '🚡', '🚀', '🛸', '🛰'],
+        objects: ['⌚', '📱', '📲', '💻', '⌨️', '🖱', '🖨', '🖱️', '🖲', '🕹', '🗜', '💽', '💾', '💿', '📀', '📼', '📷', '📸', '📹', '🎥', '📽', '🎞', '📞', '☎️', '📟', '📠', '📺', '📻', '🎙', '🎚', '🎛', '🧭', '⏱', '⏲', '⏰', '🕰', '⌛', '⏳', '📡', '🔋', '🔌', '💡', '🔦', '🕯', '🧯'],
+        symbols: ['❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '💔', '❣️', '💕', '💞', '💓', '💗', '💖', '💘', '💝', '💟', '☮️', '✝️', '☪️', '🕉', '☸️', '✡️', '🔯', '🕎', '☯️', '☦️', '🛐', '⛎', '♈', '♉', '♊', '♋', '♌', '♍', '♎', '♏', '♐', '♑', '♒', '♓', '🆔', '⚛️', '🉑']
+    };
+
+    const categories = [
+        { id: 'emotions', icon: Smile, label: 'Cảm xúc' },
+        { id: 'animals', icon: Users, label: 'Động vật' },
+        { id: 'food', icon: StickyNote, label: 'Ăn uống' },
+        { id: 'activities', icon: Star, label: 'Hoạt động' },
+        { id: 'travel', icon: MapPin, label: 'Du lịch' },
+        { id: 'objects', icon: Settings, label: 'Vật dụng' },
+        { id: 'symbols', icon: Heart, label: 'Biểu tượng' }
     ];
 
     return (
         <div style={{
-            position: 'absolute', bottom: '100%', left: 0, marginBottom: '10px',
-            background: 'var(--bg-panel)', borderRadius: '20px', boxShadow: '0 10px 40px rgba(0,0,0,0.3)',
-            border: '1px solid var(--border-color)', padding: '16px', width: '300px', zIndex: 1000,
+            position: 'absolute', bottom: '100%', right: '0', marginBottom: '10px',
+            background: 'var(--bg-panel)', borderRadius: '16px', boxShadow: '0 10px 40px rgba(0,0,0,0.3)',
+            border: '1px solid var(--border-color)', width: '320px', zIndex: 1000, overflow: 'hidden',
+            display: 'flex', flexDirection: 'column'
         }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
-                <span style={{ fontSize: '11px', fontWeight: '900', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Signals</span>
-                <X size={16} color="var(--text-muted)" style={{ cursor: 'pointer' }} onClick={onClose} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--border-color)' }}>
+                <span style={{ fontSize: '13px', fontWeight: '800', color: 'var(--text-main)' }}>
+                    {categories.find(c => c.id === currentCategory)?.label || 'Cảm xúc'}
+                </span>
+                <X size={18} color="var(--text-muted)" style={{ cursor: 'pointer' }} onClick={onClose} />
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '10px', maxHeight: '240px', overflowY: 'auto' }}>
-                {stickers.map(s => (
+
+            <div style={{ padding: '8px', display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '4px', maxHeight: '280px', overflowY: 'auto' }}>
+                {emojiCategories[currentCategory].map(s => (
                     <div
                         key={s}
-                        onClick={() => { onSelect(s); onClose(); }}
+                        onClick={() => { onSelect(s); }}
                         style={{
-                            fontSize: '28px', textAlign: 'center', cursor: 'pointer', padding: '10px',
-                            borderRadius: '12px', transition: 'all 0.2s'
+                            fontSize: '24px', textAlign: 'center', cursor: 'pointer', padding: '8px',
+                            borderRadius: '10px', transition: 'all 0.1s'
                         }}
-                        onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-light)'; e.currentTarget.style.transform = 'scale(1.2)'; }}
+                        onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-light)'; e.currentTarget.style.transform = 'scale(1.15)'; }}
                         onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.transform = 'scale(1)'; }}
                     >
                         {s}
+                    </div>
+                ))}
+            </div>
+
+            <div style={{
+                display: 'flex',
+                background: 'var(--bg-light)',
+                padding: '4px',
+                borderTop: '1px solid var(--border-color)',
+                overflowX: 'auto',
+                scrollbarWidth: 'none'
+            }}>
+                {categories.map(cat => (
+                    <div
+                        key={cat.id}
+                        onClick={() => setCurrentCategory(cat.id)}
+                        style={{
+                            padding: '8px 12px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            borderRadius: '8px',
+                            background: currentCategory === cat.id ? 'var(--bg-panel)' : 'transparent',
+                            color: currentCategory === cat.id ? 'var(--primary)' : 'var(--text-muted)',
+                            transition: 'all 0.2s',
+                            flexShrink: 0
+                        }}
+                    >
+                        <cat.icon size={20} />
                     </div>
                 ))}
             </div>

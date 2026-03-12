@@ -188,7 +188,7 @@ export default function ProfilePage() {
 
       <div style={{ marginTop: '32px', textAlign: 'center' }}>
         <p style={{ fontSize: '11px', fontWeight: '900', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-          Protocol Version: 1.0.4-SECURE // Built by TechCorp Cyber
+          Protocol Version: 1.0.4-SECURE // Built by KTT01 Cyber
         </p>
       </div>
     </div>

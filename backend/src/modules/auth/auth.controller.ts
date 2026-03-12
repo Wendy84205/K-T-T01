@@ -90,12 +90,24 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @Get('profile')
   async getProfile(@Request() req) {
-    const profile = await this.authService.getUserProfile(req.user.userId);
+    const userId = req.user.userId;
+    const profile = await this.authService.getUserProfile(userId);
+    
+    const roleNames = profile?.roles?.map(r => typeof r === 'string' ? r : r.name) || [];
+
     return {
       user: {
-        ...profile,
-        userId: req.user.userId,
-        roles: req.user.roles ?? [],
+        id: profile.id,
+        email: profile.email,
+        username: profile.username,
+        firstName: profile.firstName,
+        lastName: profile.lastName,
+        employeeId: profile.employeeId,
+        department: profile.department,
+        mfaRequired: profile.mfaRequired,
+        securityClearanceLevel: profile.securityClearanceLevel,
+        roles: roleNames, // Use names derived from database
+        publicKey: profile.publicKey,
       },
     };
   }
