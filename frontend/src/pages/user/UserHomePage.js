@@ -879,24 +879,38 @@ export default function UserHomePage() {
         } else {
           let finalContent = messageInput.trim();
 
-          // E2EE Encryption for Direct Chat
+          // E2EE Encryption — supports both direct and group chats
           const conv = conversations.find(c => c.id === selectedChat);
-          if (conv && conv.conversationType === 'direct' && conv.otherUser?.publicKey) {
-            console.log("[E2EE] Encrypting message (Hybrid Mode)...");
+          if (conv) {
+            console.log("[E2EE] Attempting encryption for conversation type:", conv.conversationType);
             try {
-              const myPublicKey = user.publicKey || JSON.parse(localStorage.getItem('user'))?.publicKey;
-              const keysToEncryptFor = {
-                [conv.otherUser.id]: conv.otherUser.publicKey
-              };
-              if (myPublicKey) {
-                keysToEncryptFor[user.id] = myPublicKey;
+              const keysToEncryptFor = {};
+              const myPublicKey = user.publicKey || JSON.parse(localStorage.getItem('user') || '{}')?.publicKey;
+              if (myPublicKey) keysToEncryptFor[String(user.id)] = myPublicKey;
+
+              if (conv.conversationType === 'direct' && conv.otherUser?.publicKey) {
+                // Direct chat: encrypt for recipient + self
+                keysToEncryptFor[String(conv.otherUser.id)] = conv.otherUser.publicKey;
+              } else if (conv.conversationType === 'group' && conv.members && conv.members.length > 0) {
+                // Group chat: encrypt for all members who have a public key
+                for (const member of conv.members) {
+                  if (member.publicKey && member.id !== user.id) {
+                    keysToEncryptFor[String(member.id)] = member.publicKey;
+                  }
+                }
               }
 
-              const hybridPayload = await encryptHybrid(finalContent, keysToEncryptFor);
-              finalContent = `[E2EE]:${JSON.stringify(hybridPayload)}`;
+              // Only encrypt if we have at least one recipient key
+              const recipientCount = Object.keys(keysToEncryptFor).filter(k => k !== String(user.id)).length;
+              if (recipientCount > 0) {
+                const hybridPayload = await encryptHybrid(finalContent, keysToEncryptFor);
+                finalContent = `[E2EE]:${JSON.stringify(hybridPayload)}`;
+                console.log(`[E2EE] Message encrypted for ${Object.keys(keysToEncryptFor).length} recipients`);
+              } else {
+                console.warn("[E2EE] No recipient public keys found — sending in plain text");
+              }
             } catch (e) {
-              console.error("[E2EE] Hybrid Encryption failed. Likely key invalid.", e);
-              // Fallback happens to plain text if we don't change finalContent
+              console.error("[E2EE] Encryption failed. Falling back to plain text.", e);
             }
           }
 
