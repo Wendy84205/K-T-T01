@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Search, Plus, MessageSquare, MoreHorizontal, Phone, Video, Info, Lock, Send, Mic, Image, Paperclip, Smile, Settings, Bell, BellOff, Clock, Shield, LogOut, ChevronLeft, ChevronRight, User, File as FileIcon, Download, Trash2, ShieldCheck, CreditCard, HelpCircle, Key, Eye, EyeOff, Check, CheckCheck, Square, X, Forward, Reply, Edit2, Play, Pause, List, Pin, Star, Cloud, Heart, ChevronDown, Users, MoreVertical, FileText, Camera, MapPin, AlertTriangle, BarChart3, Folder, Maximize2, Minimize2, Briefcase, Layers, Building2, Bold, Italic, Link, Code, AtSign, Hash, Flag, RefreshCw } from 'lucide-react';
 import api from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
-import { encryptContent, decryptContent, encryptHybrid, decryptHybrid } from "../../utils/crypto";
+import { encryptContent, decryptContent, encryptHybrid, decryptHybrid, setupE2EEWithPassword, unlockE2EEWithPassword, hasE2EEBundle } from "../../utils/crypto";
 import { SearchBar, PinnedMessagesBanner, ConversationSidebar, PollModal, StickerPicker } from '../../components/chat/ChatEnhancements';
 import { DiscoverContent, MiniAppsContent } from '../../components/chat/ZaloStyleComponents';
 import { EnhancedMessageBubble } from '../../components/chat/EnhancedMessage';
@@ -18,6 +18,10 @@ export default function UserHomePage() {
   // 1. State Declarations
   const [activeTab, setActiveTab] = useState('messages');
   const [taskNotification, setTaskNotification] = useState({ show: false, task: null, project: null, message: '' });
+  // E2EE Passphrase System
+  const [e2eeStatus, setE2eeStatus] = useState('checking'); // 'checking' | 'setup_needed' | 'locked' | 'unlocked'
+  const [showE2EEModal, setShowE2EEModal] = useState(false);
+  const [e2eePrivateKey, setE2eePrivateKey] = useState(() => sessionStorage.getItem('e2ee_session_pk') || null);
   const [selectedChat, setSelectedChat] = useState(null);
   const [conversations, setConversations] = useState([]);
   const [messages, setMessages] = useState([]);
@@ -233,6 +237,22 @@ export default function UserHomePage() {
       ));
     }
   }, [selectedChat]);
+
+  // ─── E2EE Passphrase Init ────────────────────────────────────────────────
+  useEffect(() => {
+    if (!user?.id) return;
+    const sessionPk = sessionStorage.getItem('e2ee_session_pk');
+    if (sessionPk) {
+      setE2eePrivateKey(sessionPk);
+      setE2eeStatus('unlocked');
+    } else if (hasE2EEBundle(user.id)) {
+      setE2eeStatus('locked');
+      setShowE2EEModal(true);
+    } else {
+      setE2eeStatus('setup_needed');
+      setShowE2EEModal(true);
+    }
+  }, [user?.id]);
 
   useEffect(() => {
     const token = localStorage.getItem('accessToken');
@@ -572,10 +592,11 @@ export default function UserHomePage() {
     // Decrypt main content
     if (msg.content && msg.content.startsWith('[E2EE]:') && user?.id) {
       const rawContent = msg.content.substring(7);
-      const privateKey = localStorage.getItem(`e2ee_private_key_${user.id}`);
+      // Use the PBKDF2-unlocked private key from this session
+      const privateKey = e2eePrivateKey || sessionStorage.getItem('e2ee_session_pk');
 
       if (!privateKey) {
-        msg.content = "[E2EE: Missing private key]";
+        msg.content = "🔐 E2EE locked — click the 🔑 icon to enter your passphrase";
       } else {
         try {
           const encryptedData = JSON.parse(rawContent);
@@ -1459,6 +1480,31 @@ export default function UserHomePage() {
             View My Tasks →
           </button>
         </div>
+      )}
+
+      {/* ════════════════════════════════════════════════════════
+          🔑 E2EE PASSPHRASE MODAL
+          ════════════════════════════════════════════════════════ */}
+      {showE2EEModal && (
+        <E2EEPassphraseModal
+          mode={e2eeStatus}
+          userId={user?.id}
+          onSuccess={({ privateKey, publicKey }) => {
+            // Store private key in this tab's sessionStorage (clears on tab close)
+            sessionStorage.setItem('e2ee_session_pk', privateKey);
+            setE2eePrivateKey(privateKey);
+            setE2eeStatus('unlocked');
+            setShowE2EEModal(false);
+            // Upload public key to backend so others can encrypt for us
+            api.updateProfile({ publicKey }).catch(err =>
+              console.warn('[E2EE] Failed to upload public key:', err)
+            );
+          }}
+          onSkip={() => {
+            setShowE2EEModal(false);
+            setE2eeStatus('skipped');
+          }}
+        />
       )}
 
       {/* SIDEBAR */}
@@ -4909,6 +4955,200 @@ function CallsContent() {
             );
           })
         )}
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// 🔑 E2EE PASSPHRASE MODAL COMPONENT
+// Uses PBKDF2 to derive AES key from passphrase → protects RSA private key
+// ════════════════════════════════════════════════════════════════════════════
+function E2EEPassphraseModal({ mode, userId, onSuccess, onSkip }) {
+  const [passphrase, setPassphrase] = useState('');
+  const [confirmPassphrase, setConfirmPassphrase] = useState('');
+  const [showPass, setShowPass] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const isSetup = mode === 'setup_needed';
+
+  const getStrength = (p) => {
+    if (!p) return { level: 0, label: '', color: '#444' };
+    let score = 0;
+    if (p.length >= 8) score++;
+    if (p.length >= 12) score++;
+    if (/[A-Z]/.test(p)) score++;
+    if (/[0-9]/.test(p)) score++;
+    if (/[^A-Za-z0-9]/.test(p)) score++;
+    const levels = [
+      { level: 0, label: '', color: '#444' },
+      { level: 1, label: 'Weak', color: '#ef4444' },
+      { level: 2, label: 'Fair', color: '#f59e0b' },
+      { level: 3, label: 'Good', color: '#3b82f6' },
+      { level: 4, label: 'Strong', color: '#10b981' },
+      { level: 5, label: 'Very Strong', color: '#10b981' },
+    ];
+    return levels[score] || levels[0];
+  };
+
+  const strength = getStrength(passphrase);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    if (!passphrase || passphrase.length < 6) {
+      setError('Passphrase must be at least 6 characters.');
+      return;
+    }
+    if (isSetup && passphrase !== confirmPassphrase) {
+      setError('Passphrases do not match.');
+      return;
+    }
+    setLoading(true);
+    try {
+      if (isSetup) {
+        // Generate new RSA key pair protected by this passphrase
+        const { setupE2EEWithPassword: setup } = await import('../../utils/crypto');
+        const { publicKey, privateKey } = await setup(userId, passphrase);
+        onSuccess({ privateKey, publicKey });
+      } else {
+        // Unlock existing bundle with passphrase
+        const { unlockE2EEWithPassword: unlock } = await import('../../utils/crypto');
+        const result = await unlock(userId, passphrase);
+        if (!result) {
+          setError('No encryption bundle found. Try setting up again.');
+          setLoading(false);
+          return;
+        }
+        onSuccess(result);
+      }
+    } catch (err) {
+      console.error('[E2EE Modal]', err);
+      setError(isSetup ? 'Setup failed. Please try again.' : 'Wrong passphrase. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 100000,
+      background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(12px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px'
+    }}>
+      <div style={{
+        background: 'var(--bg-panel)', borderRadius: '28px',
+        padding: '40px', maxWidth: '440px', width: '100%',
+        border: '1px solid var(--border-color)',
+        boxShadow: '0 32px 80px rgba(0,0,0,0.4), 0 0 0 1px rgba(102,126,234,0.2)',
+        animation: 'slideInUp 0.35s cubic-bezier(0.4,0,0.2,1)'
+      }}>
+        {/* Header */}
+        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+          <div style={{
+            width: '64px', height: '64px', borderRadius: '20px', margin: '0 auto 16px',
+            background: 'linear-gradient(135deg, #667eea, #764ba2)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: '28px', boxShadow: '0 8px 24px rgba(102,126,234,0.4)'
+          }}>🔑</div>
+          <h2 style={{ color: 'var(--text-main)', margin: '0 0 8px', fontSize: '20px', fontWeight: '900' }}>
+            {isSetup ? 'Create Encryption Passphrase' : 'Unlock End-to-End Encryption'}
+          </h2>
+          <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: '13px', lineHeight: 1.5 }}>
+            {isSetup
+              ? 'Your passphrase locally protects your private key. It never leaves this device.'
+              : 'Enter your passphrase to decrypt your messages. This key stays only in your browser.'}
+          </p>
+        </div>
+
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {/* Passphrase input */}
+          <div>
+            <label style={{ display: 'block', fontSize: '11px', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: '8px' }}>
+              {isSetup ? 'Create Passphrase' : 'Your Passphrase'}
+            </label>
+            <div style={{ position: 'relative' }}>
+              <input
+                type={showPass ? 'text' : 'password'}
+                value={passphrase}
+                onChange={e => setPassphrase(e.target.value)}
+                placeholder="Enter a strong passphrase..."
+                autoFocus
+                style={{
+                  width: '100%', padding: '14px 44px 14px 16px', borderRadius: '14px',
+                  background: 'var(--bg-app)', border: '2px solid var(--border-color)',
+                  color: 'var(--text-main)', fontSize: '14px', outline: 'none',
+                  boxSizing: 'border-box', fontFamily: 'inherit',
+                  transition: 'border-color 0.2s'
+                }}
+                onFocus={e => e.target.style.borderColor = 'var(--primary)'}
+                onBlur={e => e.target.style.borderColor = 'var(--border-color)'}
+              />
+              <button type="button" onClick={() => setShowPass(p => !p)}
+                style={{ position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
+                {showPass ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
+
+            {/* Strength indicator (setup only) */}
+            {isSetup && passphrase && (
+              <div style={{ marginTop: '8px' }}>
+                <div style={{ height: '4px', background: 'var(--bg-light)', borderRadius: '2px', overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${(strength.level / 5) * 100}%`, background: strength.color, borderRadius: '2px', transition: 'all 0.3s' }} />
+                </div>
+                <div style={{ fontSize: '10px', fontWeight: '700', color: strength.color, marginTop: '4px', textAlign: 'right' }}>{strength.label}</div>
+              </div>
+            )}
+          </div>
+
+          {/* Confirm passphrase (setup only) */}
+          {isSetup && (
+            <div>
+              <label style={{ display: 'block', fontSize: '11px', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: '8px' }}>
+                Confirm Passphrase
+              </label>
+              <input
+                type={showPass ? 'text' : 'password'}
+                value={confirmPassphrase}
+                onChange={e => setConfirmPassphrase(e.target.value)}
+                placeholder="Repeat your passphrase..."
+                style={{
+                  width: '100%', padding: '14px 16px', borderRadius: '14px',
+                  background: 'var(--bg-app)', border: `2px solid ${confirmPassphrase && passphrase !== confirmPassphrase ? '#ef4444' : 'var(--border-color)'}`,
+                  color: 'var(--text-main)', fontSize: '14px', outline: 'none',
+                  boxSizing: 'border-box', fontFamily: 'inherit', transition: 'border-color 0.2s'
+                }}
+              />
+            </div>
+          )}
+
+          {/* Error message */}
+          {error && (
+            <div style={{ background: '#ef444415', border: '1px solid #ef444430', borderRadius: '12px', padding: '10px 14px', color: '#ef4444', fontSize: '12px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <AlertTriangle size={14} /> {error}
+            </div>
+          )}
+
+          {/* Info box */}
+          {isSetup && (
+            <div style={{ background: 'rgba(102,126,234,0.08)', border: '1px solid rgba(102,126,234,0.2)', borderRadius: '12px', padding: '12px 14px', fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.6 }}>
+              ⚠️ <strong>Remember this passphrase!</strong> It cannot be recovered. Without it, your encrypted messages cannot be decrypted.
+            </div>
+          )}
+
+          {/* Buttons */}
+          <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
+            <button type="button" onClick={onSkip}
+              style={{ flex: 1, padding: '14px', borderRadius: '14px', background: 'var(--bg-app)', border: '1px solid var(--border-color)', color: 'var(--text-muted)', fontSize: '12px', fontWeight: '800', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Skip for now
+            </button>
+            <button type="submit" disabled={loading}
+              style={{ flex: 2, padding: '14px', borderRadius: '14px', background: 'linear-gradient(135deg, #667eea, #764ba2)', border: 'none', color: '#fff', fontSize: '13px', fontWeight: '900', cursor: loading ? 'not-allowed' : 'pointer', textTransform: 'uppercase', letterSpacing: '0.05em', opacity: loading ? 0.7 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+              {loading ? <><RefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} /> Processing…</> : isSetup ? '🔑 Create Key' : '🔓 Unlock'}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
