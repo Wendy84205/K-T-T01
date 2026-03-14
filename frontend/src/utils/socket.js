@@ -5,7 +5,7 @@ class SocketService {
     constructor() {
         this.socket = null;
         this.userId = null;
-        // Store all registered callbacks so we can re-register them on reconnect
+        // Store all registered callbacks: event -> array of callbacks
         this._callbacks = {};
     }
 
@@ -66,23 +66,81 @@ class SocketService {
         return this.socket;
     }
 
-    // Store and register a callback for an event
+    /**
+     * Register a SINGLE authoritative callback for an event.
+     * Overwrites any previous callback registered under the same key.
+     * Used for events where only one handler should exist (e.g. typing, newMessage).
+     */
     _on(event, callback) {
-        this._callbacks[event] = callback;
+        if (!this._callbacks[event]) {
+            this._callbacks[event] = [];
+        }
+        // Replace any existing entry with the same key (single-owner events)
+        this._callbacks[event] = [{ key: event, fn: callback }];
         if (this.socket) {
-            this.socket.off(event); // remove old listener first
+            this.socket.off(event);
             this.socket.on(event, callback);
+        }
+    }
+
+    /**
+     * Register a NAMED callback for an event, allowing multiple subscribers.
+     * Use this for call events where both CallContext and UserHomePage need to listen.
+     * @param {string} event - Socket event name
+     * @param {string} key   - Unique key for this handler (e.g. 'context', 'homepage')
+     * @param {Function} callback
+     */
+    _onNamed(event, key, callback) {
+        if (!this._callbacks[event]) {
+            this._callbacks[event] = [];
+        }
+        // Remove any existing entry with the same key, then add new one
+        this._callbacks[event] = this._callbacks[event].filter(c => c.key !== key);
+        this._callbacks[event].push({ key, fn: callback });
+
+        if (this.socket) {
+            // Remove old combined listener and re-attach a combined one
+            this.socket.off(event);
+            this.socket.on(event, (...args) => {
+                (this._callbacks[event] || []).forEach(c => c.fn(...args));
+            });
+        }
+    }
+
+    /**
+     * Remove a named callback for an event.
+     */
+    _offNamed(event, key) {
+        if (this._callbacks[event]) {
+            this._callbacks[event] = this._callbacks[event].filter(c => c.key !== key);
+        }
+        if (this.socket) {
+            this.socket.off(event);
+            if (this._callbacks[event] && this._callbacks[event].length > 0) {
+                this.socket.on(event, (...args) => {
+                    (this._callbacks[event] || []).forEach(c => c.fn(...args));
+                });
+            }
         }
     }
 
     // Re-register all stored callbacks onto the current socket
     _reRegisterCallbacks() {
-        Object.entries(this._callbacks).forEach(([event, callback]) => {
-            if (this.socket) {
-                this.socket.off(event);
-                this.socket.on(event, callback);
-                console.log('[Socket] Re-registered listener for:', event);
+        const seen = new Set();
+        Object.entries(this._callbacks).forEach(([event, entries]) => {
+            if (!this.socket || seen.has(event)) return;
+            seen.add(event);
+            this.socket.off(event);
+            if (entries.length === 1) {
+                // Single handler – register directly
+                this.socket.on(event, entries[0].fn);
+            } else if (entries.length > 1) {
+                // Multiple handlers – combine
+                this.socket.on(event, (...args) => {
+                    (this._callbacks[event] || []).forEach(c => c.fn(...args));
+                });
             }
+            console.log(`[Socket] Re-registered ${entries.length} listener(s) for:`, event);
         });
     }
 
@@ -133,6 +191,10 @@ class SocketService {
         this._on('notification', callback);
     }
 
+    onTaskAssigned(callback) {
+        this._on('task-assigned', callback);
+    }
+
     onMessageDeleted(callback) {
         this._on('message_deleted', callback);
     }
@@ -166,21 +228,44 @@ class SocketService {
         }
     }
 
-    onCallMade(callback) {
-        console.log('[Socket] Registering call-made listener');
-        this._on('call-made', callback);
+    /**
+     * Register a call-made listener with an optional subscriber key.
+     * Multiple components can subscribe simultaneously.
+     */
+    onCallMade(callback, key = 'default') {
+        console.log(`[Socket] Registering call-made listener [${key}]`);
+        this._onNamed('call-made', key, callback);
     }
 
-    onCallAnswered(callback) {
-        this._on('call-answered', callback);
+    offCallMade(key = 'default') {
+        this._offNamed('call-made', key);
     }
 
-    onIceCandidate(callback) {
-        this._on('ice-candidate', callback);
+    onCallAnswered(callback, key = 'default') {
+        this._onNamed('call-answered', key, callback);
     }
 
-    onCallEnded(callback) {
-        this._on('call-ended', callback);
+    offCallAnswered(key = 'default') {
+        this._offNamed('call-answered', key);
+    }
+
+    onIceCandidate(callback, key = 'default') {
+        this._onNamed('ice-candidate', key, callback);
+    }
+
+    offIceCandidate(key = 'default') {
+        this._offNamed('ice-candidate', key);
+    }
+
+    /**
+     * Register a call-ended listener with an optional subscriber key.
+     */
+    onCallEnded(callback, key = 'default') {
+        this._onNamed('call-ended', key, callback);
+    }
+
+    offCallEnded(key = 'default') {
+        this._offNamed('call-ended', key);
     }
 
     // --- Reactions ---

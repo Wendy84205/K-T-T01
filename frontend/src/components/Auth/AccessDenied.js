@@ -50,7 +50,7 @@ const AccessDenied = ({ lockedUntil }) => {
                     </div>
                 </div>
                 <div>
-                    <h2 className="text-white font-bold leading-tight tracking-wide text-lg">TechCorp</h2>
+                    <h2 className="text-white font-black leading-tight tracking-[0.1em] text-lg italic animate-glow">KTT01</h2>
                     <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">Enterprise Security</p>
                 </div>
             </div>
@@ -144,7 +144,7 @@ const AccessDenied = ({ lockedUntil }) => {
 
             {/* Footer */}
             <div className="absolute bottom-4 text-[9px] text-[#475569] font-mono tracking-widest uppercase flex gap-4">
-                <span>© 2026 TechCorp Systems & Infrastructure. Secure Authentication Endpoint.</span>
+                <span>© 2026 KTT01 GLOBAL OPERATIONS. SECURED NODE {Math.random().toString(36).substring(2, 7).toUpperCase()}</span>
             </div>
         </div>
     );

@@ -7,7 +7,7 @@ COPY package*.json ./
 
 # Install dependencies with clear cache
 RUN npm cache clean --force && \
-    npm ci --legacy-peer-deps --unsafe-perm
+    npm install --legacy-peer-deps --unsafe-perm
 
 # Copy source code
 COPY . .

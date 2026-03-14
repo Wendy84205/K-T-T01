@@ -102,55 +102,34 @@ export class UsersService {
     const skip = (page - 1) * limit;
 
     const queryBuilder = this.userRepository.createQueryBuilder('user')
+      .leftJoinAndSelect('user.roles', 'role')
       .where('user.deletedAt IS NULL')
       .orderBy('user.createdAt', 'DESC')
       .skip(skip)
       .take(limit);
 
     if (status && status !== 'All Status') {
-      queryBuilder.andWhere('user.status = :status', { status: status.toLowerCase() });
+      const dbStatus = status.toLowerCase();
+      queryBuilder.andWhere('user.status = :status', { status: dbStatus });
+    }
+
+    if (role && role !== 'All Roles') {
+      queryBuilder.andWhere('role.name = :role', { role });
     }
 
     if (search) {
       queryBuilder.andWhere(
-        '(user.email LIKE :search OR user.username LIKE :search OR user.firstName LIKE :search OR user.lastName LIKE :search)',
+        '(user.firstName LIKE :search OR user.lastName LIKE :search OR user.email LIKE :search OR user.username LIKE :search)',
         { search: `%${search}%` }
       );
     }
 
-    // Role filtering with subquery
-    if (role && role !== 'All Roles') {
-      queryBuilder.andWhere(
-        `user.id IN (
-          SELECT ur.user_id FROM user_roles ur 
-          INNER JOIN roles r ON ur.role_id = r.id 
-          WHERE r.name = :roleName
-        )`,
-        { roleName: role }
-      );
-    }
-
     const [users, total] = await queryBuilder.getManyAndCount();
-    console.log(`[DEBUG] findAll: Found ${users.length} users in page, total=${total}`);
 
-    // Fetch roles manually to avoid QueryBuilder join issues
+    // Fetch MFA secrets separately if needed, or leave it for findOne
     const userIds = users.map(u => u.id);
     if (userIds.length > 0) {
       try {
-        const allRoles = await this.userRepository.query("SELECT * FROM `roles` LIMIT 100");
-        const userRoles = await this.userRepository.query(
-          "SELECT `user_id`, `role_id` FROM `user_roles` WHERE `user_id` IN (?)",
-          [userIds]
-        );
-
-        users.forEach(user => {
-          const uRoleIds = userRoles
-            .filter(ur => ur.user_id === user.id)
-            .map(ur => ur.role_id);
-          (user as any).roles = allRoles.filter(r => uRoleIds.includes(r.id));
-        });
-
-        // Fetch MFA secrets
         const allMfa = await this.userRepository.query(
           "SELECT user_id, totp_secret FROM mfa_settings WHERE user_id IN (?)",
           [userIds]
@@ -183,22 +162,10 @@ export class UsersService {
 
   async findOne(id: string): Promise<any> {
     const user = await this.userRepository.findOne({
-      where: { id }
+      where: { id },
+      relations: ['roles']
     });
     if (!user) throw new NotFoundException(`User not found`);
-
-    // Fetch roles separately
-    const userRoles = await this.userRepository.query(
-      "SELECT `role_id` FROM `user_roles` WHERE `user_id` = ?",
-      [id]
-    );
-    const roleIds = userRoles.map(ur => ur.role_id);
-    if (roleIds.length > 0) {
-      const allRoles = await this.userRepository.query("SELECT * FROM `roles` LIMIT 100");
-      (user as any).roles = allRoles.filter(r => roleIds.includes(r.id));
-    } else {
-      (user as any).roles = [];
-    }
 
     // Fetch MFA settings
     const mfaSetting = await this.mfaSettingRepository.findOne({ where: { userId: id } });
@@ -232,27 +199,13 @@ export class UsersService {
       user.lastPasswordChange = new Date();
     }
 
-    // Handle Role Update with direct SQL to bypass TypeORM relation issues
+    // Handle Role Update with TypeORM relations (cascade: true enabled)
     if (updateUserDto.roles && updateUserDto.roles.length > 0) {
-      // Get role IDs for the requested role names
       const newRoles = await this.roleRepository.find({
         where: { name: In(updateUserDto.roles) }
       });
 
       if (newRoles.length > 0) {
-        // Manual update of user_roles table to avoid TypeORM issues
-        // 1. Remove existing roles
-        await this.userRepository.query("DELETE FROM user_roles WHERE user_id = ?", [id]);
-
-        // 2. Insert new roles
-        for (const role of newRoles) {
-          await this.userRepository.query(
-            "INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)",
-            [id, role.id]
-          );
-        }
-
-        // Update user object for return
         user.roles = newRoles;
       }
     }

@@ -27,7 +27,7 @@ export default function AdminLayout() {
 
   const [consoleInput, setConsoleInput] = useState('');
   const [consoleHistory, setConsoleHistory] = useState([
-    { type: 'output', content: 'SENTINEL v2.4.0 Secure Shell - Node: secure-node-01' },
+    { type: 'output', content: 'KTT01 v2.4.0 Secure Shell - Node: secure-node-01' },
     { type: 'output', content: 'Connection established via TLS 1.3. Identity verified.' },
     { type: 'output', content: 'Type "help" to see available commands.' },
   ]);
@@ -119,7 +119,7 @@ export default function AdminLayout() {
     if (location.pathname === '/admin/dashboard') return 'Overview';
     if (location.pathname === '/admin/logs') return 'Audit Logs';
     if (location.pathname === '/admin/users') return 'User Management';
-    return 'SOC Dashboard';
+    return 'KTT01 Dashboard';
   };
 
   const handleContextAction = () => {
@@ -184,7 +184,7 @@ export default function AdminLayout() {
         <div className="soc-modal-overlay" onClick={() => setIsHelpOpen(false)}>
           <div className="soc-modal help-modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h3><i className='bx bx-help-circle'></i> SOC Security Documentation</h3>
+              <h3><i className='bx bx-help-circle'></i> KTT01 Security Documentation</h3>
               <button className="close-modal" onClick={() => setIsHelpOpen(false)}><i className='bx bx-x'></i></button>
             </div>
             <div className="modal-content">
@@ -216,12 +216,12 @@ export default function AdminLayout() {
             <div className="console-body" style={{ maxHeight: '400px', overflowY: 'auto' }}>
               {consoleHistory.map((line, idx) => (
                 <div key={idx} className="console-line">
-                  {line.type === 'command' && <span className="c-prompt">root@sentinel:~$</span>}
+                  {line.type === 'command' && <span className="c-prompt">root@ktt01:~$</span>}
                   <span className={line.type === 'output' ? 'c-output' : ''}>{line.content}</span>
                 </div>
               ))}
               <form onSubmit={handleConsoleSubmit} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                <span className="c-prompt">root@sentinel:~$</span>
+                <span className="c-prompt">root@ktt01:~$</span>
                 <input
                   autoFocus
                   type="text"
@@ -249,10 +249,10 @@ export default function AdminLayout() {
       <aside className={`admin-sidebar ${isMobileOpen ? 'mobile-open' : ''}`}>
         <div className="admin-logo">
           <div className="admin-logo-icon">
-            <i className='bx bxs-shield-alt-2' style={{ color: 'white', fontSize: '20px' }}></i>
+            <img src="/ktt01_logo_square.png" alt="KTT01" style={{ width: '22px', height: '22px', borderRadius: '4px' }} />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <span style={{ fontSize: '18px', fontWeight: '800', letterSpacing: '0.5px' }}>SENTINEL</span>
+            <span style={{ fontSize: '18px', fontWeight: '800', letterSpacing: '0.5px' }}>KTT01</span>
             <span style={{ fontSize: '10px', color: 'var(--text-secondary)', fontWeight: '600' }}>v2.4.0 ADMIN</span>
           </div>
         </div>

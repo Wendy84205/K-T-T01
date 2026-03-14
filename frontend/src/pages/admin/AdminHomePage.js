@@ -73,7 +73,7 @@ export default function AdminHomePage() {
     return (
       <div className="soc-loader">
         <div className="soc-dot-pulse"></div>
-        <span>SYNCHRONIZING SENTINEL SOC...</span>
+        <span>SYNCHRONIZING KTT01 CORE...</span>
       </div>
     );
   }
@@ -137,7 +137,7 @@ export default function AdminHomePage() {
       {/* HEADER SECTION */}
       <div className="soc-title-section">
         <div className="soc-title-left">
-          <h1>Security Operations Center <span className="soc-dot soc-dot-pulse"></span></h1>
+          <h1>KTT01 Operations Center <span className="soc-dot soc-dot-pulse"></span></h1>
           <div className="soc-status-badge">
             <span className="status-label">Real-time monitoring active. Server heartbeat: </span>
             <span className="status-value">Stable</span>

@@ -4,7 +4,14 @@ import api from '../utils/api';
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(() => {
+    const saved = localStorage.getItem('user');
+    try {
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
   const [token, setToken] = useState(() => localStorage.getItem('accessToken'));
   const [loading, setLoading] = useState(true);
   const [darkMode, setDarkMode] = useState(() => {
@@ -23,6 +30,7 @@ export function AuthProvider({ children }) {
       root.style.setProperty('--bg-app', '#0e1621');
       root.style.setProperty('--bg-panel', '#17212b');
       root.style.setProperty('--bg-main', '#0e1621');
+      root.style.setProperty('--bg-sidebar', '#17212b');
       root.style.setProperty('--bg-light', '#242f3d');
       root.style.setProperty('--bg-selected', '#2b5278');
       root.style.setProperty('--border-color', '#242f3d');
@@ -48,6 +56,7 @@ export function AuthProvider({ children }) {
       root.style.setProperty('--bg-app', '#f0f2f5');
       root.style.setProperty('--bg-panel', '#ffffff');
       root.style.setProperty('--bg-main', '#ffffff');
+      root.style.setProperty('--bg-sidebar', '#ffffff');
       root.style.setProperty('--bg-light', '#f8f9fa');
       root.style.setProperty('--bg-selected', '#e9ecef');
       root.style.setProperty('--border-color', '#dee2e6');
@@ -113,6 +122,23 @@ export function AuthProvider({ children }) {
     }
     loadUser();
 
+    // Sync across tabs
+    const handleStorageChange = (e) => {
+      if (e.key === 'accessToken') {
+        if (!e.newValue) {
+          // Logout in another tab
+          setUser(null);
+          setToken(null);
+          window.location.href = '/login';
+        } else {
+          // Token changed (login in another tab)
+          // We reload to ensure a completely clean state for the new user
+          window.location.reload();
+        }
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+
     // Heartbeat for Active Status
     const interval = setInterval(() => {
       if (localStorage.getItem('accessToken')) {
@@ -120,7 +146,10 @@ export function AuthProvider({ children }) {
       }
     }, 3 * 60 * 1000); // 3 minutes
 
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('storage', handleStorageChange);
+    };
   }, [loadUser]);
 
   const login = useCallback((data) => {
@@ -133,13 +162,22 @@ export function AuthProvider({ children }) {
 
   const isAdmin = Boolean(user?.roles?.length && user.roles.some(r => {
     const roleName = typeof r === 'string' ? r : r.name;
-    return roleName === 'Admin';
+    const match = roleName === 'Admin';
+    if (match) console.log("[DEBUG] AuthContext: Found Admin role");
+    return match;
   }));
 
   const isManager = Boolean(user?.roles?.length && user.roles.some(r => {
     const roleName = typeof r === 'string' ? r : r.name;
-    return roleName === 'Manager' || roleName === 'Admin';
+    const match = roleName === 'Manager' || roleName === 'Admin';
+    if (match) console.log("[DEBUG] AuthContext: Found Manager/Admin role:", roleName);
+    return match;
   }));
+  
+  if (user) {
+    console.log("[DEBUG] AuthContext: Current user roles:", user.roles.map(r => typeof r === 'string' ? r : r.name));
+    console.log("[DEBUG] AuthContext: Derived suggests - isAdmin:", isAdmin, "isManager:", isManager);
+  }
 
   const value = {
     user,
@@ -151,6 +189,7 @@ export function AuthProvider({ children }) {
     isAdmin,
     isManager,
     darkMode,
+    setDarkMode,
     toggleDarkMode,
     isAuthenticated: Boolean(token && user),
   };

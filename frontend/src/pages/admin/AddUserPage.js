@@ -109,7 +109,7 @@ export default function AddUserPage() {
                         <i className='bx bx-chevron-left' style={{ fontSize: '24px' }}></i>
                     </button>
                     <div>
-                        <h1 style={{ fontSize: '28px', fontWeight: '800', margin: 0, color: '#fff' }}>Initialize New Sentinel Identity</h1>
+                        <h1 style={{ fontSize: '28px', fontWeight: '800', margin: 0, color: '#fff' }}>Initialize New KTT01 Identity</h1>
                         <p style={{ color: 'var(--text-secondary)', margin: '4px 0 0 0', fontSize: '14px' }}>Provision new access credentials and security clearance levels.</p>
                     </div>
                 </div>
@@ -133,7 +133,7 @@ export default function AddUserPage() {
                             )}
                         </div>
                         <div>
-                            <h4 style={{ margin: '0 0 8px 0', fontSize: '16px', color: '#fff' }}>Sentinel Identity Image</h4>
+                            <h4 style={{ margin: '0 0 8px 0', fontSize: '16px', color: '#fff' }}>KTT01 Identity Image</h4>
                             <div style={{ display: 'flex', gap: '12px' }}>
                                 <label style={{ background: 'var(--green-color)', color: '#fff', padding: '10px 20px', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: '600' }}>
                                     Upload Image

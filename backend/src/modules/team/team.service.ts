@@ -11,6 +11,7 @@ import { Repository, FindManyOptions, Like, Between, MoreThanOrEqual, LessThanOr
 import { Team } from '../../database/entities/team-collaboration/team.entity';
 import { TeamMember } from '../../database/entities/team-collaboration/team-member.entity';
 import { User } from '../../database/entities/core/user.entity';
+import { File } from '../../database/entities/file-storage/file.entity';
 
 @Injectable()
 export class TeamService {
@@ -23,6 +24,9 @@ export class TeamService {
 
     @InjectRepository(User)
     private userRepository: Repository<User>,
+
+    @InjectRepository(File)
+    private fileRepository: Repository<File>,
   ) { }
 
   // ========== TEAM CRUD METHODS ==========
@@ -672,6 +676,20 @@ export class TeamService {
 
     const membersCount = totalMembers - adminsCount;
 
+    // Get files count for the team
+    const filesCount = await this.fileRepository.count({
+      where: { teamId }
+    });
+
+    // Get average security clearance level of members
+    const members = await this.teamMemberRepository.find({
+      where: { teamId, leftDate: null },
+      relations: ['user']
+    });
+    
+    const totalSecurity = members.reduce((sum, m) => sum + (m.user?.securityClearanceLevel || 0), 0);
+    const avgSecurity = members.length > 0 ? Math.round(totalSecurity / members.length) : 0;
+
     // Get join dates for chart
     const joinDates = await this.teamMemberRepository
       .createQueryBuilder('member')
@@ -686,6 +704,8 @@ export class TeamService {
       activeUsers,
       adminsCount,
       membersCount,
+      filesCount,
+      avgSecurity,
       joinTrend: joinDates,
     };
   }

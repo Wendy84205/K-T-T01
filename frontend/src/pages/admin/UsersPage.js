@@ -620,7 +620,7 @@ export default function UsersPage() {
                 </div>
                 <div>
                   <h2 style={{ margin: 0, color: '#fff', fontSize: '24px', fontWeight: '800' }}>{selectedUserForProfile.firstName} {selectedUserForProfile.lastName}</h2>
-                  <p style={{ margin: '4px 0 0 0', color: 'var(--text-secondary)', fontSize: '14px' }}>@{selectedUserForProfile.username} • Sentinel Identity</p>
+                  <p style={{ margin: '4px 0 0 0', color: 'var(--text-secondary)', fontSize: '14px' }}>@{selectedUserForProfile.username} • KTT01 Identity</p>
                 </div>
               </div>
               <button
@@ -714,7 +714,7 @@ export default function UsersPage() {
             onClick={e => e.stopPropagation()}
           >
             <div style={{ padding: '24px 32px', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h2 style={{ margin: 0, color: '#fff', fontSize: '20px' }}>Modify Sentinel Identity</h2>
+              <h2 style={{ margin: 0, color: '#fff', fontSize: '20px' }}>Modify KTT01 Identity</h2>
               <button
                 onClick={() => setSelectedUserForEdit(null)}
                 style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', fontSize: '24px', cursor: 'pointer' }}
@@ -734,7 +734,7 @@ export default function UsersPage() {
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', gap: '12px', marginBottom: '8px' }}>
                     <label style={{ background: '#21262d', border: '1px solid var(--border-color)', color: 'var(--text-main)', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: '600' }}>
-                      Browse Sentinel Image
+                      Browse KTT01 Image
                       <input type="file" accept="image/*" hidden onChange={handleAvatarChange} />
                     </label>
                     <button

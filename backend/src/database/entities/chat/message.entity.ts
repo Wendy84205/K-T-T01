@@ -74,4 +74,8 @@ export class Message {
   @ManyToOne(() => File, file => file.id, { nullable: true })
   @JoinColumn({ name: 'file_id' })
   file: File;
+
+  @ManyToOne(() => Message, { nullable: true })
+  @JoinColumn({ name: 'parent_message_id' })
+  parentMessage: Message;
 }

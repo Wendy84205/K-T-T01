@@ -31,9 +31,9 @@ class ApiClient {
 
       if (!response.ok) {
         if (response.status === 401 || response.status === 403) {
-          localStorage.removeItem('accessToken');
-          localStorage.removeItem('user');
-          // Optional: window.location.href = '/login'; 
+          // Let the AuthContext handle token expiration and redirect
+          // instead of clearing immediately here, which causes race conditions.
+          console.warn(`Auth error ${response.status} on ${endpoint}`);
         }
 
         const error = new Error(data.message || data.error || `HTTP ${response.status}`);
@@ -685,6 +685,42 @@ class ApiClient {
     });
   }
 
+  // Projects endpoints
+  async getProjects() {
+    return this.request('/projects');
+  }
+
+  async createProject(projectData) {
+    return this.request('/projects', {
+      method: 'POST',
+      body: JSON.stringify(projectData),
+    });
+  }
+
+  async getProjectTasks(projectId) {
+    return this.request(`/projects/${projectId}/tasks`);
+  }
+
+  async createTask(projectId, taskData) {
+    return this.request(`/projects/${projectId}/tasks`, {
+      method: 'POST',
+      body: JSON.stringify(taskData),
+    });
+  }
+
+  async getMyTasks() {
+    return this.request('/projects/tasks/my', {
+      method: 'GET',
+    });
+  }
+
+  async updateTask(taskId, taskData) {
+    return this.request(`/projects/tasks/${taskId}`, {
+      method: 'POST',
+      body: JSON.stringify(taskData),
+    });
+  }
+
   // Team Management
   async getTeams() {
     return this.request('/teams');
@@ -699,6 +735,10 @@ class ApiClient {
 
   async getTeamMembers(teamId) {
     return this.request(`/teams/${teamId}/members`);
+  }
+
+  async getTeamStats(teamId) {
+    return this.request(`/teams/${teamId}/stats`);
   }
 
   async addTeamMember(teamId, userId, role = 'member') {

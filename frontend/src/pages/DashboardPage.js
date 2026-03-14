@@ -21,5 +21,5 @@ export default function DashboardPage() {
     return <Navigate to="/manage/dashboard" replace />;
   }
 
-  return <Navigate to="/user/home" replace />;
+  return <Navigate to="/user/dashboard" replace />;
 }

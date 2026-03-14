@@ -103,7 +103,7 @@ export default function SecurityPage() {
         <div>
           <h1 style={{ fontSize: '32px', fontWeight: '900', margin: 0, letterSpacing: '-0.03em', display: 'flex', alignItems: 'center', gap: '12px' }}>
             <Shield size={32} color="var(--primary)" />
-            Security Operation Center
+            KTT01 Operation Center
           </h1>
           <p style={{ color: 'var(--text-secondary)', marginTop: '8px', fontSize: '15px', fontWeight: '500' }}>
             Real-time threat detection and security orchestrator.

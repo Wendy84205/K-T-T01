@@ -94,15 +94,20 @@ function SecureLogin() {
                 // ROLE-BASED REDIRECTION
                 const roles = response.user?.roles || [];
                 const roleNames = roles.map(r => typeof r === 'string' ? r : r.name);
+                console.log("[DEBUG] SecureLogin: User roles from response:", roleNames);
 
                 const isAdmin = roleNames.includes('Admin');
                 const isManager = roleNames.includes('Manager');
+                console.log("[DEBUG] SecureLogin: State - isAdmin:", isAdmin, "isManager:", isManager);
 
                 if (isAdmin) {
+                    console.log("[DEBUG] SecureLogin: Redirecting to Admin dashboard");
                     navigate("/admin/dashboard", { replace: true });
                 } else if (isManager) {
+                    console.log("[DEBUG] SecureLogin: Redirecting to Manage dashboard");
                     navigate("/manage/dashboard", { replace: true });
                 } else {
+                    console.log("[DEBUG] SecureLogin: Redirecting to User drive");
                     navigate("/user/drive", { replace: true });
                 }
             }
@@ -138,18 +143,22 @@ function SecureLogin() {
             // E2EE Key Management
             await ensureE2EEKeys(response.user);
 
-            // ROLE-BASED REDIRECTION
             const roles = response.user?.roles || [];
             const roleNames = roles.map(r => typeof r === 'string' ? r : r.name);
+            console.log("[DEBUG] SecureLogin (MFA): User roles from response:", roleNames);
 
             const isAdmin = roleNames.includes('Admin');
             const isManager = roleNames.includes('Manager');
+            console.log("[DEBUG] SecureLogin (MFA): State - isAdmin:", isAdmin, "isManager:", isManager);
 
             if (isAdmin) {
+                console.log("[DEBUG] SecureLogin (MFA): Redirecting to Admin dashboard");
                 navigate("/admin/dashboard", { replace: true });
             } else if (isManager) {
+                console.log("[DEBUG] SecureLogin (MFA): Redirecting to Manage dashboard");
                 navigate("/manage/dashboard", { replace: true });
             } else {
+                console.log("[DEBUG] SecureLogin (MFA): Redirecting to User drive");
                 navigate("/user/drive", { replace: true });
             }
         } catch (err) {
@@ -225,8 +234,8 @@ function SecureLogin() {
     const labelStyle = "block text-[10px] font-bold text-[#64748b] mb-2 uppercase tracking-wide";
     const inputContainerStyle = "relative group";
     const inputStyle =
-        "w-full bg-[#f8fafc] text-[#0f172a] border border-[#e2e8f0] rounded-xl px-11 py-3.5 focus:outline-none focus:border-[#3b82f6] focus:ring-2 focus:ring-[#3b82f6]/20 transition-all placeholder-[#94a3b8] text-sm font-medium";
-    const iconStyle = "absolute left-4 top-1/2 -translate-y-1/2 text-[#64748b] group-focus-within:text-[#3b82f6] transition-colors";
+        "w-full bg-slate-50/30 backdrop-blur-sm text-slate-900 border border-slate-200/60 rounded-2xl px-12 py-4.5 focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all placeholder-slate-400 text-sm font-bold shadow-sm group-hover:bg-white/50";
+    const iconStyle = "absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors duration-300";
 
     if (isLocked && lockInfo) {
         return (
@@ -240,33 +249,24 @@ function SecureLogin() {
     return (
         <div className="w-full max-w-[420px] relative mx-auto z-10">
             {/* Card Container */}
-            <div className="bg-white rounded-2xl shadow-[0_20px_40px_-15px_rgba(0,0,0,0.05)] border border-[#e2e8f0] overflow-hidden relative flex flex-col pt-1.5">
+            <div className="bg-white/80 backdrop-blur-2xl rounded-3xl shadow-[0_32px_64px_-16px_rgba(0,0,0,0.1)] border border-white/40 overflow-hidden relative flex flex-col pt-1 group">
 
                 {/* Top Rounded Accent Line */}
-                <div className="absolute top-0 left-0 right-0 h-1.5 bg-[#007bff] rounded-t-2xl"></div>
+                <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-blue-600 via-indigo-500 to-blue-600 bg-[length:200%_100%] animate-shimmer"></div>
 
                 {/* Content Area */}
-                <div className="p-10 pt-12 pb-8">
+                <div className="p-10 pt-14 pb-10">
                     <div key={mfaRequired ? 'mfa' : 'login'} className="animate-fade-in">
                         {!mfaRequired ? (
                             <>
-                                {/* LOGIN HEADER */}
-                                <div className="flex flex-col items-center mb-10 text-center">
-                                    <div className="w-12 h-12 bg-[#eff6ff] rounded-xl flex items-center justify-center border border-[#bfdbfe] mb-5">
-                                        <Shield className="text-[#3b82f6]" size={22} strokeWidth={2.5} />
-                                    </div>
-                                    <h1 className="text-[22px] font-black text-[#0f172a] tracking-tight uppercase">
-                                        System Access
-                                    </h1>
-                                    <p className="text-[10px] font-bold text-[#64748b] mt-1.5 uppercase tracking-widest">
-                                        Secure Identity Verification
-                                    </p>
-                                </div>
-
                                 {/* LOGIN FORM */}
+                                <div className="mb-10 text-center border-b border-slate-100/50 pb-8 animate-fade-in stagger-1">
+                                    <h2 className="text-xl font-black text-slate-900 tracking-tighter uppercase italic">Terminal Access</h2>
+                                    <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-[0.2em]">Identity Verification Cluster</p>
+                                </div>
                                 <form onSubmit={handleLogin} className="space-y-6">
-                                    <div>
-                                        <label className={labelStyle}>Identity Identifier</label>
+                                    <div className="animate-fade-in stagger-2">
+                                        <label className={labelStyle}>Access Identifier</label>
                                         <div className={inputContainerStyle}>
                                             <UserIcon className={iconStyle} size={18} />
                                             <input
@@ -282,9 +282,9 @@ function SecureLogin() {
                                         </div>
                                     </div>
 
-                                    <div>
+                                    <div className="animate-fade-in stagger-3">
                                         <div className="flex justify-between items-center mb-2">
-                                            <label className="block text-[10px] font-bold text-[#64748b] uppercase tracking-wide">Security Password</label>
+                                            <label className="block text-[10px] font-bold text-[#64748b] uppercase tracking-wide">Security Phrase</label>
                                         </div>
                                         <div className={inputContainerStyle}>
                                             <Lock className={iconStyle} size={18} />
@@ -293,14 +293,14 @@ function SecureLogin() {
                                                 placeholder="••••••••••••"
                                                 value={password}
                                                 onChange={(e) => setPassword(e.target.value)}
-                                                className={`${inputStyle} pr-11 font-mono tracking-widest text-[#0f172a]`}
+                                                className={`${inputStyle} pr-11 font-mono tracking-widest text-slate-900`}
                                                 required
                                                 disabled={loading}
                                             />
                                             <button
                                                 type="button"
                                                 onClick={() => setShowPassword(!showPassword)}
-                                                className="absolute right-4 top-1/2 -translate-y-1/2 text-[#64748b] hover:text-[#0f172a] transition-colors focus:outline-none"
+                                                className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-blue-500 transition-colors focus:outline-none"
                                                 tabIndex="-1"
                                             >
                                                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -318,17 +318,17 @@ function SecureLogin() {
                                     <button
                                         type="submit"
                                         disabled={loading}
-                                        className="w-full bg-[#007bff] hover:bg-[#0069d9] text-white font-black py-3.5 mt-2 rounded-xl active:scale-[0.98] transition-all flex items-center justify-center gap-2 group uppercase tracking-widest text-xs"
+                                        className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 mt-4 rounded-2xl active:scale-[0.97] transition-all flex items-center justify-center gap-3 group uppercase tracking-[0.2em] text-xs shadow-lg shadow-blue-500/20 animate-fade-in stagger-4"
                                     >
                                         {loading ? (
                                             <>
                                                 <Loader2 className="animate-spin" size={18} />
-                                                <span>Authorizing...</span>
+                                                <span>AUTHORIZING...</span>
                                             </>
                                         ) : (
                                             <>
-                                                <span>Initiate Login</span>
-                                                <ChevronRight className="group-hover:translate-x-1 transition-transform" size={18} />
+                                                <span>INITIATE ACCESS</span>
+                                                <ChevronRight className="group-hover:translate-x-1.5 transition-transform" size={18} />
                                             </>
                                         )}
                                     </button>
@@ -337,13 +337,9 @@ function SecureLogin() {
                         ) : (
                             <>
                                 {/* MFA HEADER */}
-                                <div className="text-center mb-10">
-                                    <div className="mx-auto w-14 h-14 bg-[#eff6ff] rounded-2xl flex items-center justify-center border border-[#bfdbfe] mb-5">
-                                        <KeyIcon className="text-[#3b82f6]" size={26} strokeWidth={2.5} />
-                                    </div>
-                                    <h2 className="text-[22px] font-black text-[#0f172a] tracking-tight uppercase">MFA PROTECTION</h2>
-                                    <p className="text-[11px] font-bold text-[#64748b] mt-1.5 uppercase tracking-widest">
-                                        Enter Multi-Factor Code
+                                <div className="text-center mb-8 animate-fade-in">
+                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] opacity-70">
+                                        Action Required: Enter Security Token
                                     </p>
                                 </div>
 
@@ -361,9 +357,9 @@ function SecureLogin() {
                                                     onChange={e => handleOtpChange(e, index)}
                                                     onKeyDown={e => handleOtpKeyDown(e, index)}
                                                     disabled={loading}
-                                                    className={`w-[52px] h-[56px] text-center text-xl font-medium outline-none transition-all rounded-xl border
-                                                    ${digit ? "border-[#3b82f6] text-[#3b82f6] bg-[#eff6ff]" : "bg-[#f8fafc] border-[#e2e8f0] text-[#0f172a]"}
-                                                    focus:border-[#3b82f6] focus:ring-2 focus:ring-[#3b82f6]/20 bg-white`}
+                                                    className={`w-[52px] h-[60px] text-center text-2xl font-black outline-none transition-all rounded-2xl border-2
+                                                    ${digit ? "border-blue-500 text-blue-600 bg-blue-50/50 shadow-[0_0_15px_rgba(59,130,246,0.2)]" : "bg-slate-50/50 border-slate-200 text-slate-900"}
+                                                    focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 focus:bg-white`}
                                                 />
                                             ))}
                                         </div>
@@ -380,9 +376,9 @@ function SecureLogin() {
                                         <button
                                             onClick={() => handleMfaVerify()}
                                             disabled={loading || mfaOtp.join("").length !== 6}
-                                            className="w-full bg-[#93c5fd] text-white font-black py-3.5 rounded-xl active:scale-[0.98] transition-all disabled:opacity-70 flex items-center justify-center uppercase tracking-widest text-[11px] hover:bg-[#60a5fa] disabled:cursor-not-allowed"
+                                            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-2xl active:scale-[0.97] transition-all disabled:opacity-50 flex items-center justify-center uppercase tracking-[0.2em] text-xs shadow-lg shadow-blue-500/20"
                                         >
-                                            {loading ? <Loader2 className="animate-spin" size={18} /> : <span>Verify Security</span>}
+                                            {loading ? <Loader2 className="animate-spin" size={18} /> : <span>VERIFY TOKEN</span>}
                                         </button>
 
                                         <button

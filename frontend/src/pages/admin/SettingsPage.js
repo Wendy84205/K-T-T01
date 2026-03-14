@@ -71,7 +71,7 @@ export default function SettingsPage() {
                         <Settings className="text-blue-500" style={{ marginRight: '12px' }} />
                         System Configuration
                     </h1>
-                    <div className="card-desc">Manage core Sentinel engine parameters and global security policies</div>
+                    <div className="card-desc">Manage core KTT01 engine parameters and global security policies</div>
                 </div>
                 <div className="soc-header-btns">
                     <button

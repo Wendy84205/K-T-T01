@@ -1,20 +1,27 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Search, Plus, MessageSquare, MoreHorizontal, Phone, Video, Info, Lock, Send, Mic, Image, Paperclip, Smile, Settings, Bell, BellOff, Clock, Shield, LogOut, ChevronLeft, ChevronRight, User, File as FileIcon, Download, Trash2, ShieldCheck, CreditCard, HelpCircle, Key, Eye, EyeOff, Check, CheckCheck, Square, X, Forward, Reply, Edit2, Play, Pause, List, Pin, Star, Cloud, Heart, ChevronDown, Users, MoreVertical, FileText, Camera, MapPin, AlertTriangle, BarChart3, Folder, Maximize2, Minimize2, Briefcase, Layers, Building2, Bold, Italic, Link, Code, AtSign, Hash } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Search, Plus, MessageSquare, MoreHorizontal, Phone, Video, Info, Lock, Send, Mic, Image, Paperclip, Smile, Settings, Bell, BellOff, Clock, Shield, LogOut, ChevronLeft, ChevronRight, User, File as FileIcon, Download, Trash2, ShieldCheck, CreditCard, HelpCircle, Key, Eye, EyeOff, Check, CheckCheck, Square, X, Forward, Reply, Edit2, Play, Pause, List, Pin, Star, Cloud, Heart, ChevronDown, Users, MoreVertical, FileText, Camera, MapPin, AlertTriangle, BarChart3, Folder, Maximize2, Minimize2, Briefcase, Layers, Building2, Bold, Italic, Link, Code, AtSign, Hash, Flag, RefreshCw } from 'lucide-react';
 import api from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
-import { encryptContent, decryptContent, encryptHybrid, decryptHybrid } from "../../utils/crypto";
+import { encryptContent, decryptContent, encryptHybrid, decryptHybrid, setupE2EEWithPassword, unlockE2EEWithPassword, hasE2EEBundle } from "../../utils/crypto";
 import { SearchBar, PinnedMessagesBanner, ConversationSidebar, PollModal, StickerPicker } from '../../components/chat/ChatEnhancements';
 import { DiscoverContent, MiniAppsContent } from '../../components/chat/ZaloStyleComponents';
 import { EnhancedMessageBubble } from '../../components/chat/EnhancedMessage';
 
 import socketService from '../../utils/socket';
+import { useCall } from '../../context/CallContext';
 import '../../chat.css';
 
 export default function UserHomePage() {
   const { user, isAdmin, isManager, darkMode, toggleDarkMode } = useAuth();
+  const { incomingCall: globalIncomingCall, setIncomingCall: setGlobalIncomingCall } = useCall();
 
   // 1. State Declarations
   const [activeTab, setActiveTab] = useState('messages');
+  const [taskNotification, setTaskNotification] = useState({ show: false, task: null, project: null, message: '' });
+  // E2EE Passphrase System
+  const [e2eeStatus, setE2eeStatus] = useState('checking'); // 'checking' | 'setup_needed' | 'locked' | 'unlocked'
+  const [showE2EEModal, setShowE2EEModal] = useState(false);
+  const [e2eePrivateKey, setE2eePrivateKey] = useState(() => sessionStorage.getItem('e2ee_session_pk') || null);
   const [selectedChat, setSelectedChat] = useState(null);
   const [conversations, setConversations] = useState([]);
   const [messages, setMessages] = useState([]);
@@ -40,6 +47,12 @@ export default function UserHomePage() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
   const [incomingCall, setIncomingCall] = useState(null);
+  // If user receives a call while not on this screen, we still get it via CallProvider.
+  useEffect(() => {
+    if (globalIncomingCall && !incomingCall) {
+      setIncomingCall(globalIncomingCall);
+    }
+  }, [globalIncomingCall, incomingCall]);
   const [showCamera, setShowCamera] = useState(false);
   const [showCallModal, setShowCallModal] = useState(false);
   const [callType, setCallType] = useState(null); // 'voice' or 'video'
@@ -89,6 +102,7 @@ export default function UserHomePage() {
   const [showVaultAuthModal, setShowVaultAuthModal] = useState(false);
   const [vaultPassword, setVaultPassword] = useState('');
   const [vaultAuthError, setVaultAuthError] = useState('');
+  const [pinnedVersion, setPinnedVersion] = useState(0);
 
   // 2. Refs
   const messagesEndRef = useRef(null);
@@ -104,6 +118,11 @@ export default function UserHomePage() {
   const audioChunksRef = useRef([]);
   const peerConnectionRef = useRef(null);
   const iceCandidatesQueue = useRef([]);
+  // Refs that always hold the latest stream/ringtone functions
+  // to avoid stale closures in socket event handlers
+  const localStreamRef = useRef(null);
+  const startRingtoneRef = useRef(null);
+  const stopRingtoneRef = useRef(null);
 
   // 3. Helper Functions
   const loadUnreadCount = async () => {
@@ -219,6 +238,22 @@ export default function UserHomePage() {
     }
   }, [selectedChat]);
 
+  // ─── E2EE Passphrase Init ────────────────────────────────────────────────
+  useEffect(() => {
+    if (!user?.id) return;
+    const sessionPk = sessionStorage.getItem('e2ee_session_pk');
+    if (sessionPk) {
+      setE2eePrivateKey(sessionPk);
+      setE2eeStatus('unlocked');
+    } else if (hasE2EEBundle(user.id)) {
+      setE2eeStatus('locked');
+      setShowE2EEModal(true);
+    } else {
+      setE2eeStatus('setup_needed');
+      setShowE2EEModal(true);
+    }
+  }, [user?.id]);
+
   useEffect(() => {
     const token = localStorage.getItem('accessToken');
     if (token && user?.id) {
@@ -227,6 +262,21 @@ export default function UserHomePage() {
 
         socketService.onNotification(() => {
           loadUnreadCount();
+        });
+
+        // 🔔 Task Assignment Notification
+        socketService.onTaskAssigned((data) => {
+          console.log('[Socket] Task assigned notification received:', data);
+          // Show a toast/banner notification
+          setTaskNotification({
+            show: true,
+            task: data.task,
+            project: data.project,
+            message: data.message,
+          });
+          // Switch to projects tab so the user can see the new task
+          // Auto-hide after 8 seconds
+          setTimeout(() => setTaskNotification(prev => ({ ...prev, show: false })), 8000);
         });
 
         socketService.onReactionUpdated(({ messageId, reaction, userId }) => {
@@ -248,23 +298,72 @@ export default function UserHomePage() {
           }));
         });
 
+        // Use named key 'homepage' so this listener coexists with CallContext's 'context' key
         socketService.onCallMade(async ({ offer, conversationId, callerId, type }) => {
           setCallStatus(currentStatus => {
             if (currentStatus === 'idle') {
-              // We just set incomingCall safely without touching availableUsers inside here
               setIncomingCall({ offer, conversationId, from: { firstName: 'Incoming', lastName: 'Call' }, type });
-              if (typeof startRingtone === 'function') startRingtone();
+              // startRingtone is defined later but captured via ref below
+              startRingtoneRef.current?.();
               return 'ringing';
             }
             return currentStatus;
           });
+        }, 'homepage');
 
-          // Try to fetch user data and update incoming Call with the true caller's name
-          try {
-            // In actual app, we could look this up from an API or existing conversations.
-            // We'll let the UI fallback nicely.
-          } catch (e) { }
-        });
+        // call-answered — stable handler via ref so no stale closure on localStream
+        socketService.onCallAnswered(async ({ answer, accepted, conversationId }) => {
+          console.log(`[Calls] Call answered: ${accepted}`);
+          stopRingtoneRef.current?.();
+          if (accepted && answer) {
+            const pc = peerConnectionRef.current;
+            if (pc && pc.signalingState === 'have-local-offer') {
+              await pc.setRemoteDescription(new RTCSessionDescription(answer));
+              setCallStatus('connected');
+              if (iceCandidatesQueue.current.length > 0) {
+                iceCandidatesQueue.current.forEach(candidate => {
+                  pc.addIceCandidate(new RTCIceCandidate(candidate))
+                    .catch(e => console.error('[WebRTC] Error adding queued ICE', e));
+                });
+                iceCandidatesQueue.current = [];
+              }
+            }
+          } else {
+            setCallStatus('idle');
+            setShowCallModal(false);
+            // Use ref to access current localStream without stale closure
+            localStreamRef.current?.getTracks().forEach(t => t.stop());
+            setLocalStream(null);
+          }
+        }, 'homepage');
+
+        // call-ended — stable handler via ref
+        socketService.onCallEnded(() => {
+          console.log('[Calls] Signal received: Call ended');
+          stopRingtoneRef.current?.();
+          setCallStatus('idle');
+          setShowCallModal(false);
+          setCallConversationId(null);
+          setIncomingCall(null);
+          setGlobalIncomingCall(null);
+          localStreamRef.current?.getTracks().forEach(t => t.stop());
+          setLocalStream(null);
+          if (peerConnectionRef.current) {
+            peerConnectionRef.current.close();
+            peerConnectionRef.current = null;
+          }
+        }, 'homepage');
+
+        // ice-candidate — stable handler
+        socketService.onIceCandidate(({ candidate }) => {
+          if (peerConnectionRef.current && peerConnectionRef.current.remoteDescription) {
+            peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(candidate))
+              .catch(e => console.error('[WebRTC] Error adding ICE', e));
+          } else {
+            console.log('[WebRTC] Queuing ICE candidate');
+            iceCandidatesQueue.current.push(candidate);
+          }
+        }, 'homepage');
 
         socketService.onUserStatus(({ userId, status }) => {
           setOnlineUserIds(prev => {
@@ -283,8 +382,12 @@ export default function UserHomePage() {
       initSocket();
     }
     return () => {
+      socketService.offCallMade('homepage');
+      socketService.offCallAnswered('homepage');
+      socketService.offCallEnded('homepage');
+      socketService.offIceCandidate('homepage');
       socketService.disconnect();
-      if (typeof stopRingtone === 'function') stopRingtone();
+      stopRingtoneRef.current?.();
     };
   }, [user]);
 
@@ -484,60 +587,48 @@ export default function UserHomePage() {
   // Unread count handled via Effect 3 helper
 
   const decryptMessage = async (msg) => {
-    if (!msg || !msg.content || !msg.content.startsWith('[E2EE]:')) return msg;
-    if (!user?.id) return msg;
+    if (!msg) return msg;
 
-    const rawContent = msg.content.substring(7);
-    const privateKey = localStorage.getItem(`e2ee_private_key_${user.id}`);
+    // Decrypt main content
+    if (msg.content && msg.content.startsWith('[E2EE]:') && user?.id) {
+      const rawContent = msg.content.substring(7);
+      // Use the PBKDF2-unlocked private key from this session
+      const privateKey = e2eePrivateKey || sessionStorage.getItem('e2ee_session_pk');
 
-    if (!privateKey) {
-      console.warn("[E2EE] Missing private key for user", user.id);
-      msg.content = "[E2EE: Missing private key]";
-      return msg;
-    }
-
-    try {
-      // Try to parse as JSON (New Dual-Encryption or Hybrid format)
-      const encryptedData = JSON.parse(rawContent);
-      const myId = String(user.id);
-
-      // 1. Check for Hybrid Format (Version 2)
-      if (encryptedData.v === "2" || encryptedData.ciphertext) {
-        msg.content = await decryptHybrid(encryptedData, privateKey, myId);
-        return msg;
-      }
-
-      // 2. Fallback to Legacy Dual-Encryption (Version 1 / RSA-only)
-      const myPayload = encryptedData[myId] || encryptedData[user.id];
-
-      if (myPayload) {
-        try {
-          const decrypted = await decryptContent(myPayload, privateKey);
-          if (decrypted !== "[Unable to decrypt message]") {
-            msg.content = decrypted;
-          } else {
-            console.error("[E2EE] RSA Decryption failed for msg:", msg.id);
-            msg.content = "[Decryption Error: Key mismatch]";
-          }
-        } catch (decryptErr) {
-          console.error("[E2EE] decryptContent threw error:", decryptErr);
-          msg.content = "[Decryption Error: System error]";
-        }
+      if (!privateKey) {
+        msg.content = "🔐 E2EE locked — click the 🔑 icon to enter your passphrase";
       } else {
-        console.warn("[E2EE] No payload for my ID:", myId, "Found keys:", Object.keys(encryptedData));
-        msg.content = "[E2EE: No decryption for you]";
-      }
-    } catch (e) {
-      // Not JSON? Fallback (Oldest format: pure ciphertext)
-      try {
-        console.log("[E2EE] Fallback to legacy decryption format");
-        const decrypted = await decryptContent(rawContent, privateKey);
-        msg.content = decrypted;
-      } catch (decryptErr) {
-        console.error("[E2EE] Legacy Decryption failed:", decryptErr);
-        msg.content = "[Decryption Error: Invalid format]";
+        try {
+          const encryptedData = JSON.parse(rawContent);
+          const myId = String(user.id);
+
+          if (encryptedData.v === "2" || encryptedData.ciphertext) {
+            msg.content = await decryptHybrid(encryptedData, privateKey, myId);
+          } else {
+            const myPayload = encryptedData[myId] || encryptedData[user.id];
+            if (myPayload) {
+              const decrypted = await decryptContent(myPayload, privateKey);
+              msg.content = decrypted !== "[Unable to decrypt message]" ? decrypted : "[Decryption Error: Key mismatch]";
+            } else {
+              msg.content = "[E2EE: No decryption for you]";
+            }
+          }
+        } catch (e) {
+          try {
+            const decrypted = await decryptContent(rawContent, privateKey);
+            msg.content = decrypted;
+          } catch (decryptErr) {
+            msg.content = "[Decryption Error: Invalid format]";
+          }
+        }
       }
     }
+
+    // Decrypt parent message content if it exists
+    if (msg.parentMessage) {
+      await decryptMessage(msg.parentMessage);
+    }
+
     return msg;
   };
 
@@ -825,24 +916,38 @@ export default function UserHomePage() {
         } else {
           let finalContent = messageInput.trim();
 
-          // E2EE Encryption for Direct Chat
+          // E2EE Encryption — supports both direct and group chats
           const conv = conversations.find(c => c.id === selectedChat);
-          if (conv && conv.conversationType === 'direct' && conv.otherUser?.publicKey) {
-            console.log("[E2EE] Encrypting message (Hybrid Mode)...");
+          if (conv) {
+            console.log("[E2EE] Attempting encryption for conversation type:", conv.conversationType);
             try {
-              const myPublicKey = user.publicKey || JSON.parse(localStorage.getItem('user'))?.publicKey;
-              const keysToEncryptFor = {
-                [conv.otherUser.id]: conv.otherUser.publicKey
-              };
-              if (myPublicKey) {
-                keysToEncryptFor[user.id] = myPublicKey;
+              const keysToEncryptFor = {};
+              const myPublicKey = user.publicKey || JSON.parse(localStorage.getItem('user') || '{}')?.publicKey;
+              if (myPublicKey) keysToEncryptFor[String(user.id)] = myPublicKey;
+
+              if (conv.conversationType === 'direct' && conv.otherUser?.publicKey) {
+                // Direct chat: encrypt for recipient + self
+                keysToEncryptFor[String(conv.otherUser.id)] = conv.otherUser.publicKey;
+              } else if (conv.conversationType === 'group' && conv.members && conv.members.length > 0) {
+                // Group chat: encrypt for all members who have a public key
+                for (const member of conv.members) {
+                  if (member.publicKey && member.id !== user.id) {
+                    keysToEncryptFor[String(member.id)] = member.publicKey;
+                  }
+                }
               }
 
-              const hybridPayload = await encryptHybrid(finalContent, keysToEncryptFor);
-              finalContent = `[E2EE]:${JSON.stringify(hybridPayload)}`;
+              // Only encrypt if we have at least one recipient key
+              const recipientCount = Object.keys(keysToEncryptFor).filter(k => k !== String(user.id)).length;
+              if (recipientCount > 0) {
+                const hybridPayload = await encryptHybrid(finalContent, keysToEncryptFor);
+                finalContent = `[E2EE]:${JSON.stringify(hybridPayload)}`;
+                console.log(`[E2EE] Message encrypted for ${Object.keys(keysToEncryptFor).length} recipients`);
+              } else {
+                console.warn("[E2EE] No recipient public keys found — sending in plain text");
+              }
             } catch (e) {
-              console.error("[E2EE] Hybrid Encryption failed. Likely key invalid.", e);
-              // Fallback happens to plain text if we don't change finalContent
+              console.error("[E2EE] Encryption failed. Falling back to plain text.", e);
             }
           }
 
@@ -1140,9 +1245,21 @@ export default function UserHomePage() {
     }
   };
 
+  // Keep ringtone refs current so socket handlers (registered once in initSocket)
+  // always call the correct version of these functions.
+  useEffect(() => {
+    startRingtoneRef.current = startRingtone;
+    stopRingtoneRef.current = stopRingtone;
+  }); // no deps — run every render to stay current
+
   const initiateCall = async (type) => {
     if (!selectedChat) {
       alert('Please select a chat first');
+      return;
+    }
+    // Guard: do not allow starting a new call while already ringing or connected
+    if (callStatus !== 'idle') {
+      console.warn('[Calls] Ignoring initiateCall — already in call state:', callStatus);
       return;
     }
     try {
@@ -1189,70 +1306,11 @@ export default function UserHomePage() {
   const handleCall = (type) => initiateCall(type);
 
 
+  // Keep localStreamRef in sync with localStream state so socket handlers
+  // always access the latest stream without capturing a stale closure value.
   useEffect(() => {
-    if (!socketService.socket) return;
-
-    socketService.onCallAnswered(async ({ answer, accepted, conversationId }) => {
-      console.log(`[Calls] Call answered: ${accepted}`);
-      stopRingtone();
-      if (accepted && answer) {
-        const pc = peerConnectionRef.current;
-        if (pc && pc.signalingState === 'have-local-offer') {
-          await pc.setRemoteDescription(new RTCSessionDescription(answer));
-          setCallStatus('connected');
-
-          if (iceCandidatesQueue.current.length > 0) {
-            iceCandidatesQueue.current.forEach(candidate => {
-              pc.addIceCandidate(new RTCIceCandidate(candidate))
-                .catch(e => console.error('[WebRTC] Error adding queued ICE', e));
-            });
-            iceCandidatesQueue.current = [];
-          }
-        }
-      } else {
-        setCallStatus('idle');
-        setShowCallModal(false);
-        if (localStream) {
-          localStream.getTracks().forEach(t => t.stop());
-          setLocalStream(null);
-        }
-      }
-    });
-
-    socketService.onCallEnded(() => {
-      console.log('[Calls] Signal received: Call ended');
-      stopRingtone();
-      setCallStatus('idle');
-      setShowCallModal(false);
-      setCallConversationId(null);
-      if (localStream) {
-        localStream.getTracks().forEach(t => t.stop());
-        setLocalStream(null);
-      }
-      if (peerConnectionRef.current) {
-        peerConnectionRef.current.close();
-        peerConnectionRef.current = null;
-      }
-    });
-
-    socketService.onIceCandidate(({ candidate }) => {
-      if (peerConnectionRef.current && peerConnectionRef.current.remoteDescription) {
-        peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(candidate))
-          .catch(e => console.error('[WebRTC] Error adding ICE', e));
-      } else {
-        console.log('[WebRTC] Queuing ICE candidate');
-        iceCandidatesQueue.current.push(candidate);
-      }
-    });
-
-    return () => {
-      if (socketService.socket) {
-        socketService.socket.off('call-answered');
-        socketService.socket.off('ice-candidate');
-        socketService.socket.off('call-ended');
-      }
-    };
-  }, [localStream, callStatus]);
+    localStreamRef.current = localStream;
+  }, [localStream]);
 
   const acceptIncomingCall = async () => {
     if (!incomingCall) return;
@@ -1266,6 +1324,7 @@ export default function UserHomePage() {
       setShowCallModal(true);
       setIsCallMaximized(true);
       setIncomingCall(null);
+      setGlobalIncomingCall(null);
 
       const stream = await navigator.mediaDevices.getUserMedia({
         video: type === 'video',
@@ -1357,6 +1416,97 @@ export default function UserHomePage() {
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
       overflow: 'hidden'
     }}>
+
+      {/* 🔔 Task Assignment Toast Notification */}
+      {taskNotification.show && taskNotification.task && (
+        <div style={{
+          position: 'fixed', top: '20px', right: '20px', zIndex: 99999,
+          background: 'var(--bg-panel)',
+          border: '1px solid var(--primary)',
+          borderRadius: '20px',
+          padding: '18px 20px',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.25), 0 0 0 1px rgba(102,126,234,0.2)',
+          maxWidth: '360px',
+          animation: 'slideInRight 0.4s cubic-bezier(0.4,0,0.2,1)',
+          display: 'flex', flexDirection: 'column', gap: '10px'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{ fontSize: '22px', lineHeight: 1 }}>📋</div>
+              <div>
+                <div style={{ fontSize: '11px', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--primary)', marginBottom: '2px' }}>
+                  New Task Assigned
+                </div>
+                <div style={{ fontSize: '14px', fontWeight: '800', color: 'var(--text-main)' }}>
+                  {taskNotification.task.title}
+                </div>
+              </div>
+            </div>
+            <button onClick={() => setTaskNotification(prev => ({ ...prev, show: false }))}
+              style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '2px' }}>
+              <X size={16} />
+            </button>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            {taskNotification.task.priority && (
+              <span style={{
+                fontSize: '9px', fontWeight: '900', textTransform: 'uppercase',
+                color: { low: '#8b98a5', medium: '#667eea', high: '#f59e0b', critical: '#ef4444' }[taskNotification.task.priority] || '#667eea',
+                background: `${{ low: '#8b98a5', medium: '#667eea', high: '#f59e0b', critical: '#ef4444' }[taskNotification.task.priority] || '#667eea'}15`,
+                padding: '3px 8px', borderRadius: '6px'
+              }}>
+                <Flag size={8} style={{ display: 'inline', marginRight: '3px' }} />{taskNotification.task.priority}
+              </span>
+            )}
+            {taskNotification.project?.name && (
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <Layers size={11} />{taskNotification.project.name}
+              </span>
+            )}
+            {taskNotification.task.dueDate && (
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <Clock size={11} />{new Date(taskNotification.task.dueDate).toLocaleDateString()}
+              </span>
+            )}
+          </div>
+          <button
+            onClick={() => { setActiveTab('projects'); setTaskNotification(prev => ({ ...prev, show: false })); }}
+            style={{
+              background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: '10px',
+              padding: '8px 16px', fontSize: '11px', fontWeight: '900', textTransform: 'uppercase',
+              cursor: 'pointer', letterSpacing: '0.05em', alignSelf: 'flex-start'
+            }}
+          >
+            View My Tasks →
+          </button>
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════════════════════
+          🔑 E2EE PASSPHRASE MODAL
+          ════════════════════════════════════════════════════════ */}
+      {showE2EEModal && (
+        <E2EEPassphraseModal
+          mode={e2eeStatus}
+          userId={user?.id}
+          onSuccess={({ privateKey, publicKey }) => {
+            // Store private key in this tab's sessionStorage (clears on tab close)
+            sessionStorage.setItem('e2ee_session_pk', privateKey);
+            setE2eePrivateKey(privateKey);
+            setE2eeStatus('unlocked');
+            setShowE2EEModal(false);
+            // Upload public key to backend so others can encrypt for us
+            api.updateProfile({ publicKey }).catch(err =>
+              console.warn('[E2EE] Failed to upload public key:', err)
+            );
+          }}
+          onSkip={() => {
+            setShowE2EEModal(false);
+            setE2eeStatus('skipped');
+          }}
+        />
+      )}
+
       {/* SIDEBAR */}
       <div style={{
         width: '64px',
@@ -1382,7 +1532,7 @@ export default function UserHomePage() {
           marginBottom: '40px',
           boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)'
         }}>
-          <Shield size={28} color="#fff" />
+          <img src="/ktt01_logo_square.png" alt="KTT01" style={{ width: '36px', height: '36px', borderRadius: '10px' }} />
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '8px 0', flex: 1 }}>
@@ -1498,7 +1648,7 @@ export default function UserHomePage() {
           backdropFilter: 'blur(20px)',
           backgroundOpacity: 0.95
         }}>
-          {/* Workspace Header - SLICK / PREMIUM */}
+          {/* Workspace Header - PREMIUM */}
           <div style={{
             padding: '24px 20px',
             borderBottom: '1px solid var(--border-color)',
@@ -1506,34 +1656,34 @@ export default function UserHomePage() {
             alignItems: 'center',
             justifyContent: 'space-between'
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
               <div style={{
-                width: '42px',
-                height: '42px',
-                background: 'linear-gradient(135deg, var(--primary), #38b6ff)',
-                borderRadius: '12px',
+                width: '46px',
+                height: '46px',
+                background: 'linear-gradient(135deg, #007aff, #38b6ff)',
+                borderRadius: '14px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 color: '#fff',
-                boxShadow: '0 4px 15px rgba(0, 123, 255, 0.3)'
+                boxShadow: '0 8px 16px rgba(0, 122, 255, 0.25)'
               }}>
-                <Shield size={22} />
+                <img src="/ktt01_logo_square.png" alt="KTT01" style={{ width: '32px', height: '32px', borderRadius: '8px' }} />
               </div>
               <div>
-                <h2 style={{ margin: 0, color: 'var(--text-main)', fontSize: '18px', fontWeight: '900', letterSpacing: '-0.02em' }}>CYBERSEC</h2>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <h2 style={{ margin: 0, color: 'var(--text-main)', fontSize: '18px', fontWeight: '900', letterSpacing: '0.04em', textTransform: 'uppercase' }}>CYBERSEC</h2>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
                   <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--green-color)', boxShadow: '0 0 8px var(--green-color)' }}></div>
-                  <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '500' }}>{onlineUserIds.size} Active</span>
+                  <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>1 Active</span>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* New Search Input */}
+          {/* Updated Search Input */}
           <div style={{ padding: '16px 20px 8px' }}>
             <div style={{ position: 'relative' }}>
-              <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+              <Search size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', opacity: 0.6 }} />
               <input
                 type="text"
                 placeholder="Find conversation..."
@@ -1541,28 +1691,36 @@ export default function UserHomePage() {
                 onChange={(e) => setChatSearchQuery(e.target.value)}
                 style={{
                   width: '100%',
-                  padding: '10px 12px 10px 38px',
-                  borderRadius: '10px',
-                  background: 'var(--bg-app)',
+                  padding: '13px 15px 13px 44px',
+                  borderRadius: '14px',
+                  background: 'var(--bg-light)',
                   border: '1px solid var(--border-color)',
                   color: 'var(--text-main)',
-                  fontSize: '13px',
+                  fontSize: '14px',
                   outline: 'none',
-                  transition: 'all 0.2s',
-                  boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.1)'
+                  transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
                 }}
-                onFocus={(e) => e.target.style.borderColor = 'var(--primary)'}
-                onBlur={(e) => e.target.style.borderColor = 'var(--border-color)'}
+                onFocus={(e) => {
+                  e.target.style.borderColor = 'var(--primary)';
+                  e.target.style.background = 'var(--bg-panel)';
+                  e.target.style.boxShadow = '0 4px 12px rgba(0,123,255,0.08)';
+                }}
+                onBlur={(e) => {
+                  e.target.style.borderColor = 'var(--border-color)';
+                  e.target.style.background = 'var(--bg-light)';
+                  e.target.style.boxShadow = '0 2px 4px rgba(0,0,0,0.02)';
+                }}
               />
             </div>
           </div>
 
           <div style={{ flex: 1, overflowY: 'auto', padding: '10px 0', scrollbarWidth: 'none' }}>
             {/* CHANNELS SECTION */}
-            <div style={{ padding: '12px 20px 8px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                <span style={{ fontSize: '11px', fontWeight: '800', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Channels</span>
-                <button onClick={() => setShowGroupModal(true)} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', opacity: 0.7 }} onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = 0.7}><Plus size={16} /></button>
+            <div style={{ padding: '24px 20px 8px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <span style={{ fontSize: '12px', fontWeight: '800', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.12em', opacity: 0.8 }}>Channels</span>
+                <button onClick={() => setShowGroupModal(true)} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', transition: 'all 0.2s' }} onMouseEnter={e => { e.currentTarget.style.color = 'var(--primary)'; e.currentTarget.style.transform = 'scale(1.1)'; }} onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.transform = 'scale(1)'; }}><Plus size={18} /></button>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                 {conversations
@@ -1590,10 +1748,10 @@ export default function UserHomePage() {
             </div>
 
             {/* DIRECT MESSAGES SECTION */}
-            <div style={{ padding: '24px 20px 8px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                <span style={{ fontSize: '11px', fontWeight: '800', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Direct Messages</span>
-                <button onClick={handleStartNewChat} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', opacity: 0.7 }} onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = 0.7}><Plus size={16} /></button>
+            <div style={{ padding: '28px 20px 8px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <span style={{ fontSize: '12px', fontWeight: '800', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.12em', opacity: 0.8 }}>Direct Messages</span>
+                <button onClick={handleStartNewChat} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', transition: 'all 0.2s' }} onMouseEnter={e => { e.currentTarget.style.color = 'var(--primary)'; e.currentTarget.style.transform = 'scale(1.1)'; }} onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.transform = 'scale(1)'; }}><Plus size={18} /></button>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                 {conversations
@@ -1659,10 +1817,10 @@ export default function UserHomePage() {
               justifyContent: 'center',
               border: '1px solid var(--border-primary-soft)'
             }}>
-              <Shield size={60} color="var(--primary)" />
+              <MessageSquare size={60} color="var(--primary)" />
             </div>
             <div style={{ textAlign: 'center' }}>
-              <h2 style={{ margin: '0 0 10px 0', fontSize: '24px', fontWeight: '900', textTransform: 'uppercase', tracking: '-0.02em', color: 'var(--text-main)' }}>TechCorp Secure Terminal</h2>
+              <h2 style={{ margin: '0 0 10px 0', fontSize: '24px', fontWeight: '900', textTransform: 'uppercase', tracking: '-0.02em', color: 'var(--text-main)' }}>KTT01 Secure Terminal</h2>
               <p style={{ color: 'var(--text-secondary)', margin: 0, fontSize: '14px', fontWeight: '500' }}>Quantum-safe end-to-end encrypted protocol active.</p>
             </div>
           </div>
@@ -2049,6 +2207,7 @@ export default function UserHomePage() {
 
               {/* Pinned Messages Banner */}
               <PinnedMessagesBanner
+                key={`${selectedChat}_${pinnedVersion}`}
                 conversationId={selectedChat}
                 userId={user?.id}
               />
@@ -2085,13 +2244,14 @@ export default function UserHomePage() {
                     {messages
                       .filter(m => !m.messageType || !m.messageType.startsWith('signal_'))
                       .map((msg, index, arr) => (
-                        <div key={msg.id} className="message-appear">
+                        <div key={msg.id} id={`msg-${msg.id}`} className="message-appear">
                           <EnhancedMessageBubble
                             message={msg}
                             isOwn={msg.sender?.id === user?.id}
                             showAvatar={index === 0 || arr[index - 1].sender?.id !== msg.sender?.id}
                             currentUserId={user?.id}
                             conversationId={selectedChat}
+                            onPin={() => { loadMessages(selectedChat, true); setPinnedVersion(v => v + 1); }}
                             onDelete={() => loadMessages(selectedChat, true)}
                             onReply={(msg) => setReplyingTo(msg)}
                             onForward={(msg) => { setForwardingMessage(msg); setShowForwardModal(true); }}
@@ -2163,19 +2323,12 @@ export default function UserHomePage() {
                     };
                     return (
                       <>
-                        <button type="button" onClick={() => setShowStickerPicker(!showStickerPicker)} style={toolbarButtonStyle} title="Emoji & Stickers" onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-light)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}><Smile size={20} /></button>
                         <button type="button" onClick={() => { const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*'; inp.onchange = ev => { if (ev.target.files[0]) setSelectedFile(ev.target.files[0]); }; inp.click(); }} style={toolbarButtonStyle} title="Send Image" onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-light)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}><Image size={20} /></button>
                         <button type="button" onClick={handleFileClick} style={toolbarButtonStyle} title="Send File" onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-light)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}><Paperclip size={20} /></button>
                         <button type="button" onClick={startCamera} style={toolbarButtonStyle} title="Take Photo" onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-light)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}><Camera size={20} /></button>
                         <button type="button" onClick={() => setShowPollModal(true)} style={toolbarButtonStyle} title="Poll" onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-light)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}><BarChart3 size={20} /></button>
                         <button type="button" style={toolbarButtonStyle} title="Self-destruct messages" onClick={() => setSelfDestructTime(v => v ? null : 30)} onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-light)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}><Clock size={20} color={selfDestructTime ? 'var(--primary)' : 'inherit'} /></button>
 
-                        <div style={{ width: '1px', height: '18px', background: 'var(--border-color)', margin: '0 8px' }} />
-
-                        <button type="button" onClick={() => setMessageInput(v => v + '@')} style={toolbarButtonStyle} title="Mention Name" onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-light)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}><AtSign size={20} /></button>
-                        <button type="button" onClick={() => setMessageInput(v => v + '**bold**')} style={toolbarButtonStyle} title="Bold Text" onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-light)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}><Bold size={20} /></button>
-                        <button type="button" onClick={() => setMessageInput(v => v + '*italic*')} style={toolbarButtonStyle} title="Italic Text" onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-light)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}><Italic size={20} /></button>
-                        <button type="button" onClick={() => setMessageInput(v => v + '`code`')} style={toolbarButtonStyle} title="Code Block" onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-light)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}><Code size={20} /></button>
                       </>
                     );
                   })()}
@@ -2211,24 +2364,9 @@ export default function UserHomePage() {
                   background: 'var(--bg-light)',
                   borderRadius: (replyingTo || editingMessage) ? '0 0 12px 12px' : '12px',
                   padding: '8px 12px',
-                  gap: '10px'
+                  gap: '10px',
+                  position: 'relative'
                 }}>
-                  <button
-                    type="button"
-                    onClick={() => setShowAttachmentMenu(!showAttachmentMenu)}
-                    style={{
-                      background: 'transparent',
-                      border: 'none',
-                      color: 'var(--text-secondary)',
-                      padding: '4px',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      marginBottom: '2px'
-                    }}
-                  >
-                    <Plus size={22} />
-                  </button>
-
                   <textarea
                     ref={inputRef}
                     rows={1}
@@ -2260,6 +2398,12 @@ export default function UserHomePage() {
                   />
 
                   <div style={{ display: 'flex', gap: '4px', alignItems: 'center', marginBottom: '2px' }}>
+                    {showStickerPicker && (
+                      <StickerPicker
+                        onSelect={(emoji) => setMessageInput(prev => prev + emoji)}
+                        onClose={() => setShowStickerPicker(false)}
+                      />
+                    )}
                     <button type="button" onClick={() => setShowStickerPicker(v => !v)}
                       style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', padding: '4px' }}>
                       <Smile size={24} />
@@ -2347,7 +2491,7 @@ export default function UserHomePage() {
                 alignItems: 'center',
                 justifyContent: 'center'
               }}>
-                <Shield size={60} color="#667eea" />
+                <MessageSquare size={60} color="#667eea" />
               </div>
               <div style={{ textAlign: 'center' }}>
                 <h2 style={{ color: '#fff', margin: '0 0 10px 0', fontSize: '24px' }}>
@@ -3103,7 +3247,7 @@ export default function UserHomePage() {
 
                 <button
                   onClick={async () => {
-                    const chatId = selectedChat;
+                    const chatId = callConversationId || selectedChat;
                     setShowCallModal(false);
                     setCallStatus('idle');
                     stopStream();
@@ -3201,6 +3345,7 @@ export default function UserHomePage() {
                     stopRingtone();
                     if (incomingCall.conversationId) socketService.sendCallResponse(incomingCall.conversationId, null, false);
                     setIncomingCall(null);
+                    setGlobalIncomingCall(null);
                   }}
                   style={{
                     width: '85px',
@@ -3510,87 +3655,89 @@ function ChatItem({ chat, active, onClick, getName, getAvatar, formatTime, onCon
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        padding: '10px 14px',
-        margin: '2px 8px',
-        borderRadius: '12px',
+        padding: '12px 16px',
+        margin: '2px 10px',
+        borderRadius: '16px',
         cursor: 'pointer',
-        background: active ? 'var(--bg-selected)' : (hovered ? 'rgba(255, 255, 255, 0.03)' : 'transparent'),
-        transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+        background: active ? 'var(--bg-selected)' : (hovered ? 'var(--bg-light)' : 'transparent'),
+        transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
         display: 'flex',
-        gap: '12px',
+        gap: '14px',
         alignItems: 'center',
         position: 'relative',
-        transform: active ? 'scale(1.02)' : 'scale(1)',
-        borderLeft: active ? '3px solid var(--primary)' : '3px solid transparent'
+        transform: active ? 'translateX(4px)' : 'none',
+        borderLeft: active ? '4px solid var(--primary)' : '4px solid transparent'
       }}
     >
-      <div style={{ position: 'relative' }}>
+      <div style={{ position: 'relative', flexShrink: 0 }}>
         <div style={{
-          width: '42px',
-          height: '42px',
-          background: active ? 'var(--primary)' : 'var(--bg-app)',
-          borderRadius: '12px',
+          width: '48px',
+          height: '48px',
+          background: active ? 'var(--primary)' : 'var(--bg-light)',
+          borderRadius: '15px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          fontSize: '15px',
+          fontSize: '18px',
           fontWeight: '900',
-          color: active ? '#fff' : 'var(--text-main)',
-          boxShadow: active ? '0 4px 10px rgba(0, 123, 255, 0.2)' : 'none',
-          border: '1px solid var(--border-color)'
+          color: active ? '#fff' : 'var(--primary)',
+          boxShadow: active ? '0 8px 16px rgba(0, 122, 255, 0.2)' : 'none',
+          border: '1px solid var(--border-color)',
+          transition: 'all 0.3s'
         }}>
-          {isGroup ? <Hash size={20} /> : getAvatar(chat)}
+          {isGroup ? <Hash size={22} strokeWidth={2.5} /> : getAvatar(chat)}
         </div>
         {isOnline && !isGroup && (
           <div style={{
             position: 'absolute',
-            bottom: '-2px',
-            right: '-2px',
-            width: '12px',
-            height: '12px',
-            background: 'var(--green-color)',
-            border: '2px solid var(--bg-panel)',
+            bottom: '0',
+            right: '0',
+            width: '14px',
+            height: '14px',
+            background: '#10b981',
+            border: '2.5px solid var(--bg-panel)',
             borderRadius: '50%',
-            boxShadow: '0 0 5px var(--green-color)'
+            boxShadow: '0 0 10px rgba(16, 185, 129, 0.4)'
           }} />
         )}
       </div>
 
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '2px' }}>
           <h4 style={{
             margin: 0,
             color: active ? 'var(--primary)' : 'var(--text-main)',
-            fontSize: '14px',
-            fontWeight: chat.unreadCount > 0 ? '900' : (active ? '800' : '600'),
+            fontSize: '15px',
+            fontWeight: (chat.unreadCount > 0 || active) ? '800' : '600',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
-            letterSpacing: '-0.01em'
+            letterSpacing: '-0.01em',
+            transition: 'color 0.2s'
           }}>
             {getName(chat)}
           </h4>
-          <span style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: '500' }}>
+          <span style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: '700', opacity: 0.8 }}>
             {chat.lastMessage ? formatTime(chat.lastMessage.createdAt) : ''}
           </span>
         </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <p style={{
             margin: 0,
             color: chat.unreadCount > 0 ? 'var(--text-main)' : 'var(--text-muted)',
-            fontSize: '12px',
+            fontSize: '13px',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
-            fontWeight: chat.unreadCount > 0 ? '700' : '400',
-            opacity: active ? 0.9 : 0.7
+            fontWeight: chat.unreadCount > 0 ? '700' : '500',
+            opacity: 0.85
           }}>
-            {chat.lastMessage?.content || 'No messages yet'}
+            {chat.lastMessage?.content || 'No signals transmitted'}
           </p>
           {chat.unreadCount > 0 && (
             <div style={{
               background: 'var(--primary)',
-              borderRadius: '8px',
+              borderRadius: '9px',
               minWidth: '20px',
               height: '18px',
               padding: '0 6px',
@@ -3602,7 +3749,7 @@ function ChatItem({ chat, active, onClick, getName, getAvatar, formatTime, onCon
               justifyContent: 'center',
               flexShrink: 0,
               marginLeft: '8px',
-              boxShadow: '0 2px 8px rgba(0, 123, 255, 0.4)'
+              boxShadow: '0 4px 8px rgba(0, 122, 255, 0.3)'
             }}>
               {chat.unreadCount}
             </div>
@@ -4362,100 +4509,146 @@ function SettingsContent({ user, darkMode, toggleDarkMode }) {
 
 function ContactsContent({ users, onSelect }) {
   const [term, setTerm] = React.useState('');
-  const [filter, setFilter] = useState('all'); // all, online
 
   const filtered = users?.filter(u => {
-    const matchSearch = u.firstName?.toLowerCase().includes(term.toLowerCase()) ||
-      u.lastName?.toLowerCase().includes(term.toLowerCase()) ||
-      u.email?.toLowerCase().includes(term.toLowerCase());
-    return matchSearch;
+    const search = term.toLowerCase();
+    return (
+      u.firstName?.toLowerCase().includes(search) ||
+      u.lastName?.toLowerCase().includes(search) ||
+      u.email?.toLowerCase().includes(search) ||
+      u.department?.toLowerCase().includes(search)
+    );
   }) || [];
 
   return (
-    <div style={{ padding: '30px', color: 'var(--text-main)', height: '100%', display: 'flex', flexDirection: 'column', maxWidth: '1200px', margin: '0 auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
-        <div>
-          <h2 style={{ fontSize: '32px', margin: 0, fontWeight: '700', color: 'var(--text-main)' }}>Directory</h2>
-          <p style={{ color: 'var(--text-muted)', marginTop: '8px' }}>Connect with your colleagues securely</p>
-        </div>
-      </div>
+    <div style={{ padding: '40px', color: 'var(--text-main)', height: '100%', display: 'flex', flexDirection: 'column', maxWidth: '1400px', margin: '0 auto', overflow: 'hidden' }}>
+      <header style={{ marginBottom: '40px' }}>
+        <h2 style={{ fontSize: '38px', margin: 0, fontWeight: '900', color: 'var(--text-main)', letterSpacing: '-0.03em' }}>Directory</h2>
+        <p style={{ color: 'var(--text-secondary)', marginTop: '8px', fontSize: '16px', fontWeight: '500' }}>Connect with your colleagues securely</p>
+      </header>
 
-      <div style={{ marginBottom: '30px', position: 'relative' }}>
-        <Search size={20} style={{ position: 'absolute', left: '20px', top: '15px', color: '#667eea' }} />
+      <div style={{ marginBottom: '40px', position: 'relative', maxWidth: '600px' }}>
+        <Search size={22} style={{ position: 'absolute', left: '20px', top: '50%', transform: 'translateY(-50%)', color: 'var(--primary)' }} />
         <input
           value={term}
           onChange={e => setTerm(e.target.value)}
-          placeholder="Search by name, email or department..."
+          placeholder="Search for colleagues..."
           style={{
             width: '100%',
-            padding: '16px 16px 16px 55px',
+            padding: '18px 20px 18px 60px',
             background: 'var(--bg-panel)',
-            border: '1px solid var(--border-color)',
-            borderRadius: '16px',
+            border: '2px solid var(--border-color)',
+            borderRadius: '20px',
             color: 'var(--text-main)',
             outline: 'none',
-            fontSize: '15px',
-            transition: 'all 0.2s',
+            fontSize: '16px',
+            fontWeight: '600',
+            transition: 'all 0.3s ease',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
             boxSizing: 'border-box'
           }}
+          onFocus={e => (e.target.style.borderColor = 'var(--primary)')}
+          onBlur={e => (e.target.style.borderColor = 'var(--border-color)')}
         />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px', overflowY: 'auto' }}>
-        {filtered.map(u => (
-          <div
-            key={u.id}
-            onClick={() => onSelect(u.id)}
-            style={{
-              background: 'var(--bg-panel)',
-              padding: '24px',
-              borderRadius: '24px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '18px',
-              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-              border: '1px solid var(--border-color)'
-            }}
-            onMouseEnter={e => {
-              e.currentTarget.style.transform = 'translateY(-5px) scale(1.02)';
-              e.currentTarget.style.borderColor = '#667eea';
-              e.currentTarget.style.boxShadow = '0 10px 30px rgba(0,0,0,0.3)';
-            }}
-            onMouseLeave={e => {
-              e.currentTarget.style.transform = 'translateY(0) scale(1)';
-              e.currentTarget.style.borderColor = 'var(--border-color)';
-              e.currentTarget.style.boxShadow = 'none';
-            }}
-          >
-            <div style={{
-              width: '60px',
-              height: '60px',
-              borderRadius: '20px',
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '24px',
-              fontWeight: '800',
-              color: '#fff',
-              flexShrink: 0
-            }}>
-              {u.firstName?.charAt(0)}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+        gap: '20px',
+        overflowY: 'auto',
+        paddingBottom: '40px',
+        scrollbarWidth: 'none'
+      }}>
+        {filtered.length > 0 ? (
+          filtered.map(u => (
+            <div
+              key={u.id}
+              onClick={() => onSelect(u.id)}
+              style={{
+                background: 'var(--bg-panel)',
+                padding: '24px',
+                borderRadius: '28px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '16px',
+                transition: 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+                border: '1px solid var(--border-color)',
+                position: 'relative',
+                overflow: 'hidden'
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.transform = 'translateY(-8px)';
+                e.currentTarget.style.borderColor = 'var(--primary)';
+                e.currentTarget.style.boxShadow = '0 20px 40px rgba(0,0,0,0.2)';
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.borderColor = 'var(--border-color)';
+                e.currentTarget.style.boxShadow = 'none';
+              }}
+            >
+              <div style={{
+                width: '64px',
+                height: '64px',
+                borderRadius: '22px',
+                background: 'linear-gradient(135deg, var(--primary) 0%, #a855f7 100%)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '26px',
+                fontWeight: '900',
+                color: '#fff',
+                flexShrink: 0,
+                boxShadow: '0 8px 16px rgba(102, 126, 234, 0.2)'
+              }}>
+                {u.firstName?.charAt(0)}
+              </div>
+
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: '800', fontSize: '18px', color: 'var(--text-main)', marginBottom: '4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {u.firstName} {u.lastName}
+                </div>
+                <div style={{
+                  display: 'inline-block',
+                  background: 'rgba(102, 126, 234, 0.1)',
+                  color: 'var(--primary)',
+                  fontSize: '11px',
+                  fontWeight: '800',
+                  padding: '4px 10px',
+                  borderRadius: '8px',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                  marginBottom: '6px'
+                }}>
+                  {u.department || 'OFFICE'}
+                </div>
+                <div style={{ fontSize: '13px', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: '500' }}>
+                  {u.email}
+                </div>
+              </div>
+
+              <div style={{
+                position: 'absolute',
+                top: '12px',
+                right: '12px',
+                width: '10px',
+                height: '10px',
+                borderRadius: '50%',
+                background: 'var(--green-color)',
+                boxShadow: '0 0 10px var(--green-color)',
+                border: '2px solid var(--bg-panel)'
+              }} />
             </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontWeight: '700', fontSize: '17px', color: 'var(--text-main)', marginBottom: '2px' }}>{u.firstName} {u.lastName}</div>
-              <div style={{ fontSize: '13px', color: '#667eea', fontWeight: '600', marginBottom: '4px' }}>{u.jobTitle || u.department || 'Team Member'}</div>
-              <div style={{ fontSize: '12px', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis' }}>{u.email}</div>
-            </div>
-            <div style={{
-              width: '10px', height: '10px', borderRadius: '50%',
-              background: 'var(--green-color)',
-              boxShadow: '0 0 8px var(--green-color)',
-              flexShrink: 0
-            }} />
+          ))
+        ) : (
+          <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '100px 0', color: 'var(--text-muted)' }}>
+            <div style={{ fontSize: '60px', marginBottom: '20px' }}>🔍</div>
+            <h3 style={{ fontSize: '20px', fontWeight: '800' }}>No colleagues found</h3>
+            <p>Try adjusting your search terms.</p>
           </div>
-        ))}
+        )}
       </div>
     </div>
   );
@@ -4465,6 +4658,34 @@ function TeamContent({ users, currentUser, onSelect, isAdmin }) {
   const [broadcastSent, setBroadcastSent] = useState(false);
   const [broadcastMsg, setBroadcastMsg] = useState('');
   const [showBroadcast, setShowBroadcast] = useState(false);
+  const [stats, setStats] = useState({
+    teamSize: 0,
+    onlineNow: 0,
+    filesShared: 0,
+    avgSecurity: 0,
+  });
+  const [loadingStats, setLoadingStats] = useState(false);
+
+  useEffect(() => {
+    const loadStats = async () => {
+      if (!currentUser?.primaryTeamId) return;
+      try {
+        setLoadingStats(true);
+        const data = await api.getTeamStats(currentUser.primaryTeamId);
+        setStats({
+          teamSize: data.totalMembers || 0,
+          onlineNow: data.activeUsers || 0,
+          filesShared: data.filesCount || 0,
+          avgSecurity: data.avgSecurity || 0,
+        });
+      } catch (err) {
+        console.error('Failed to load team stats:', err);
+      } finally {
+        setLoadingStats(false);
+      }
+    };
+    loadStats();
+  }, [currentUser]);
 
   const teamMembers = users?.filter(u => isAdmin ? true : (u.managerId === currentUser.id || u.department === currentUser.department)) || [];
 
@@ -4531,12 +4752,13 @@ function TeamContent({ users, currentUser, onSelect, isAdmin }) {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '25px', marginBottom: '40px' }}>
         {[
-          { label: 'Team Size', val: teamMembers.length, color: '#667eea', icon: <Users /> },
-          { label: 'Online Now', val: teamMembers.length, color: '#10b981', icon: <Clock /> },
-          { label: 'Files Shared', val: '42', color: '#f59e0b', icon: <FileIcon /> },
-          { label: 'Security Level', val: 'SECURED', color: '#ef4444', icon: <Shield /> },
+          { label: 'Team Size', val: stats.teamSize || teamMembers.length, color: '#667eea', icon: <Users /> },
+          { label: 'Online Now', val: stats.onlineNow || teamMembers.filter(u => u.status === 'active').length, color: '#10b981', icon: <Clock /> },
+          { label: 'Files Shared', val: stats.filesShared, color: '#f59e0b', icon: <FileIcon /> },
+          { label: 'Security Level', val: stats.avgSecurity > 0 ? `Lvl ${stats.avgSecurity}` : 'SECURED', color: '#ef4444', icon: <Shield /> },
         ].map(s => (
-          <div key={s.label} style={{ background: 'var(--bg-panel)', padding: '25px', borderRadius: '24px', border: '1px solid var(--border-color)' }}>
+          <div key={s.label} style={{ background: 'var(--bg-panel)', padding: '25px', borderRadius: '24px', border: '1px solid var(--border-color)', position: 'relative', overflow: 'hidden' }}>
+            {loadingStats && <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '2px', background: 'var(--primary)', animation: 'shimmer 2s infinite' }} />}
             <div style={{ color: s.color, marginBottom: '15px' }}>{s.icon}</div>
             <div style={{ fontSize: '28px', fontWeight: '800', marginBottom: '5px' }}>{s.val}</div>
             <div style={{ color: '#8b98a5', fontSize: '13px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '1px' }}>{s.label}</div>
@@ -4570,10 +4792,19 @@ function TeamContent({ users, currentUser, onSelect, isAdmin }) {
                     </div>
                   </div>
                 </td>
-                <td style={{ borderTop: '1px solid var(--border-color)', borderBottom: '1px solid var(--border-color)', fontSize: '14px', color: 'var(--text-main)' }}>{u.jobTitle || 'Engineer'}</td>
+                <td style={{ borderTop: '1px solid var(--border-color)', borderBottom: '1px solid var(--border-color)', fontSize: '14px', color: 'var(--text-main)' }}>{u.jobTitle || 'Team Member'}</td>
                 <td style={{ borderTop: '1px solid var(--border-color)', borderBottom: '1px solid var(--border-color)', fontSize: '14px', color: 'var(--text-main)' }}>{u.department}</td>
                 <td style={{ borderTop: '1px solid var(--border-color)', borderBottom: '1px solid var(--border-color)' }}>
-                  <span style={{ padding: '4px 12px', borderRadius: '20px', background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', fontSize: '12px', fontWeight: '700' }}>Active</span>
+                  <span style={{ 
+                    padding: '4px 12px', 
+                    borderRadius: '20px', 
+                    background: u.status === 'active' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(107, 114, 128, 0.1)', 
+                    color: u.status === 'active' ? '#10b981' : '#6b7280', 
+                    fontSize: '12px', 
+                    fontWeight: '700' 
+                  }}>
+                    {u.status === 'active' ? 'Online' : (u.status || 'Offline').charAt(0).toUpperCase() + (u.status || 'Offline').slice(1)}
+                  </span>
                 </td>
                 <td style={{ padding: '15px 20px', borderRadius: '0 16px 16px 0', borderRight: '1px solid var(--border-color)', borderTop: '1px solid var(--border-color)', borderBottom: '1px solid var(--border-color)', textAlign: 'right' }}>
                   <button
@@ -4724,6 +4955,200 @@ function CallsContent() {
             );
           })
         )}
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// 🔑 E2EE PASSPHRASE MODAL COMPONENT
+// Uses PBKDF2 to derive AES key from passphrase → protects RSA private key
+// ════════════════════════════════════════════════════════════════════════════
+function E2EEPassphraseModal({ mode, userId, onSuccess, onSkip }) {
+  const [passphrase, setPassphrase] = useState('');
+  const [confirmPassphrase, setConfirmPassphrase] = useState('');
+  const [showPass, setShowPass] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const isSetup = mode === 'setup_needed';
+
+  const getStrength = (p) => {
+    if (!p) return { level: 0, label: '', color: '#444' };
+    let score = 0;
+    if (p.length >= 8) score++;
+    if (p.length >= 12) score++;
+    if (/[A-Z]/.test(p)) score++;
+    if (/[0-9]/.test(p)) score++;
+    if (/[^A-Za-z0-9]/.test(p)) score++;
+    const levels = [
+      { level: 0, label: '', color: '#444' },
+      { level: 1, label: 'Weak', color: '#ef4444' },
+      { level: 2, label: 'Fair', color: '#f59e0b' },
+      { level: 3, label: 'Good', color: '#3b82f6' },
+      { level: 4, label: 'Strong', color: '#10b981' },
+      { level: 5, label: 'Very Strong', color: '#10b981' },
+    ];
+    return levels[score] || levels[0];
+  };
+
+  const strength = getStrength(passphrase);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    if (!passphrase || passphrase.length < 6) {
+      setError('Passphrase must be at least 6 characters.');
+      return;
+    }
+    if (isSetup && passphrase !== confirmPassphrase) {
+      setError('Passphrases do not match.');
+      return;
+    }
+    setLoading(true);
+    try {
+      if (isSetup) {
+        // Generate new RSA key pair protected by this passphrase
+        const { setupE2EEWithPassword: setup } = await import('../../utils/crypto');
+        const { publicKey, privateKey } = await setup(userId, passphrase);
+        onSuccess({ privateKey, publicKey });
+      } else {
+        // Unlock existing bundle with passphrase
+        const { unlockE2EEWithPassword: unlock } = await import('../../utils/crypto');
+        const result = await unlock(userId, passphrase);
+        if (!result) {
+          setError('No encryption bundle found. Try setting up again.');
+          setLoading(false);
+          return;
+        }
+        onSuccess(result);
+      }
+    } catch (err) {
+      console.error('[E2EE Modal]', err);
+      setError(isSetup ? 'Setup failed. Please try again.' : 'Wrong passphrase. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 100000,
+      background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(12px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px'
+    }}>
+      <div style={{
+        background: 'var(--bg-panel)', borderRadius: '28px',
+        padding: '40px', maxWidth: '440px', width: '100%',
+        border: '1px solid var(--border-color)',
+        boxShadow: '0 32px 80px rgba(0,0,0,0.4), 0 0 0 1px rgba(102,126,234,0.2)',
+        animation: 'slideInUp 0.35s cubic-bezier(0.4,0,0.2,1)'
+      }}>
+        {/* Header */}
+        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+          <div style={{
+            width: '64px', height: '64px', borderRadius: '20px', margin: '0 auto 16px',
+            background: 'linear-gradient(135deg, #667eea, #764ba2)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: '28px', boxShadow: '0 8px 24px rgba(102,126,234,0.4)'
+          }}>🔑</div>
+          <h2 style={{ color: 'var(--text-main)', margin: '0 0 8px', fontSize: '20px', fontWeight: '900' }}>
+            {isSetup ? 'Create Encryption Passphrase' : 'Unlock End-to-End Encryption'}
+          </h2>
+          <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: '13px', lineHeight: 1.5 }}>
+            {isSetup
+              ? 'Your passphrase locally protects your private key. It never leaves this device.'
+              : 'Enter your passphrase to decrypt your messages. This key stays only in your browser.'}
+          </p>
+        </div>
+
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {/* Passphrase input */}
+          <div>
+            <label style={{ display: 'block', fontSize: '11px', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: '8px' }}>
+              {isSetup ? 'Create Passphrase' : 'Your Passphrase'}
+            </label>
+            <div style={{ position: 'relative' }}>
+              <input
+                type={showPass ? 'text' : 'password'}
+                value={passphrase}
+                onChange={e => setPassphrase(e.target.value)}
+                placeholder="Enter a strong passphrase..."
+                autoFocus
+                style={{
+                  width: '100%', padding: '14px 44px 14px 16px', borderRadius: '14px',
+                  background: 'var(--bg-app)', border: '2px solid var(--border-color)',
+                  color: 'var(--text-main)', fontSize: '14px', outline: 'none',
+                  boxSizing: 'border-box', fontFamily: 'inherit',
+                  transition: 'border-color 0.2s'
+                }}
+                onFocus={e => e.target.style.borderColor = 'var(--primary)'}
+                onBlur={e => e.target.style.borderColor = 'var(--border-color)'}
+              />
+              <button type="button" onClick={() => setShowPass(p => !p)}
+                style={{ position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
+                {showPass ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
+
+            {/* Strength indicator (setup only) */}
+            {isSetup && passphrase && (
+              <div style={{ marginTop: '8px' }}>
+                <div style={{ height: '4px', background: 'var(--bg-light)', borderRadius: '2px', overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${(strength.level / 5) * 100}%`, background: strength.color, borderRadius: '2px', transition: 'all 0.3s' }} />
+                </div>
+                <div style={{ fontSize: '10px', fontWeight: '700', color: strength.color, marginTop: '4px', textAlign: 'right' }}>{strength.label}</div>
+              </div>
+            )}
+          </div>
+
+          {/* Confirm passphrase (setup only) */}
+          {isSetup && (
+            <div>
+              <label style={{ display: 'block', fontSize: '11px', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: '8px' }}>
+                Confirm Passphrase
+              </label>
+              <input
+                type={showPass ? 'text' : 'password'}
+                value={confirmPassphrase}
+                onChange={e => setConfirmPassphrase(e.target.value)}
+                placeholder="Repeat your passphrase..."
+                style={{
+                  width: '100%', padding: '14px 16px', borderRadius: '14px',
+                  background: 'var(--bg-app)', border: `2px solid ${confirmPassphrase && passphrase !== confirmPassphrase ? '#ef4444' : 'var(--border-color)'}`,
+                  color: 'var(--text-main)', fontSize: '14px', outline: 'none',
+                  boxSizing: 'border-box', fontFamily: 'inherit', transition: 'border-color 0.2s'
+                }}
+              />
+            </div>
+          )}
+
+          {/* Error message */}
+          {error && (
+            <div style={{ background: '#ef444415', border: '1px solid #ef444430', borderRadius: '12px', padding: '10px 14px', color: '#ef4444', fontSize: '12px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <AlertTriangle size={14} /> {error}
+            </div>
+          )}
+
+          {/* Info box */}
+          {isSetup && (
+            <div style={{ background: 'rgba(102,126,234,0.08)', border: '1px solid rgba(102,126,234,0.2)', borderRadius: '12px', padding: '12px 14px', fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.6 }}>
+              ⚠️ <strong>Remember this passphrase!</strong> It cannot be recovered. Without it, your encrypted messages cannot be decrypted.
+            </div>
+          )}
+
+          {/* Buttons */}
+          <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
+            <button type="button" onClick={onSkip}
+              style={{ flex: 1, padding: '14px', borderRadius: '14px', background: 'var(--bg-app)', border: '1px solid var(--border-color)', color: 'var(--text-muted)', fontSize: '12px', fontWeight: '800', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Skip for now
+            </button>
+            <button type="submit" disabled={loading}
+              style={{ flex: 2, padding: '14px', borderRadius: '14px', background: 'linear-gradient(135deg, #667eea, #764ba2)', border: 'none', color: '#fff', fontSize: '13px', fontWeight: '900', cursor: loading ? 'not-allowed' : 'pointer', textTransform: 'uppercase', letterSpacing: '0.05em', opacity: loading ? 0.7 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+              {loading ? <><RefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} /> Processing…</> : isSetup ? '🔑 Create Key' : '🔓 Unlock'}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
@@ -4933,38 +5358,273 @@ function AlertsContent({ onUpdateCount }) {
   );
 }
 
+function MyTasksView() {
+  const [myTasks, setMyTasks] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedTask, setSelectedTask] = useState(null);
+  const [progressNote, setProgressNote] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState({});
+
+  const loadMyTasks = async () => {
+    try {
+      setLoading(true);
+      const data = await api.getMyTasks();
+      setMyTasks(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Failed to load my tasks:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { loadMyTasks(); }, []);
+
+  const STATUS_CYCLE = { todo: 'in_progress', in_progress: 'done', done: 'todo', pending: 'in_progress', completed: 'done' };
+  const STATUS_LABEL = { todo: 'To Do', in_progress: 'In Progress', done: 'Done', pending: 'Pending', completed: 'Completed' };
+  const STATUS_COLOR = { todo: '#8b98a5', in_progress: '#667eea', done: '#10b981', pending: '#f59e0b', completed: '#10b981' };
+  const PRIORITY_COLOR = { low: '#8b98a5', medium: '#667eea', high: '#f59e0b', critical: '#ef4444' };
+
+  const handleCycleStatus = async (task) => {
+    const newStatus = STATUS_CYCLE[task.status] || 'in_progress';
+    try {
+      await api.updateTask(task.id, { status: newStatus });
+      setMyTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: newStatus } : t));
+      if (selectedTask?.id === task.id) setSelectedTask(prev => ({ ...prev, status: newStatus }));
+    } catch (err) {
+      alert('Failed to update task status');
+    }
+  };
+
+  const handleSubmitReport = async (task) => {
+    if (!progressNote.trim()) return;
+    setSubmitting(true);
+    try {
+      // Report is stored as a task update with a note field, or sent via updateTask
+      await api.updateTask(task.id, {
+        status: task.status,
+        progressNote: progressNote.trim(),
+      });
+      setSubmitted(prev => ({ ...prev, [task.id]: progressNote.trim() }));
+      setProgressNote('');
+      setSelectedTask(null);
+      alert('✅ Progress report submitted to manager!');
+    } catch (err) {
+      alert('Failed to submit report: ' + err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const isOverdue = (task) => {
+    if (!task.dueDate) return false;
+    return new Date(task.dueDate) < new Date() && task.status !== 'done' && task.status !== 'completed';
+  };
+
+  const pendingCount = myTasks.filter(t => t.status !== 'done' && t.status !== 'completed').length;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h3 style={{ fontSize: '11px', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--text-muted)', margin: 0 }}>
+          My Tasks
+        </h3>
+        {pendingCount > 0 && (
+          <span style={{ background: '#ef4444', color: '#fff', fontSize: '9px', fontWeight: '900', padding: '2px 8px', borderRadius: '20px' }}>
+            {pendingCount} Pending
+          </span>
+        )}
+      </div>
+
+      {loading ? (
+        <div style={{ color: 'var(--text-muted)', fontSize: '12px' }}>Syncing tasks...</div>
+      ) : myTasks.length === 0 ? (
+        <div style={{ color: 'var(--text-muted)', fontSize: '12px', padding: '12px', textAlign: 'center', background: 'var(--bg-app)', borderRadius: '12px', border: '1px dashed var(--border-color)' }}>
+          No tasks assigned to you yet.
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gap: '10px' }}>
+          {myTasks.map(task => {
+            const overdue = isOverdue(task);
+            const statusColor = STATUS_COLOR[task.status] || '#8b98a5';
+            const priorityColor = PRIORITY_COLOR[task.priority] || '#8b98a5';
+            const isSelected = selectedTask?.id === task.id;
+            return (
+              <div key={task.id} style={{
+                background: 'var(--bg-panel)',
+                borderRadius: '16px',
+                border: `1px solid ${overdue ? '#ef444440' : isSelected ? 'var(--primary)' : 'var(--border-color)'}`,
+                overflow: 'hidden',
+                transition: 'all 0.2s'
+              }}>
+                {/* Task Card Row */}
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '14px 14px 10px' }}>
+                  {/* Status Toggle Button */}
+                  <button
+                    onClick={() => handleCycleStatus(task)}
+                    title={`Status: ${STATUS_LABEL[task.status]} — Click to advance`}
+                    style={{
+                      width: '22px', height: '22px', borderRadius: '6px',
+                      border: `2px solid ${statusColor}`,
+                      background: task.status === 'done' || task.status === 'completed' ? statusColor : 'transparent',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      cursor: 'pointer', flexShrink: 0, marginTop: '2px'
+                    }}
+                  >
+                    {(task.status === 'done' || task.status === 'completed') && <Check size={12} color="#fff" />}
+                    {task.status === 'in_progress' && <RefreshCw size={11} color={statusColor} style={{ animationDuration: '2s' }} className="animate-spin" />}
+                  </button>
+
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '4px' }}>
+                      <span style={{
+                        color: 'var(--text-main)', fontWeight: '700', fontSize: '13px',
+                        textDecoration: task.status === 'done' || task.status === 'completed' ? 'line-through' : 'none',
+                        opacity: task.status === 'done' || task.status === 'completed' ? 0.55 : 1,
+                        lineHeight: '1.4'
+                      }}>
+                        {task.title}
+                      </span>
+                      {overdue && (
+                        <span style={{ fontSize: '9px', fontWeight: '900', color: '#ef4444', background: '#ef444415', padding: '2px 6px', borderRadius: '6px', flexShrink: 0 }}>
+                          OVERDUE
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Meta row */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px', flexWrap: 'wrap' }}>
+                      {/* Status badge */}
+                      <span style={{ fontSize: '9px', fontWeight: '900', textTransform: 'uppercase', color: statusColor, background: `${statusColor}15`, padding: '2px 7px', borderRadius: '6px' }}>
+                        {STATUS_LABEL[task.status] || task.status}
+                      </span>
+                      {/* Priority badge */}
+                      {task.priority && (
+                        <span style={{ fontSize: '9px', fontWeight: '900', textTransform: 'uppercase', color: priorityColor, background: `${priorityColor}15`, padding: '2px 7px', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                          <Flag size={8} />{task.priority}
+                        </span>
+                      )}
+                      {/* Due date */}
+                      {task.dueDate && (
+                        <span style={{ fontSize: '10px', fontWeight: '700', color: overdue ? '#ef4444' : 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                          <Clock size={10} />{new Date(task.dueDate).toLocaleDateString()}
+                        </span>
+                      )}
+                      {/* Project name */}
+                      {task.project?.name && (
+                        <span style={{ fontSize: '10px', fontWeight: '600', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                          <Layers size={10} />{task.project.name}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Show submitted report note */}
+                    {submitted[task.id] && (
+                      <div style={{ marginTop: '8px', background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: '8px', padding: '7px 10px', fontSize: '11px', color: '#10b981', fontWeight: '600' }}>
+                        ✅ Report sent: "{submitted[task.id]}"
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Report button */}
+                  <button
+                    onClick={() => { setSelectedTask(isSelected ? null : task); setProgressNote(''); }}
+                    title="Submit Progress Report"
+                    style={{
+                      background: isSelected ? 'var(--primary)' : 'var(--bg-app)',
+                      border: `1px solid ${isSelected ? 'var(--primary)' : 'var(--border-color)'}`,
+                      borderRadius: '8px', padding: '5px 8px', cursor: 'pointer',
+                      color: isSelected ? '#fff' : 'var(--text-muted)',
+                      fontSize: '10px', fontWeight: '800', textTransform: 'uppercase',
+                      display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0
+                    }}
+                  >
+                    <FileText size={11} /> Report
+                  </button>
+                </div>
+
+                {/* Progress Report Panel */}
+                {isSelected && (
+                  <div style={{ padding: '0 14px 14px', borderTop: '1px solid var(--border-color)', paddingTop: '12px' }}>
+                    <label style={{ fontSize: '10px', fontWeight: '900', textTransform: 'uppercase', color: 'var(--text-muted)', display: 'block', marginBottom: '8px', letterSpacing: '0.08em' }}>
+                      Progress Report to Manager
+                    </label>
+                    <textarea
+                      value={progressNote}
+                      onChange={e => setProgressNote(e.target.value)}
+                      placeholder={`Describe progress on "${task.title}"...`}
+                      rows={3}
+                      style={{
+                        width: '100%', background: 'var(--bg-app)', border: '1px solid var(--border-color)',
+                        borderRadius: '10px', padding: '10px 12px', color: 'var(--text-main)',
+                        fontSize: '13px', fontWeight: '500', outline: 'none', resize: 'none',
+                        lineHeight: '1.5', boxSizing: 'border-box', fontFamily: 'inherit'
+                      }}
+                    />
+                    <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                      <button
+                        onClick={() => handleSubmitReport(task)}
+                        disabled={!progressNote.trim() || submitting}
+                        style={{
+                          flex: 1, padding: '9px', background: progressNote.trim() ? 'var(--primary)' : 'var(--bg-light)',
+                          border: 'none', borderRadius: '9px', color: progressNote.trim() ? '#fff' : 'var(--text-muted)',
+                          cursor: progressNote.trim() ? 'pointer' : 'not-allowed', fontWeight: '900',
+                          fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', transition: 'all 0.2s'
+                        }}
+                      >
+                        {submitting ? 'Sending...' : '📤 Send Report'}
+                      </button>
+                      <button
+                        onClick={() => { setSelectedTask(null); setProgressNote(''); }}
+                        style={{ padding: '9px 14px', background: 'transparent', border: '1px solid var(--border-color)', borderRadius: '9px', color: 'var(--text-muted)', cursor: 'pointer', fontWeight: '700', fontSize: '11px' }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ProjectsTasksContent() {
   const [projects, setProjects] = useState([]);
   const [selectedProject, setSelectedProject] = useState(null);
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [tasksLoading, setTasksLoading] = useState(false);
+  const [showNewProjectModal, setShowNewProjectModal] = useState(false);
+  const [showNewTaskModal, setShowNewTaskModal] = useState(false);
+  const [newProjectName, setNewProjectName] = useState('');
+  const [newProjectDesc, setNewProjectDesc] = useState('');
+  const [newTaskTitle, setNewTaskTitle] = useState('');
+
+  const loadProjects = useCallback(async () => {
+    try {
+      setLoading(true);
+      const data = await api.getProjects();
+      setProjects(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Failed to load projects:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    const loadProjects = async () => {
-      try {
-        setLoading(true);
-        const res = await fetch('/api/v1/projects', {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` }
-        });
-        const data = await res.json();
-        setProjects(Array.isArray(data) ? data : []);
-      } catch (err) {
-        console.error('Failed to load projects:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
     loadProjects();
-  }, []);
+  }, [loadProjects]);
 
   const loadTasks = async (projectId) => {
     try {
       setTasksLoading(true);
-      const res = await fetch(`/api/v1/projects/${projectId}/tasks`, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` }
-      });
-      const data = await res.json();
+      const data = await api.getProjectTasks(projectId);
       setTasks(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Failed to load tasks:', err);
@@ -4978,6 +5638,41 @@ function ProjectsTasksContent() {
     loadTasks(p.id);
   };
 
+  const handleCreateProject = async () => {
+    if (!newProjectName.trim()) return;
+    try {
+      await api.createProject({ name: newProjectName, description: newProjectDesc });
+      setNewProjectName('');
+      setNewProjectDesc('');
+      setShowNewProjectModal(false);
+      loadProjects();
+    } catch (err) {
+      alert('Failed to create project');
+    }
+  };
+
+  const handleCreateTask = async () => {
+    if (!newTaskTitle.trim() || !selectedProject) return;
+    try {
+      await api.createTask(selectedProject.id, { title: newTaskTitle });
+      setNewTaskTitle('');
+      setShowNewTaskModal(false);
+      loadTasks(selectedProject.id);
+    } catch (err) {
+      alert('Failed to create task');
+    }
+  };
+
+  const toggleLocalTask = async (task) => {
+    try {
+      const newStatus = task.status === 'done' ? 'todo' : 'done';
+      await api.updateTask(task.id, { status: newStatus });
+      setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: newStatus } : t));
+    } catch (err) {
+      alert('Failed to update task');
+    }
+  };
+
   const getStatusColor = (status) => {
     switch (status) {
       case 'active': case 'in_progress': return '#10b981';
@@ -4989,44 +5684,152 @@ function ProjectsTasksContent() {
   };
 
   return (
-    <div style={{ padding: '30px', color: 'var(--text-main)', height: '100%', display: 'flex', gap: '30px', maxWidth: '1400px', margin: '0 auto', width: '100%' }}>
-      <div style={{ width: selectedProject ? '350px' : '100%', display: 'flex', flexDirection: 'column' }}>
-        <h2 style={{ fontSize: '32px', margin: '0 0 20px 0', fontWeight: '800', color: 'var(--text-main)' }}>Secure Projects</h2>
-        {loading ? <div style={{ color: 'var(--text-muted)' }}>Loading...</div> : (
-          <div style={{ display: 'grid', gridTemplateColumns: selectedProject ? '1fr' : 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px', overflowY: 'auto' }}>
-            {projects.map(p => (
-              <div key={p.id} onClick={() => handleProjectClick(p)} style={{ background: 'var(--bg-panel)', padding: '24px', borderRadius: '24px', border: `1px solid ${selectedProject?.id === p.id ? '#667eea' : 'var(--border-color)'}`, cursor: 'pointer', transition: 'all 0.2s' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px' }}>
-                  <span style={{ fontSize: '10px', fontWeight: '800', textTransform: 'uppercase', color: getStatusColor(p.status), background: `${getStatusColor(p.status)}15`, padding: '4px 8px', borderRadius: '6px' }}>{p.status}</span>
-                  <Layers size={16} color="#8b98a5" />
-                </div>
-                <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '700', color: 'var(--text-main)' }}>{p.name}</h3>
-                <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', color: 'var(--text-muted)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Clock size={14} /> {p.deadline ? new Date(p.deadline).toLocaleDateString() : 'N/A'}</div>
-                  <ChevronRight size={16} />
-                </div>
-              </div>
-            ))}
+    <div style={{ padding: '30px', color: 'var(--text-main)', height: '100%', display: 'flex', gap: '40px', maxWidth: '1600px', margin: '0 auto', width: '100%' }}>
+      {/* Left Column: Projects List */}
+      <div style={{ width: '350px', display: 'flex', flexDirection: 'column', gap: '30px' }}>
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+            <h2 style={{ fontSize: '28px', margin: 0, fontWeight: '900', color: 'var(--text-main)', letterSpacing: '-0.5px' }}>Secure Projects</h2>
+            <button
+              onClick={() => setShowNewProjectModal(true)}
+              style={{ width: '36px', height: '36px', background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(0, 123, 255, 0.3)' }}
+            >
+              <Plus size={20} />
+            </button>
           </div>
-        )}
-      </div>
-      {selectedProject && (
-        <div style={{ flex: 1, background: 'var(--bg-panel)', borderRadius: '24px', padding: '30px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
-            <h2 style={{ margin: 0, color: 'var(--text-main)' }}>{selectedProject.name}</h2>
-            <button onClick={() => setSelectedProject(null)} style={{ background: 'transparent', border: 'none', color: 'var(--text-main)', cursor: 'pointer' }}><X size={24} /></button>
-          </div>
-          {tasksLoading ? <div style={{ color: '#8b98a5' }}>Loading...</div> : (
-            <div style={{ display: 'grid', gap: '12px' }}>
-              {tasks.length > 0 ? tasks.map(t => (
-                <div key={t.id} style={{ background: '#0e1621', padding: '16px', borderRadius: '14px', border: '1px solid #2a3441', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <div style={{ width: '18px', height: '18px', borderRadius: '50%', border: '2px solid #667eea', background: t.status === 'done' ? '#667eea' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{t.status === 'done' && <Check size={12} />}</div>
-                  <div>{t.title}</div>
+
+          {loading ? <div style={{ color: 'var(--text-muted)' }}>Decrypting projects...</div> : (
+            <div style={{ display: 'grid', gap: '15px', overflowY: 'auto', maxHeight: '400px', paddingRight: '10px' }}>
+              {projects.map(p => (
+                <div key={p.id} onClick={() => handleProjectClick(p)} style={{ background: 'var(--bg-panel)', padding: '20px', borderRadius: '20px', border: `1px solid ${selectedProject?.id === p.id ? 'var(--primary)' : 'var(--border-color)'}`, cursor: 'pointer', transition: 'all 0.2s', boxShadow: selectedProject?.id === p.id ? '0 8px 20px rgba(0, 0, 0, 0.1)' : 'none' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
+                    <span style={{ fontSize: '9px', fontWeight: '900', textTransform: 'uppercase', color: getStatusColor(p.status), background: `${getStatusColor(p.status)}15`, padding: '4px 8px', borderRadius: '6px', letterSpacing: '0.5px' }}>{p.status}</span>
+                    <Layers size={14} color="#8b98a5" />
+                  </div>
+                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '800', color: 'var(--text-main)' }}>{p.name}</h3>
+                  <div style={{ marginTop: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11px', color: 'var(--text-muted)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><Clock size={12} /> {p.deadline ? new Date(p.deadline).toLocaleDateString() : 'Active'}</div>
+                    <ChevronRight size={14} />
+                  </div>
                 </div>
-              )) : <div style={{ color: '#8b98a5' }}>No tasks found in archives.</div>}
+              ))}
+              {projects.length === 0 && <div style={{ color: 'var(--text-muted)', fontSize: '12px', padding: '10px' }}>No secure projects initialized.</div>}
             </div>
           )}
         </div>
+
+        <div style={{ height: '1px', background: 'var(--border-color)' }} />
+        
+        <MyTasksView />
+      </div>
+
+      {/* Right Column: Project Details & Tasks */}
+      <div style={{ flex: 1, position: 'relative' }}>
+        {selectedProject ? (
+          <div style={{ background: 'var(--bg-panel)', borderRadius: '32px', padding: '40px', border: '1px solid var(--border-color)', height: '100%', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 40px rgba(0,0,0,0.1)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '30px' }}>
+              <div>
+                <h2 style={{ fontSize: '32px', fontWeight: '900', margin: 0, color: 'var(--text-main)' }}>{selectedProject.name}</h2>
+                <p style={{ margin: '10px 0 0 0', color: 'var(--text-muted)', fontSize: '15px', fontWeight: '500', maxWidth: '600px', lineHeight: '1.5' }}>{selectedProject.description}</p>
+              </div>
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <button
+                  onClick={() => setShowNewTaskModal(true)}
+                  style={{ padding: '10px 20px', background: 'var(--bg-selected)', color: 'var(--primary)', border: 'none', borderRadius: '14px', cursor: 'pointer', fontWeight: '800', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}
+                >
+                  <Plus size={16} /> Add Task
+                </button>
+                <button onClick={() => setSelectedProject(null)} style={{ background: 'var(--bg-light)', border: 'none', color: 'var(--text-main)', width: '40px', height: '40px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><X size={20} /></button>
+              </div>
+            </div>
+
+            <div style={{ height: '1px', background: 'var(--border-color)', marginBottom: '30px' }} />
+
+            {tasksLoading ? <div style={{ color: 'var(--text-muted)' }}>Accessing archives...</div> : (
+              <div style={{ display: 'grid', gap: '15px', overflowY: 'auto' }}>
+                {tasks.length > 0 ? tasks.map(t => (
+                  <div key={t.id} style={{ background: 'var(--bg-app)', padding: '20px', borderRadius: '20px', border: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', gap: '15px', transition: 'all 0.2s' }}>
+                    <div 
+                      onClick={() => toggleLocalTask(t)}
+                      style={{ width: '24px', height: '24px', borderRadius: '8px', border: `2px solid ${t.status === 'done' ? 'var(--primary)' : 'var(--border-color)'}`, background: t.status === 'done' ? 'var(--primary)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                    >
+                      {t.status === 'done' && <Check size={16} color="#fff" />}
+                    </div>
+                    <div>
+                      <div style={{ color: 'var(--text-main)', fontWeight: '700', fontSize: '15px', textDecoration: t.status === 'done' ? 'line-through' : 'none', opacity: t.status === 'done' ? 0.6 : 1 }}>{t.title}</div>
+                      {t.priority && <span style={{ fontSize: '9px', fontWeight: '900', textTransform: 'uppercase', color: '#ef4444', marginTop: '4px', display: 'inline-block' }}>{t.priority} priority</span>}
+                    </div>
+                  </div>
+                )) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px', color: 'var(--text-muted)', textAlign: 'center' }}>
+                    <div style={{ opacity: 0.1, marginBottom: '20px' }}><Layers size={64} /></div>
+                    <div style={{ fontWeight: '800', fontSize: '18px', color: 'var(--text-main)' }}>No Tasks found in Secure Vault</div>
+                    <div style={{ fontSize: '14px', marginTop: '5px' }}>Start by adding a new assignment to this project.</div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-panel)', borderRadius: '32px', border: '1px dashed var(--border-color)', color: 'var(--text-muted)' }}>
+            <Shield size={48} style={{ opacity: 0.2, marginBottom: '20px' }} />
+            <h3 style={{ fontSize: '20px', fontWeight: '800', color: 'var(--text-main)' }}>Select a Project to View Intelligence</h3>
+            <p style={{ fontSize: '14px' }}>Click on a project card to view active tasks and status reports.</p>
+          </div>
+        )}
+      </div>
+
+      {showNewProjectModal && (
+        <Modal title="Initialize Secure Project" onClose={() => setShowNewProjectModal(false)}>
+          <div style={{ padding: '25px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <div>
+              <label style={{ fontSize: '12px', fontWeight: '900', textTransform: 'uppercase', color: 'var(--text-muted)', display: 'block', marginBottom: '8px' }}>Project Codename</label>
+              <input
+                placeholder="Enter project name..."
+                value={newProjectName}
+                onChange={e => setNewProjectName(e.target.value)}
+                style={{ width: '100%', padding: '14px', borderRadius: '12px', background: 'var(--bg-app)', border: '1px solid var(--border-color)', color: 'var(--text-main)', outline: 'none', fontWeight: '600' }}
+              />
+            </div>
+            <div>
+              <label style={{ fontSize: '12px', fontWeight: '900', textTransform: 'uppercase', color: 'var(--text-muted)', display: 'block', marginBottom: '8px' }}>Briefing / Description</label>
+              <textarea
+                placeholder="Describe the project objective..."
+                value={newProjectDesc}
+                onChange={e => setNewProjectDesc(e.target.value)}
+                style={{ width: '100%', padding: '14px', borderRadius: '12px', background: 'var(--bg-app)', border: '1px solid var(--border-color)', color: 'var(--text-main)', height: '120px', outline: 'none', resize: 'none', fontWeight: '500' }}
+              />
+            </div>
+            <button
+              onClick={handleCreateProject}
+              style={{ padding: '16px', background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: '14px', fontWeight: '900', cursor: 'pointer', fontSize: '15px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', marginTop: '10px' }}
+            >
+              <ShieldCheck size={20} /> Initialize Security Project
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {showNewTaskModal && (
+        <Modal title="Add Operational Task" onClose={() => setShowNewTaskModal(false)}>
+          <div style={{ padding: '25px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <div>
+              <label style={{ fontSize: '12px', fontWeight: '900', textTransform: 'uppercase', color: 'var(--text-muted)', display: 'block', marginBottom: '8px' }}>Task Description</label>
+              <input
+                placeholder="What needs to be done?"
+                value={newTaskTitle}
+                onChange={e => setNewTaskTitle(e.target.value)}
+                style={{ width: '100%', padding: '14px', borderRadius: '12px', background: 'var(--bg-app)', border: '1px solid var(--border-color)', color: 'var(--text-main)', outline: 'none', fontWeight: '600' }}
+              />
+            </div>
+            <button
+              onClick={handleCreateTask}
+              style={{ padding: '16px', background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: '14px', fontWeight: '900', cursor: 'pointer', fontSize: '15px' }}
+            >
+              Deploy Task to Project
+            </button>
+          </div>
+        </Modal>
       )}
     </div>
   );

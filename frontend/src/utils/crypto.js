@@ -16,6 +16,125 @@ const AES_ALGORITHM = {
     length: 256
 };
 
+const PBKDF2_ITERATIONS = 310_000; // OWASP 2023 recommended minimum
+
+// ============================================================
+// 🔑 PASSWORD-DERIVED KEY FUNCTIONS (PBKDF2)
+// ============================================================
+
+/**
+ * Derive a 256-bit AES-GCM key from a password + salt using PBKDF2.
+ * The SAME password + SAME salt always produces the SAME key.
+ */
+export async function deriveAesKeyFromPassword(password, saltBase64) {
+    const salt = base64ToArrayBuffer(saltBase64);
+    const passwordKey = await window.crypto.subtle.importKey(
+        'raw',
+        new TextEncoder().encode(password),
+        'PBKDF2',
+        false,
+        ['deriveKey']
+    );
+    return window.crypto.subtle.deriveKey(
+        { name: 'PBKDF2', salt, iterations: PBKDF2_ITERATIONS, hash: 'SHA-256' },
+        passwordKey,
+        { name: 'AES-GCM', length: 256 },
+        false,
+        ['encrypt', 'decrypt']
+    );
+}
+
+/**
+ * Encrypt the RSA private key (base64) with a password-derived AES key.
+ * Returns { encryptedPrivateKey, salt, iv } all as base64 strings.
+ */
+export async function encryptPrivateKeyWithPassword(privateKeyBase64, password) {
+    const salt = window.crypto.getRandomValues(new Uint8Array(32));
+    const iv   = window.crypto.getRandomValues(new Uint8Array(12));
+    const saltB64 = arrayBufferToBase64(salt);
+
+    const aesKey = await deriveAesKeyFromPassword(password, saltB64);
+    const privateKeyBytes = new TextEncoder().encode(privateKeyBase64);
+
+    const encrypted = await window.crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv },
+        aesKey,
+        privateKeyBytes
+    );
+
+    return {
+        encryptedPrivateKey: arrayBufferToBase64(encrypted),
+        salt: saltB64,
+        iv: arrayBufferToBase64(iv),
+    };
+}
+
+/**
+ * Decrypt the RSA private key using password + stored salt + iv.
+ * Throws if password is wrong.
+ */
+export async function decryptPrivateKeyWithPassword(encryptedPrivateKeyBase64, password, saltBase64, ivBase64) {
+    const aesKey = await deriveAesKeyFromPassword(password, saltBase64);
+    const decrypted = await window.crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv: base64ToArrayBuffer(ivBase64) },
+        aesKey,
+        base64ToArrayBuffer(encryptedPrivateKeyBase64)
+    );
+    return new TextDecoder().decode(decrypted);
+}
+
+/**
+ * Full E2EE Setup (first time):
+ * 1. Generate RSA-2048 key pair
+ * 2. Encrypt private key with password → store in localStorage
+ * 3. Return public key (caller should upload to backend)
+ */
+export async function setupE2EEWithPassword(userId, password) {
+    const { publicKey, privateKey } = await generateKeyPair();
+    const encrypted = await encryptPrivateKeyWithPassword(privateKey, password);
+
+    // Store the encrypted bundle in localStorage — only this device
+    localStorage.setItem(`e2ee_bundle_${userId}`, JSON.stringify({
+        encryptedPrivateKey: encrypted.encryptedPrivateKey,
+        salt: encrypted.salt,
+        iv: encrypted.iv,
+        publicKey, // cached for convenience
+    }));
+
+    return { publicKey, privateKey };
+}
+
+/**
+ * Unlock E2EE on login:
+ * 1. Load encrypted bundle from localStorage
+ * 2. Decrypt private key with password
+ * 3. Return privateKey (plain) for use in decryption
+ *
+ * Returns null if no bundle found (need setup) or throws if password wrong.
+ */
+export async function unlockE2EEWithPassword(userId, password) {
+    const raw = localStorage.getItem(`e2ee_bundle_${userId}`);
+    if (!raw) return null; // no bundle — need setupE2EEWithPassword
+
+    const bundle = JSON.parse(raw);
+    // Throws DOMException if password is wrong (AES-GCM auth tag fails)
+    const privateKey = await decryptPrivateKeyWithPassword(
+        bundle.encryptedPrivateKey,
+        password,
+        bundle.salt,
+        bundle.iv
+    );
+    return { privateKey, publicKey: bundle.publicKey };
+}
+
+/**
+ * Check if a user already has an E2EE bundle stored.
+ */
+export function hasE2EEBundle(userId) {
+    return Boolean(localStorage.getItem(`e2ee_bundle_${userId}`));
+}
+
+
 /**
  * Generates a new RSA-OAEP key pair for E2EE
  */
