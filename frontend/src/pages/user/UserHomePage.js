@@ -922,29 +922,46 @@ export default function UserHomePage() {
             console.log("[E2EE] Attempting encryption for conversation type:", conv.conversationType);
             try {
               const keysToEncryptFor = {};
-              const myPublicKey = user.publicKey || JSON.parse(localStorage.getItem('user') || '{}')?.publicKey;
-              if (myPublicKey) keysToEncryptFor[String(user.id)] = myPublicKey;
+
+              // 🔑 Self-key: read from LOCAL bundle (matches current private key 100%)
+              // Falls back to user.publicKey from profile if bundle not found
+              const e2eeBundleRaw = localStorage.getItem(`e2ee_bundle_${user.id}`);
+              const selfPublicKey = e2eeBundleRaw
+                ? JSON.parse(e2eeBundleRaw).publicKey
+                : (user.publicKey || JSON.parse(localStorage.getItem('user') || '{}')?.publicKey);
+
+              if (selfPublicKey) {
+                keysToEncryptFor[String(user.id)] = selfPublicKey;
+                console.log('[E2EE] Self-key loaded from bundle for user', user.id);
+              } else {
+                console.warn('[E2EE] No self public key — sender will not be able to decrypt own messages!');
+              }
 
               if (conv.conversationType === 'direct' && conv.otherUser?.publicKey) {
-                // Direct chat: encrypt for recipient + self
+                // Direct chat: encrypt for recipient
                 keysToEncryptFor[String(conv.otherUser.id)] = conv.otherUser.publicKey;
               } else if (conv.conversationType === 'group' && conv.members && conv.members.length > 0) {
-                // Group chat: encrypt for all members who have a public key
+                // Group chat: encrypt for all members with a public key
                 for (const member of conv.members) {
-                  if (member.publicKey && member.id !== user.id) {
+                  if (member.publicKey && String(member.id) !== String(user.id)) {
                     keysToEncryptFor[String(member.id)] = member.publicKey;
                   }
                 }
               }
 
-              // Only encrypt if we have at least one recipient key
+              // Only encrypt if we have at least one OTHER recipient key
               const recipientCount = Object.keys(keysToEncryptFor).filter(k => k !== String(user.id)).length;
               if (recipientCount > 0) {
                 const hybridPayload = await encryptHybrid(finalContent, keysToEncryptFor);
                 finalContent = `[E2EE]:${JSON.stringify(hybridPayload)}`;
-                console.log(`[E2EE] Message encrypted for ${Object.keys(keysToEncryptFor).length} recipients`);
+                console.log(`[E2EE] Encrypted for ${Object.keys(keysToEncryptFor).length} recipients (self + ${recipientCount} others)`);
+              } else if (selfPublicKey) {
+                // Self-conversation or no other keys: still encrypt for self
+                const hybridPayload = await encryptHybrid(finalContent, keysToEncryptFor);
+                finalContent = `[E2EE]:${JSON.stringify(hybridPayload)}`;
+                console.log('[E2EE] Encrypted for self only (no other recipient keys)');
               } else {
-                console.warn("[E2EE] No recipient public keys found — sending in plain text");
+                console.warn("[E2EE] No keys available — sending plain text");
               }
             } catch (e) {
               console.error("[E2EE] Encryption failed. Falling back to plain text.", e);
