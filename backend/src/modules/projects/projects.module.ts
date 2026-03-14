@@ -5,9 +5,13 @@ import { Project } from '../../database/entities/team-collaboration/project.enti
 import { ProjectTask } from '../../database/entities/team-collaboration/project-task.entity';
 import { ProjectsService } from './projects.service';
 import { ProjectsController } from './projects.controller';
+import { ChatModule } from '../chat/chat.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Project, ProjectTask])],
+  imports: [
+    TypeOrmModule.forFeature([Project, ProjectTask]),
+    ChatModule,
+  ],
   providers: [ProjectsService],
   controllers: [ProjectsController],
 })

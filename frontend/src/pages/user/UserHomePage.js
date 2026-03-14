@@ -17,6 +17,7 @@ export default function UserHomePage() {
 
   // 1. State Declarations
   const [activeTab, setActiveTab] = useState('messages');
+  const [taskNotification, setTaskNotification] = useState({ show: false, task: null, project: null, message: '' });
   const [selectedChat, setSelectedChat] = useState(null);
   const [conversations, setConversations] = useState([]);
   const [messages, setMessages] = useState([]);
@@ -241,6 +242,21 @@ export default function UserHomePage() {
 
         socketService.onNotification(() => {
           loadUnreadCount();
+        });
+
+        // 🔔 Task Assignment Notification
+        socketService.onTaskAssigned((data) => {
+          console.log('[Socket] Task assigned notification received:', data);
+          // Show a toast/banner notification
+          setTaskNotification({
+            show: true,
+            task: data.task,
+            project: data.project,
+            message: data.message,
+          });
+          // Switch to projects tab so the user can see the new task
+          // Auto-hide after 8 seconds
+          setTimeout(() => setTaskNotification(prev => ({ ...prev, show: false })), 8000);
         });
 
         socketService.onReactionUpdated(({ messageId, reaction, userId }) => {
@@ -1379,6 +1395,72 @@ export default function UserHomePage() {
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
       overflow: 'hidden'
     }}>
+
+      {/* 🔔 Task Assignment Toast Notification */}
+      {taskNotification.show && taskNotification.task && (
+        <div style={{
+          position: 'fixed', top: '20px', right: '20px', zIndex: 99999,
+          background: 'var(--bg-panel)',
+          border: '1px solid var(--primary)',
+          borderRadius: '20px',
+          padding: '18px 20px',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.25), 0 0 0 1px rgba(102,126,234,0.2)',
+          maxWidth: '360px',
+          animation: 'slideInRight 0.4s cubic-bezier(0.4,0,0.2,1)',
+          display: 'flex', flexDirection: 'column', gap: '10px'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{ fontSize: '22px', lineHeight: 1 }}>📋</div>
+              <div>
+                <div style={{ fontSize: '11px', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--primary)', marginBottom: '2px' }}>
+                  New Task Assigned
+                </div>
+                <div style={{ fontSize: '14px', fontWeight: '800', color: 'var(--text-main)' }}>
+                  {taskNotification.task.title}
+                </div>
+              </div>
+            </div>
+            <button onClick={() => setTaskNotification(prev => ({ ...prev, show: false }))}
+              style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '2px' }}>
+              <X size={16} />
+            </button>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            {taskNotification.task.priority && (
+              <span style={{
+                fontSize: '9px', fontWeight: '900', textTransform: 'uppercase',
+                color: { low: '#8b98a5', medium: '#667eea', high: '#f59e0b', critical: '#ef4444' }[taskNotification.task.priority] || '#667eea',
+                background: `${{ low: '#8b98a5', medium: '#667eea', high: '#f59e0b', critical: '#ef4444' }[taskNotification.task.priority] || '#667eea'}15`,
+                padding: '3px 8px', borderRadius: '6px'
+              }}>
+                <Flag size={8} style={{ display: 'inline', marginRight: '3px' }} />{taskNotification.task.priority}
+              </span>
+            )}
+            {taskNotification.project?.name && (
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <Layers size={11} />{taskNotification.project.name}
+              </span>
+            )}
+            {taskNotification.task.dueDate && (
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <Clock size={11} />{new Date(taskNotification.task.dueDate).toLocaleDateString()}
+              </span>
+            )}
+          </div>
+          <button
+            onClick={() => { setActiveTab('projects'); setTaskNotification(prev => ({ ...prev, show: false })); }}
+            style={{
+              background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: '10px',
+              padding: '8px 16px', fontSize: '11px', fontWeight: '900', textTransform: 'uppercase',
+              cursor: 'pointer', letterSpacing: '0.05em', alignSelf: 'flex-start'
+            }}
+          >
+            View My Tasks →
+          </button>
+        </div>
+      )}
+
       {/* SIDEBAR */}
       <div style={{
         width: '64px',

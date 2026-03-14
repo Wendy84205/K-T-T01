@@ -34,11 +34,12 @@ export class ProjectsController {
   }
 
   @Post(':id/tasks')
-  createTask(@Param('id') id: string, @Body() data: any) {
-    return this.projectsService.createTask(id, data);
+  createTask(@Param('id') id: string, @Body() data: any, @Request() req) {
+    // Pass the creatorId so the service can include it in the notification
+    return this.projectsService.createTask(id, data, req.user.userId);
   }
 
-  @Post('tasks/:id') // Using POST for update simplicity or PATCH
+  @Post('tasks/:id')
   updateTask(@Param('id') id: string, @Body() data: any) {
     return this.projectsService.updateTask(id, data);
   }

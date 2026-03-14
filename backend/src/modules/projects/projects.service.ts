@@ -4,6 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Project } from '../../database/entities/team-collaboration/project.entity';
 import { ProjectTask } from '../../database/entities/team-collaboration/project-task.entity';
+import { ChatGateway } from '../chat/chat.gateway';
 
 @Injectable()
 export class ProjectsService {
@@ -12,6 +13,7 @@ export class ProjectsService {
     private projectRepository: Repository<Project>,
     @InjectRepository(ProjectTask)
     private taskRepository: Repository<ProjectTask>,
+    private readonly chatGateway: ChatGateway,
   ) {}
 
   async findAll(userId: string): Promise<Project[]> {
@@ -48,13 +50,57 @@ export class ProjectsService {
     });
   }
 
-  async createTask(projectId: string, data: any): Promise<ProjectTask> {
+  async createTask(projectId: string, data: any, creatorId?: string): Promise<ProjectTask> {
     const task = this.taskRepository.create({
       ...data,
       projectId,
     });
-    const saved = await this.taskRepository.save(task);
-    return saved as unknown as ProjectTask;
+    const saved = await this.taskRepository.save(task) as unknown as ProjectTask;
+
+    // Load full task with relations to get assignee info for notification
+    const fullTask = await this.taskRepository.findOne({
+      where: { id: saved.id },
+      relations: ['assignee', 'project'],
+    });
+
+    // 🔔 Emit Socket.IO notification to the assigned user
+    if (fullTask?.assigneeId) {
+      const projectName = fullTask.project?.name || 'Unknown Project';
+      const taskTitle = fullTask.title;
+
+      console.log(`[Projects] Notifying user ${fullTask.assigneeId} of new task: ${taskTitle}`);
+
+      // Emit to the user's personal socket room (user_{userId})
+      this.chatGateway.server.to(`user_${fullTask.assigneeId}`).emit('task-assigned', {
+        type: 'TASK_ASSIGNED',
+        task: {
+          id: fullTask.id,
+          title: taskTitle,
+          priority: fullTask.priority,
+          dueDate: fullTask.dueDate,
+          status: fullTask.status,
+        },
+        project: {
+          id: projectId,
+          name: projectName,
+        },
+        assignedBy: creatorId || null,
+        message: `You have been assigned a new task: "${taskTitle}" in project "${projectName}"`,
+        createdAt: new Date().toISOString(),
+      });
+
+      // Also emit as a generic notification event to trigger the notification bell
+      this.chatGateway.server.to(`user_${fullTask.assigneeId}`).emit('notification', {
+        type: 'TASK_ASSIGNED',
+        title: '📋 New Task Assigned',
+        message: `"${taskTitle}" — ${projectName}`,
+        taskId: fullTask.id,
+        projectId,
+        createdAt: new Date().toISOString(),
+      });
+    }
+
+    return fullTask || (saved as unknown as ProjectTask);
   }
 
   async findMyTasks(userId: string): Promise<ProjectTask[]> {
@@ -66,10 +112,39 @@ export class ProjectsService {
   }
 
   async updateTask(taskId: string, data: any): Promise<ProjectTask> {
-    const task = await this.taskRepository.findOne({ where: { id: taskId } });
+    const task = await this.taskRepository.findOne({
+      where: { id: taskId },
+      relations: ['project'],
+    });
     if (!task) throw new NotFoundException('Task not found');
-    
-    Object.assign(task, data);
+
+    // Handle progressNote: save with timestamp
+    if (data.progressNote !== undefined && data.progressNote !== null && data.progressNote.trim() !== '') {
+      task.progressNote = data.progressNote.trim();
+      task.lastProgressNoteAt = new Date();
+
+      // 🔔 Notify the project creator/manager about the progress report
+      const projectCreatorId = task.project?.creatorId;
+      if (projectCreatorId && projectCreatorId !== task.assigneeId) {
+        this.chatGateway.server.to(`user_${projectCreatorId}`).emit('notification', {
+          type: 'TASK_PROGRESS_REPORT',
+          title: '📊 Progress Report Received',
+          message: `Task "${task.title}": ${task.progressNote}`,
+          taskId,
+          projectId: task.projectId,
+          createdAt: new Date().toISOString(),
+        });
+      }
+
+      // Remove progressNote from data so it doesn't double-assign
+      const { progressNote, ...rest } = data;
+      Object.assign(task, rest);
+    } else {
+      // Normal update (status change, etc.)
+      const { progressNote, ...rest } = data;
+      Object.assign(task, rest);
+    }
+
     const saved = await this.taskRepository.save(task);
     return saved as unknown as ProjectTask;
   }

@@ -191,6 +191,10 @@ class SocketService {
         this._on('notification', callback);
     }
 
+    onTaskAssigned(callback) {
+        this._on('task-assigned', callback);
+    }
+
     onMessageDeleted(callback) {
         this._on('message_deleted', callback);
     }

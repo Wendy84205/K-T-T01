@@ -31,6 +31,12 @@ export class ProjectTask {
   @Column({ name: 'due_date', type: 'timestamp', nullable: true })
   dueDate: Date;
 
+  @Column({ name: 'progress_note', type: 'text', nullable: true })
+  progressNote: string;
+
+  @Column({ name: 'last_progress_note_at', type: 'timestamp', nullable: true })
+  lastProgressNoteAt: Date;
+
   @Column({ name: 'project_id', type: 'char', length: 36 })
   projectId: string;
 
