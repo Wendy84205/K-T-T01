@@ -5144,8 +5144,8 @@ function E2EEPassphraseModal({ mode, userId, onSuccess, onSkip }) {
 
           {/* Error message */}
           {error && (
-            <div style={{ background: '#ef444415', border: '1px solid #ef444430', borderRadius: '12px', padding: '10px 14px', color: '#ef4444', fontSize: '12px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <AlertTriangle size={14} /> {error}
+            <div style={{ background: '#ef444415', border: '1px solid #ef444430', borderRadius: '12px', padding: '10px 14px', color: '#ef4444', fontSize: '12px', fontWeight: '600' }}>
+              {error}
             </div>
           )}
 
