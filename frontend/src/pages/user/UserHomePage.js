@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Search, Plus, MessageSquare, MoreHorizontal, Phone, Video, Info, Lock, Send, Mic, Image, Paperclip, Smile, Settings, Bell, BellOff, Clock, Shield, LogOut, ChevronLeft, ChevronRight, User, File as FileIcon, Download, Trash2, ShieldCheck, CreditCard, HelpCircle, Key, Eye, EyeOff, Check, CheckCheck, Square, X, Forward, Reply, Edit2, Play, Pause, List, Pin, Star, Cloud, Heart, ChevronDown, Users, MoreVertical, FileText, Camera, MapPin, AlertTriangle, BarChart3, Folder, Maximize2, Minimize2, Briefcase, Layers, Building2, Bold, Italic, Link, Code, AtSign, Hash } from 'lucide-react';
+import { Search, Plus, MessageSquare, MoreHorizontal, Phone, Video, Info, Lock, Send, Mic, Image, Paperclip, Smile, Settings, Bell, BellOff, Clock, Shield, LogOut, ChevronLeft, ChevronRight, User, File as FileIcon, Download, Trash2, ShieldCheck, CreditCard, HelpCircle, Key, Eye, EyeOff, Check, CheckCheck, Square, X, Forward, Reply, Edit2, Play, Pause, List, Pin, Star, Cloud, Heart, ChevronDown, Users, MoreVertical, FileText, Camera, MapPin, AlertTriangle, BarChart3, Folder, Maximize2, Minimize2, Briefcase, Layers, Building2, Bold, Italic, Link, Code, AtSign, Hash, Flag, RefreshCw } from 'lucide-react';
 import api from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
 import { encryptContent, decryptContent, encryptHybrid, decryptHybrid } from "../../utils/crypto";
@@ -5039,51 +5039,232 @@ function AlertsContent({ onUpdateCount }) {
 function MyTasksView() {
   const [myTasks, setMyTasks] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [selectedTask, setSelectedTask] = useState(null);
+  const [progressNote, setProgressNote] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState({});
 
-  useEffect(() => {
-    const loadMyTasks = async () => {
-      try {
-        setLoading(true);
-        const data = await api.getMyTasks();
-        setMyTasks(Array.isArray(data) ? data : []);
-      } catch (err) {
-        console.error('Failed to load my tasks:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadMyTasks();
-  }, []);
-
-  const handleToggleTask = async (task) => {
+  const loadMyTasks = async () => {
     try {
-      const newStatus = task.status === 'done' ? 'todo' : 'done';
-      await api.updateTask(task.id, { status: newStatus });
-      setMyTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: newStatus } : t));
+      setLoading(true);
+      const data = await api.getMyTasks();
+      setMyTasks(Array.isArray(data) ? data : []);
     } catch (err) {
-      alert('Failed to update task');
+      console.error('Failed to load my tasks:', err);
+    } finally {
+      setLoading(false);
     }
   };
 
+  useEffect(() => { loadMyTasks(); }, []);
+
+  const STATUS_CYCLE = { todo: 'in_progress', in_progress: 'done', done: 'todo', pending: 'in_progress', completed: 'done' };
+  const STATUS_LABEL = { todo: 'To Do', in_progress: 'In Progress', done: 'Done', pending: 'Pending', completed: 'Completed' };
+  const STATUS_COLOR = { todo: '#8b98a5', in_progress: '#667eea', done: '#10b981', pending: '#f59e0b', completed: '#10b981' };
+  const PRIORITY_COLOR = { low: '#8b98a5', medium: '#667eea', high: '#f59e0b', critical: '#ef4444' };
+
+  const handleCycleStatus = async (task) => {
+    const newStatus = STATUS_CYCLE[task.status] || 'in_progress';
+    try {
+      await api.updateTask(task.id, { status: newStatus });
+      setMyTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: newStatus } : t));
+      if (selectedTask?.id === task.id) setSelectedTask(prev => ({ ...prev, status: newStatus }));
+    } catch (err) {
+      alert('Failed to update task status');
+    }
+  };
+
+  const handleSubmitReport = async (task) => {
+    if (!progressNote.trim()) return;
+    setSubmitting(true);
+    try {
+      // Report is stored as a task update with a note field, or sent via updateTask
+      await api.updateTask(task.id, {
+        status: task.status,
+        progressNote: progressNote.trim(),
+      });
+      setSubmitted(prev => ({ ...prev, [task.id]: progressNote.trim() }));
+      setProgressNote('');
+      setSelectedTask(null);
+      alert('✅ Progress report submitted to manager!');
+    } catch (err) {
+      alert('Failed to submit report: ' + err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const isOverdue = (task) => {
+    if (!task.dueDate) return false;
+    return new Date(task.dueDate) < new Date() && task.status !== 'done' && task.status !== 'completed';
+  };
+
+  const pendingCount = myTasks.filter(t => t.status !== 'done' && t.status !== 'completed').length;
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-      <h3 style={{ fontSize: '14px', fontWeight: '800', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '10px' }}>Tasks Assigned to Me</h3>
-      {loading ? <div style={{ color: 'var(--text-muted)' }}>Syncing tasks...</div> : (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h3 style={{ fontSize: '11px', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--text-muted)', margin: 0 }}>
+          My Tasks
+        </h3>
+        {pendingCount > 0 && (
+          <span style={{ background: '#ef4444', color: '#fff', fontSize: '9px', fontWeight: '900', padding: '2px 8px', borderRadius: '20px' }}>
+            {pendingCount} Pending
+          </span>
+        )}
+      </div>
+
+      {loading ? (
+        <div style={{ color: 'var(--text-muted)', fontSize: '12px' }}>Syncing tasks...</div>
+      ) : myTasks.length === 0 ? (
+        <div style={{ color: 'var(--text-muted)', fontSize: '12px', padding: '12px', textAlign: 'center', background: 'var(--bg-app)', borderRadius: '12px', border: '1px dashed var(--border-color)' }}>
+          No tasks assigned to you yet.
+        </div>
+      ) : (
         <div style={{ display: 'grid', gap: '10px' }}>
-          {myTasks.length > 0 ? myTasks.map(t => (
-            <div key={t.id} style={{ background: 'var(--bg-panel)', padding: '16px', borderRadius: '16px', border: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', gap: '12px', transition: 'all 0.2s' }}>
-              <div 
-                onClick={() => handleToggleTask(t)}
-                style={{ width: '22px', height: '22px', borderRadius: '6px', border: `2px solid ${t.status === 'done' ? 'var(--primary)' : 'var(--border-color)'}`, background: t.status === 'done' ? 'var(--primary)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
-              >
-                {t.status === 'done' && <Check size={14} color="#fff" />}
+          {myTasks.map(task => {
+            const overdue = isOverdue(task);
+            const statusColor = STATUS_COLOR[task.status] || '#8b98a5';
+            const priorityColor = PRIORITY_COLOR[task.priority] || '#8b98a5';
+            const isSelected = selectedTask?.id === task.id;
+            return (
+              <div key={task.id} style={{
+                background: 'var(--bg-panel)',
+                borderRadius: '16px',
+                border: `1px solid ${overdue ? '#ef444440' : isSelected ? 'var(--primary)' : 'var(--border-color)'}`,
+                overflow: 'hidden',
+                transition: 'all 0.2s'
+              }}>
+                {/* Task Card Row */}
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '14px 14px 10px' }}>
+                  {/* Status Toggle Button */}
+                  <button
+                    onClick={() => handleCycleStatus(task)}
+                    title={`Status: ${STATUS_LABEL[task.status]} — Click to advance`}
+                    style={{
+                      width: '22px', height: '22px', borderRadius: '6px',
+                      border: `2px solid ${statusColor}`,
+                      background: task.status === 'done' || task.status === 'completed' ? statusColor : 'transparent',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      cursor: 'pointer', flexShrink: 0, marginTop: '2px'
+                    }}
+                  >
+                    {(task.status === 'done' || task.status === 'completed') && <Check size={12} color="#fff" />}
+                    {task.status === 'in_progress' && <RefreshCw size={11} color={statusColor} style={{ animationDuration: '2s' }} className="animate-spin" />}
+                  </button>
+
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '4px' }}>
+                      <span style={{
+                        color: 'var(--text-main)', fontWeight: '700', fontSize: '13px',
+                        textDecoration: task.status === 'done' || task.status === 'completed' ? 'line-through' : 'none',
+                        opacity: task.status === 'done' || task.status === 'completed' ? 0.55 : 1,
+                        lineHeight: '1.4'
+                      }}>
+                        {task.title}
+                      </span>
+                      {overdue && (
+                        <span style={{ fontSize: '9px', fontWeight: '900', color: '#ef4444', background: '#ef444415', padding: '2px 6px', borderRadius: '6px', flexShrink: 0 }}>
+                          OVERDUE
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Meta row */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px', flexWrap: 'wrap' }}>
+                      {/* Status badge */}
+                      <span style={{ fontSize: '9px', fontWeight: '900', textTransform: 'uppercase', color: statusColor, background: `${statusColor}15`, padding: '2px 7px', borderRadius: '6px' }}>
+                        {STATUS_LABEL[task.status] || task.status}
+                      </span>
+                      {/* Priority badge */}
+                      {task.priority && (
+                        <span style={{ fontSize: '9px', fontWeight: '900', textTransform: 'uppercase', color: priorityColor, background: `${priorityColor}15`, padding: '2px 7px', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                          <Flag size={8} />{task.priority}
+                        </span>
+                      )}
+                      {/* Due date */}
+                      {task.dueDate && (
+                        <span style={{ fontSize: '10px', fontWeight: '700', color: overdue ? '#ef4444' : 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                          <Clock size={10} />{new Date(task.dueDate).toLocaleDateString()}
+                        </span>
+                      )}
+                      {/* Project name */}
+                      {task.project?.name && (
+                        <span style={{ fontSize: '10px', fontWeight: '600', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                          <Layers size={10} />{task.project.name}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Show submitted report note */}
+                    {submitted[task.id] && (
+                      <div style={{ marginTop: '8px', background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: '8px', padding: '7px 10px', fontSize: '11px', color: '#10b981', fontWeight: '600' }}>
+                        ✅ Report sent: "{submitted[task.id]}"
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Report button */}
+                  <button
+                    onClick={() => { setSelectedTask(isSelected ? null : task); setProgressNote(''); }}
+                    title="Submit Progress Report"
+                    style={{
+                      background: isSelected ? 'var(--primary)' : 'var(--bg-app)',
+                      border: `1px solid ${isSelected ? 'var(--primary)' : 'var(--border-color)'}`,
+                      borderRadius: '8px', padding: '5px 8px', cursor: 'pointer',
+                      color: isSelected ? '#fff' : 'var(--text-muted)',
+                      fontSize: '10px', fontWeight: '800', textTransform: 'uppercase',
+                      display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0
+                    }}
+                  >
+                    <FileText size={11} /> Report
+                  </button>
+                </div>
+
+                {/* Progress Report Panel */}
+                {isSelected && (
+                  <div style={{ padding: '0 14px 14px', borderTop: '1px solid var(--border-color)', paddingTop: '12px' }}>
+                    <label style={{ fontSize: '10px', fontWeight: '900', textTransform: 'uppercase', color: 'var(--text-muted)', display: 'block', marginBottom: '8px', letterSpacing: '0.08em' }}>
+                      Progress Report to Manager
+                    </label>
+                    <textarea
+                      value={progressNote}
+                      onChange={e => setProgressNote(e.target.value)}
+                      placeholder={`Describe progress on "${task.title}"...`}
+                      rows={3}
+                      style={{
+                        width: '100%', background: 'var(--bg-app)', border: '1px solid var(--border-color)',
+                        borderRadius: '10px', padding: '10px 12px', color: 'var(--text-main)',
+                        fontSize: '13px', fontWeight: '500', outline: 'none', resize: 'none',
+                        lineHeight: '1.5', boxSizing: 'border-box', fontFamily: 'inherit'
+                      }}
+                    />
+                    <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                      <button
+                        onClick={() => handleSubmitReport(task)}
+                        disabled={!progressNote.trim() || submitting}
+                        style={{
+                          flex: 1, padding: '9px', background: progressNote.trim() ? 'var(--primary)' : 'var(--bg-light)',
+                          border: 'none', borderRadius: '9px', color: progressNote.trim() ? '#fff' : 'var(--text-muted)',
+                          cursor: progressNote.trim() ? 'pointer' : 'not-allowed', fontWeight: '900',
+                          fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', transition: 'all 0.2s'
+                        }}
+                      >
+                        {submitting ? 'Sending...' : '📤 Send Report'}
+                      </button>
+                      <button
+                        onClick={() => { setSelectedTask(null); setProgressNote(''); }}
+                        style={{ padding: '9px 14px', background: 'transparent', border: '1px solid var(--border-color)', borderRadius: '9px', color: 'var(--text-muted)', cursor: 'pointer', fontWeight: '700', fontSize: '11px' }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ color: 'var(--text-main)', fontWeight: '700', fontSize: '14px', textDecoration: t.status === 'done' ? 'line-through' : 'none', opacity: t.status === 'done' ? 0.6 : 1 }}>{t.title}</div>
-                <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '4px' }}>Project: {t.project?.name || 'Unknown'}</div>
-              </div>
-            </div>
-          )) : <div style={{ color: 'var(--text-muted)', fontSize: '12px', padding: '10px' }}>No active assignments found.</div>}
+            );
+          })}
         </div>
       )}
     </div>
