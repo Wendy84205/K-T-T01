@@ -81,7 +81,27 @@ export default function DocumentsPage() {
   }
 
   return (
-    <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-500">
+    <div
+      className="space-y-8 animate-in slide-in-from-bottom-4 duration-500"
+      style={{ position: 'relative' }}
+      onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
+      onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setDragActive(false); }}
+      onDrop={(e) => { e.preventDefault(); setDragActive(false); handleUpload(e); }}
+    >
+      {/* Full-page drag overlay */}
+      {dragActive && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(102,126,234,0.12)',
+          border: '3px dashed var(--primary)', borderRadius: '24px',
+          zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          backdropFilter: 'blur(4px)', pointerEvents: 'none'
+        }}>
+          <div style={{ textAlign: 'center', color: 'var(--primary)' }}>
+            <Upload size={48} style={{ margin: '0 auto 12px', display: 'block' }} />
+            <p style={{ fontWeight: 900, fontSize: '16px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Drop to Upload & Encrypt</p>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>

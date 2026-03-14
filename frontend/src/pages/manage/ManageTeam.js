@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Search, MessageSquare, Loader2, Users } from 'lucide-react';
+import { Search, MessageSquare, Loader2, Users, CheckCircle2, Clock, AlertCircle } from 'lucide-react';
 import api from '../../utils/api';
 
 export default function ManageTeam({ onStartChat }) {
     const [users, setUsers] = useState([]);
+    const [taskMap, setTaskMap] = useState({}); // userId -> { total, done }
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
 
@@ -11,8 +12,23 @@ export default function ManageTeam({ onStartChat }) {
         const loadUsers = async () => {
             try {
                 setLoading(true);
-                const data = await api.getChatUsers();
+                const [data, projects] = await Promise.all([
+                    api.getChatUsers().catch(() => []),
+                    api.getProjects().catch(() => []),
+                ]);
                 setUsers(data || []);
+
+                // Build task map: userId -> { total, done }
+                const map = {};
+                (projects || []).forEach(p => {
+                    (p.tasks || []).forEach(t => {
+                        if (!t.assigneeId) return;
+                        if (!map[t.assigneeId]) map[t.assigneeId] = { total: 0, done: 0 };
+                        map[t.assigneeId].total++;
+                        if (t.status === 'done' || t.status === 'completed') map[t.assigneeId].done++;
+                    });
+                });
+                setTaskMap(map);
             } catch (err) {
                 console.error('Failed to load team users:', err);
             } finally {
@@ -120,10 +136,33 @@ export default function ManageTeam({ onStartChat }) {
                                 fontSize: '11px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '6px',
                                 textTransform: 'uppercase', tracking: '0.05em'
                             }}>
-                                <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'currentColor', shadow: '0 0 8px currentColor' }} />
+                                <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'currentColor' }} />
                                 {u.status === 'active' ? 'Operational' : 'Restricted'}
                             </span>
                         </div>
+
+                        {/* Task workload indicator */}
+                        {taskMap[u.id] ? (
+                            <div style={{ marginBottom: '20px', background: 'var(--bg-app)', borderRadius: '12px', padding: '12px 14px', border: '1px solid var(--border-color)' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                    <span style={{ fontSize: '10px', fontWeight: '900', textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.08em' }}>Task Workload</span>
+                                    <span style={{ fontSize: '11px', fontWeight: '800', color: 'var(--text-main)' }}>
+                                        {taskMap[u.id].done}/{taskMap[u.id].total} Done
+                                    </span>
+                                </div>
+                                <div style={{ height: '5px', background: 'var(--bg-light)', borderRadius: '3px', overflow: 'hidden' }}>
+                                    <div style={{
+                                        height: '100%', borderRadius: '3px', transition: 'width 0.6s ease',
+                                        width: `${Math.round((taskMap[u.id].done / taskMap[u.id].total) * 100)}%`,
+                                        background: taskMap[u.id].done === taskMap[u.id].total ? '#10b981' : 'var(--primary)'
+                                    }} />
+                                </div>
+                            </div>
+                        ) : (
+                            <div style={{ marginBottom: '20px', fontSize: '11px', color: 'var(--text-muted)', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <CheckCircle2 size={12} /> No tasks assigned
+                            </div>
+                        )}
 
                         <button
                             onClick={() => onStartChat?.(u.id)}
