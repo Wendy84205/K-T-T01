@@ -188,6 +188,19 @@ class ApiClient {
     });
   }
 
+  async saveE2EEBundle(bundle) {
+    return this.request('/users/profile/e2ee-bundle', {
+      method: 'PUT',
+      body: JSON.stringify(bundle),
+    });
+  }
+
+  async getE2EEBundle() {
+    return this.request('/users/profile/e2ee-bundle', {
+      method: 'GET',
+    });
+  }
+
   // Admin Session Management
   async getAdminUserSessions(userId) {
     return this.request(`/users/${userId}/sessions`, {

@@ -93,13 +93,27 @@ export async function setupE2EEWithPassword(userId, password) {
     const { publicKey, privateKey } = await generateKeyPair();
     const encrypted = await encryptPrivateKeyWithPassword(privateKey, password);
 
-    // Store the encrypted bundle in localStorage — only this device
-    localStorage.setItem(`e2ee_bundle_${userId}`, JSON.stringify({
+    const bundle = {
         encryptedPrivateKey: encrypted.encryptedPrivateKey,
         salt: encrypted.salt,
         iv: encrypted.iv,
         publicKey, // cached for convenience
-    }));
+    };
+
+    // Store locally
+    localStorage.setItem(`e2ee_bundle_${userId}`, JSON.stringify(bundle));
+
+    // Backup to server (encrypted bundle is safe to store server-side — PIN never leaves device)
+    try {
+        const { default: api } = await import('./api');
+        await api.saveE2EEBundle({
+            encryptedPrivateKey: encrypted.encryptedPrivateKey,
+            salt: encrypted.salt,
+            iv: encrypted.iv,
+        });
+    } catch (err) {
+        console.warn('[E2EE] Server backup failed, local only:', err);
+    }
 
     return { publicKey, privateKey };
 }
@@ -113,8 +127,29 @@ export async function setupE2EEWithPassword(userId, password) {
  * Returns null if no bundle found (need setup) or throws if password wrong.
  */
 export async function unlockE2EEWithPassword(userId, password) {
-    const raw = localStorage.getItem(`e2ee_bundle_${userId}`);
-    if (!raw) return null; // no bundle — need setupE2EEWithPassword
+    let raw = localStorage.getItem(`e2ee_bundle_${userId}`);
+
+    // If no local bundle, try fetching from server
+    if (!raw) {
+        try {
+            const { default: api } = await import('./api');
+            const serverBundle = await api.getE2EEBundle();
+            if (serverBundle && serverBundle.encryptedPrivateKey) {
+                // Save server bundle locally for future use
+                localStorage.setItem(`e2ee_bundle_${userId}`, JSON.stringify({
+                    encryptedPrivateKey: serverBundle.encryptedPrivateKey,
+                    salt: serverBundle.salt,
+                    iv: serverBundle.iv,
+                    publicKey: serverBundle.publicKey,
+                }));
+                raw = localStorage.getItem(`e2ee_bundle_${userId}`);
+            }
+        } catch (err) {
+            console.warn('[E2EE] Could not fetch bundle from server:', err);
+        }
+    }
+
+    if (!raw) return null; // no bundle anywhere — need setupE2EEWithPassword
 
     const bundle = JSON.parse(raw);
     // Throws DOMException if password is wrong (AES-GCM auth tag fails)

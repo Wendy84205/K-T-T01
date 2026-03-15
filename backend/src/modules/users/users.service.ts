@@ -472,4 +472,23 @@ export class UsersService {
     session.revokedReason = 'Administrative revocation';
     await this.userSessionRepository.save(session);
   }
+
+  async saveE2EEBundle(userId: string, bundle: { encryptedPrivateKey: string; salt: string; iv: string }): Promise<void> {
+    await this.userRepository.update(userId, {
+      e2eeBundleEncryptedKey: bundle.encryptedPrivateKey,
+      e2eeBundleSalt: bundle.salt,
+      e2eeBundleIv: bundle.iv,
+    });
+  }
+
+  async getE2EEBundle(userId: string): Promise<{ encryptedPrivateKey: string; salt: string; iv: string; publicKey: string } | null> {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user || !user.e2eeBundleEncryptedKey) return null;
+    return {
+      encryptedPrivateKey: user.e2eeBundleEncryptedKey,
+      salt: user.e2eeBundleSalt,
+      iv: user.e2eeBundleIv,
+      publicKey: user.publicKey,
+    };
+  }
 }

@@ -205,7 +205,6 @@ export default function ManageSettings() {
 
                     <div style={{ marginTop: 'auto', padding: '20px', background: 'rgba(239, 68, 68, 0.03)', borderRadius: '20px', border: '1px solid rgba(239, 68, 68, 0.1)' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#ef4444', marginBottom: '8px' }}>
-                            <AlertCircle size={14} />
                             <span style={{ fontSize: '11px', fontWeight: '900', textTransform: 'uppercase' }}>Security Policy</span>
                         </div>
                         <p style={{ fontSize: '11px', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.4', fontWeight: '600' }}>Changes to MFA or Identity require immediate re-authentication across all active nodes.</p>

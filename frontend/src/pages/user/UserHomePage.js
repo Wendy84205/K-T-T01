@@ -245,13 +245,40 @@ export default function UserHomePage() {
     if (sessionPk) {
       setE2eePrivateKey(sessionPk);
       setE2eeStatus('unlocked');
-    } else if (hasE2EEBundle(user.id)) {
+      return;
+    }
+
+    // Local bundle found → prompt to unlock
+    if (hasE2EEBundle(user.id)) {
       setE2eeStatus('locked');
       setShowE2EEModal(true);
-    } else {
-      setE2eeStatus('setup_needed');
-      setShowE2EEModal(true);
+      return;
     }
+
+    // No local bundle → check server (handles URL/domain change scenarios)
+    import('../../utils/api').then(({ default: api }) => {
+      api.getE2EEBundle().then(serverBundle => {
+        if (serverBundle && serverBundle.encryptedPrivateKey) {
+          // Server has a bundle → pre-populate localStorage and prompt to unlock
+          localStorage.setItem(`e2ee_bundle_${user.id}`, JSON.stringify({
+            encryptedPrivateKey: serverBundle.encryptedPrivateKey,
+            salt: serverBundle.salt,
+            iv: serverBundle.iv,
+            publicKey: serverBundle.publicKey,
+          }));
+          setE2eeStatus('locked');
+          setShowE2EEModal(true);
+        } else {
+          // No bundle anywhere → first-time setup
+          setE2eeStatus('setup_needed');
+          setShowE2EEModal(true);
+        }
+      }).catch(() => {
+        // Fallback: show setup modal if server check fails
+        setE2eeStatus('setup_needed');
+        setShowE2EEModal(true);
+      });
+    });
   }, [user?.id]);
 
   useEffect(() => {
@@ -922,29 +949,46 @@ export default function UserHomePage() {
             console.log("[E2EE] Attempting encryption for conversation type:", conv.conversationType);
             try {
               const keysToEncryptFor = {};
-              const myPublicKey = user.publicKey || JSON.parse(localStorage.getItem('user') || '{}')?.publicKey;
-              if (myPublicKey) keysToEncryptFor[String(user.id)] = myPublicKey;
+
+              // 🔑 Self-key: read from LOCAL bundle (matches current private key 100%)
+              // Falls back to user.publicKey from profile if bundle not found
+              const e2eeBundleRaw = localStorage.getItem(`e2ee_bundle_${user.id}`);
+              const selfPublicKey = e2eeBundleRaw
+                ? JSON.parse(e2eeBundleRaw).publicKey
+                : (user.publicKey || JSON.parse(localStorage.getItem('user') || '{}')?.publicKey);
+
+              if (selfPublicKey) {
+                keysToEncryptFor[String(user.id)] = selfPublicKey;
+                console.log('[E2EE] Self-key loaded from bundle for user', user.id);
+              } else {
+                console.warn('[E2EE] No self public key — sender will not be able to decrypt own messages!');
+              }
 
               if (conv.conversationType === 'direct' && conv.otherUser?.publicKey) {
-                // Direct chat: encrypt for recipient + self
+                // Direct chat: encrypt for recipient
                 keysToEncryptFor[String(conv.otherUser.id)] = conv.otherUser.publicKey;
               } else if (conv.conversationType === 'group' && conv.members && conv.members.length > 0) {
-                // Group chat: encrypt for all members who have a public key
+                // Group chat: encrypt for all members with a public key
                 for (const member of conv.members) {
-                  if (member.publicKey && member.id !== user.id) {
+                  if (member.publicKey && String(member.id) !== String(user.id)) {
                     keysToEncryptFor[String(member.id)] = member.publicKey;
                   }
                 }
               }
 
-              // Only encrypt if we have at least one recipient key
+              // Only encrypt if we have at least one OTHER recipient key
               const recipientCount = Object.keys(keysToEncryptFor).filter(k => k !== String(user.id)).length;
               if (recipientCount > 0) {
                 const hybridPayload = await encryptHybrid(finalContent, keysToEncryptFor);
                 finalContent = `[E2EE]:${JSON.stringify(hybridPayload)}`;
-                console.log(`[E2EE] Message encrypted for ${Object.keys(keysToEncryptFor).length} recipients`);
+                console.log(`[E2EE] Encrypted for ${Object.keys(keysToEncryptFor).length} recipients (self + ${recipientCount} others)`);
+              } else if (selfPublicKey) {
+                // Self-conversation or no other keys: still encrypt for self
+                const hybridPayload = await encryptHybrid(finalContent, keysToEncryptFor);
+                finalContent = `[E2EE]:${JSON.stringify(hybridPayload)}`;
+                console.log('[E2EE] Encrypted for self only (no other recipient keys)');
               } else {
-                console.warn("[E2EE] No recipient public keys found — sending in plain text");
+                console.warn("[E2EE] No keys available — sending plain text");
               }
             } catch (e) {
               console.error("[E2EE] Encryption failed. Falling back to plain text.", e);
@@ -4965,59 +5009,54 @@ function CallsContent() {
 // Uses PBKDF2 to derive AES key from passphrase → protects RSA private key
 // ════════════════════════════════════════════════════════════════════════════
 function E2EEPassphraseModal({ mode, userId, onSuccess, onSkip }) {
-  const [passphrase, setPassphrase] = useState('');
-  const [confirmPassphrase, setConfirmPassphrase] = useState('');
-  const [showPass, setShowPass] = useState(false);
+  const PIN_LENGTH = 6;
+  const [pin, setPin] = useState(Array(PIN_LENGTH).fill(''));
+  const [confirmPin, setConfirmPin] = useState(Array(PIN_LENGTH).fill(''));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const pinRefs = useRef([]);
+  const confirmRefs = useRef([]);
 
   const isSetup = mode === 'setup_needed';
+  const pinValue = pin.join('');
+  const confirmPinValue = confirmPin.join('');
 
-  const getStrength = (p) => {
-    if (!p) return { level: 0, label: '', color: '#444' };
-    let score = 0;
-    if (p.length >= 8) score++;
-    if (p.length >= 12) score++;
-    if (/[A-Z]/.test(p)) score++;
-    if (/[0-9]/.test(p)) score++;
-    if (/[^A-Za-z0-9]/.test(p)) score++;
-    const levels = [
-      { level: 0, label: '', color: '#444' },
-      { level: 1, label: 'Weak', color: '#ef4444' },
-      { level: 2, label: 'Fair', color: '#f59e0b' },
-      { level: 3, label: 'Good', color: '#3b82f6' },
-      { level: 4, label: 'Strong', color: '#10b981' },
-      { level: 5, label: 'Very Strong', color: '#10b981' },
-    ];
-    return levels[score] || levels[0];
+  const handlePinChange = (index, val, arr, setArr, refs) => {
+    if (!/^[0-9]?$/.test(val)) return;
+    const updated = [...arr];
+    updated[index] = val;
+    setArr(updated);
+    setError('');
+    if (val && index < PIN_LENGTH - 1) refs.current[index + 1]?.focus();
   };
 
-  const strength = getStrength(passphrase);
+  const handlePinKeyDown = (e, index, refs) => {
+    if (e.key === 'Backspace' && !refs.current[index]?.value && index > 0)
+      refs.current[index - 1]?.focus();
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    if (!passphrase || passphrase.length < 6) {
-      setError('Passphrase must be at least 6 characters.');
+    if (pinValue.length < PIN_LENGTH) {
+      setError('Please enter all 6 digits.');
       return;
     }
-    if (isSetup && passphrase !== confirmPassphrase) {
-      setError('Passphrases do not match.');
+    if (isSetup && pinValue !== confirmPinValue) {
+      setError('PINs do not match. Please try again.');
       return;
     }
     setLoading(true);
     try {
       if (isSetup) {
-        // Generate new RSA key pair protected by this passphrase
         const { setupE2EEWithPassword: setup } = await import('../../utils/crypto');
-        const { publicKey, privateKey } = await setup(userId, passphrase);
+        const { publicKey, privateKey } = await setup(userId, pinValue);
         onSuccess({ privateKey, publicKey });
       } else {
-        // Unlock existing bundle with passphrase
         const { unlockE2EEWithPassword: unlock } = await import('../../utils/crypto');
-        const result = await unlock(userId, passphrase);
+        const result = await unlock(userId, pinValue);
         if (!result) {
-          setError('No encryption bundle found. Try setting up again.');
+          setError('No encryption setup found on this device.');
           setLoading(false);
           return;
         }
@@ -5025,7 +5064,9 @@ function E2EEPassphraseModal({ mode, userId, onSuccess, onSkip }) {
       }
     } catch (err) {
       console.error('[E2EE Modal]', err);
-      setError(isSetup ? 'Setup failed. Please try again.' : 'Wrong passphrase. Please try again.');
+      setError(isSetup ? 'Setup failed. Try again.' : 'Wrong PIN. Please try again.');
+      // Reset confirm on wrong unlock
+      if (!isSetup) setPin(Array(PIN_LENGTH).fill(''));
     } finally {
       setLoading(false);
     }
@@ -5050,90 +5091,95 @@ function E2EEPassphraseModal({ mode, userId, onSuccess, onSkip }) {
             width: '64px', height: '64px', borderRadius: '20px', margin: '0 auto 16px',
             background: 'linear-gradient(135deg, #667eea, #764ba2)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: '28px', boxShadow: '0 8px 24px rgba(102,126,234,0.4)'
-          }}>🔑</div>
+            boxShadow: '0 8px 24px rgba(102,126,234,0.4)'
+          }}></div>
           <h2 style={{ color: 'var(--text-main)', margin: '0 0 8px', fontSize: '20px', fontWeight: '900' }}>
-            {isSetup ? 'Create Encryption Passphrase' : 'Unlock End-to-End Encryption'}
+            {isSetup ? 'Tạo mã PIN mã hóa' : 'Nhập mã PIN để mở khóa'}
           </h2>
           <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: '13px', lineHeight: 1.5 }}>
             {isSetup
-              ? 'Your passphrase locally protects your private key. It never leaves this device.'
-              : 'Enter your passphrase to decrypt your messages. This key stays only in your browser.'}
+              ? 'PIN 6 số bảo vệ private key của bạn. Không bao giờ rời khỏi thiết bị này.'
+              : 'Nhập PIN 6 số để giải mã tin nhắn. Key chỉ lưu trong trình duyệt của bạn.'}
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {/* Passphrase input */}
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          {/* PIN input row */}
           <div>
-            <label style={{ display: 'block', fontSize: '11px', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: '8px' }}>
-              {isSetup ? 'Create Passphrase' : 'Your Passphrase'}
+            <label style={{ display: 'block', fontSize: '11px', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: '12px', textAlign: 'center' }}>
+              {isSetup ? 'Tạo PIN 6 số' : 'Nhập PIN 6 số'}
             </label>
-            <div style={{ position: 'relative' }}>
-              <input
-                type={showPass ? 'text' : 'password'}
-                value={passphrase}
-                onChange={e => setPassphrase(e.target.value)}
-                placeholder="Enter a strong passphrase..."
-                autoFocus
-                style={{
-                  width: '100%', padding: '14px 44px 14px 16px', borderRadius: '14px',
-                  background: 'var(--bg-app)', border: '2px solid var(--border-color)',
-                  color: 'var(--text-main)', fontSize: '14px', outline: 'none',
-                  boxSizing: 'border-box', fontFamily: 'inherit',
-                  transition: 'border-color 0.2s'
-                }}
-                onFocus={e => e.target.style.borderColor = 'var(--primary)'}
-                onBlur={e => e.target.style.borderColor = 'var(--border-color)'}
-              />
-              <button type="button" onClick={() => setShowPass(p => !p)}
-                style={{ position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
-                {showPass ? <EyeOff size={18} /> : <Eye size={18} />}
-              </button>
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+              {pin.map((digit, i) => (
+                <input
+                  key={i}
+                  ref={el => pinRefs.current[i] = el}
+                  type="password"
+                  inputMode="numeric"
+                  maxLength={1}
+                  value={digit}
+                  autoFocus={i === 0}
+                  onChange={e => handlePinChange(i, e.target.value, pin, setPin, pinRefs)}
+                  onKeyDown={e => handlePinKeyDown(e, i, pinRefs)}
+                  style={{
+                    width: '52px', height: '60px', textAlign: 'center', fontSize: '22px',
+                    fontWeight: '900', borderRadius: '14px',
+                    background: 'var(--bg-app)',
+                    border: `2px solid ${digit ? 'var(--primary)' : 'var(--border-color)'}`,
+                    color: 'var(--text-main)', outline: 'none',
+                    caretColor: 'transparent',
+                    transition: 'border-color 0.2s, box-shadow 0.2s',
+                    boxShadow: digit ? '0 0 0 3px var(--primary-light)' : 'none'
+                  }}
+                />
+              ))}
             </div>
-
-            {/* Strength indicator (setup only) */}
-            {isSetup && passphrase && (
-              <div style={{ marginTop: '8px' }}>
-                <div style={{ height: '4px', background: 'var(--bg-light)', borderRadius: '2px', overflow: 'hidden' }}>
-                  <div style={{ height: '100%', width: `${(strength.level / 5) * 100}%`, background: strength.color, borderRadius: '2px', transition: 'all 0.3s' }} />
-                </div>
-                <div style={{ fontSize: '10px', fontWeight: '700', color: strength.color, marginTop: '4px', textAlign: 'right' }}>{strength.label}</div>
-              </div>
-            )}
           </div>
 
-          {/* Confirm passphrase (setup only) */}
+          {/* Confirm PIN (setup only) */}
           {isSetup && (
             <div>
-              <label style={{ display: 'block', fontSize: '11px', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: '8px' }}>
-                Confirm Passphrase
+              <label style={{ display: 'block', fontSize: '11px', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: '12px', textAlign: 'center' }}>
+                Xác nhận PIN
               </label>
-              <input
-                type={showPass ? 'text' : 'password'}
-                value={confirmPassphrase}
-                onChange={e => setConfirmPassphrase(e.target.value)}
-                placeholder="Repeat your passphrase..."
-                style={{
-                  width: '100%', padding: '14px 16px', borderRadius: '14px',
-                  background: 'var(--bg-app)', border: `2px solid ${confirmPassphrase && passphrase !== confirmPassphrase ? '#ef4444' : 'var(--border-color)'}`,
-                  color: 'var(--text-main)', fontSize: '14px', outline: 'none',
-                  boxSizing: 'border-box', fontFamily: 'inherit', transition: 'border-color 0.2s'
-                }}
-              />
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+                {confirmPin.map((digit, i) => (
+                  <input
+                    key={i}
+                    ref={el => confirmRefs.current[i] = el}
+                    type="password"
+                    inputMode="numeric"
+                    maxLength={1}
+                    value={digit}
+                    onChange={e => handlePinChange(i, e.target.value, confirmPin, setConfirmPin, confirmRefs)}
+                    onKeyDown={e => handlePinKeyDown(e, i, confirmRefs)}
+                    style={{
+                      width: '52px', height: '60px', textAlign: 'center', fontSize: '22px',
+                      fontWeight: '900', borderRadius: '14px',
+                      background: 'var(--bg-app)',
+                      border: `2px solid ${digit && confirmPinValue.length === PIN_LENGTH && confirmPinValue !== pinValue ? '#ef4444' : digit ? 'var(--primary)' : 'var(--border-color)'}`,
+                      color: 'var(--text-main)', outline: 'none',
+                      caretColor: 'transparent',
+                      transition: 'border-color 0.2s, box-shadow 0.2s',
+                      boxShadow: digit ? '0 0 0 3px var(--primary-light)' : 'none'
+                    }}
+                  />
+                ))}
+              </div>
             </div>
           )}
 
           {/* Error message */}
           {error && (
-            <div style={{ background: '#ef444415', border: '1px solid #ef444430', borderRadius: '12px', padding: '10px 14px', color: '#ef4444', fontSize: '12px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <AlertTriangle size={14} /> {error}
+            <div style={{ background: '#ef444415', border: '1px solid #ef444430', borderRadius: '12px', padding: '10px 14px', color: '#ef4444', fontSize: '12px', fontWeight: '600' }}>
+              {error}
             </div>
           )}
 
           {/* Info box */}
           {isSetup && (
-            <div style={{ background: 'rgba(102,126,234,0.08)', border: '1px solid rgba(102,126,234,0.2)', borderRadius: '12px', padding: '12px 14px', fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.6 }}>
-              ⚠️ <strong>Remember this passphrase!</strong> It cannot be recovered. Without it, your encrypted messages cannot be decrypted.
+            <div style={{ background: 'rgba(102,126,234,0.08)', border: '1px solid rgba(102,126,234,0.2)', borderRadius: '12px', padding: '12px 14px', fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.6, textAlign: 'center' }}>
+              <strong>Ghi nhớ PIN này!</strong> Không thể khôi phục nếu quên. Mất PIN = mất toàn bộ tin nhắn cũ.
             </div>
           )}
 
@@ -5144,8 +5190,8 @@ function E2EEPassphraseModal({ mode, userId, onSuccess, onSkip }) {
               Skip for now
             </button>
             <button type="submit" disabled={loading}
-              style={{ flex: 2, padding: '14px', borderRadius: '14px', background: 'linear-gradient(135deg, #667eea, #764ba2)', border: 'none', color: '#fff', fontSize: '13px', fontWeight: '900', cursor: loading ? 'not-allowed' : 'pointer', textTransform: 'uppercase', letterSpacing: '0.05em', opacity: loading ? 0.7 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-              {loading ? <><RefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} /> Processing…</> : isSetup ? '🔑 Create Key' : '🔓 Unlock'}
+              style={{ flex: 2, padding: '14px', borderRadius: '14px', background: 'linear-gradient(135deg, #667eea, #764ba2)', border: 'none', color: '#fff', fontSize: '13px', fontWeight: '900', cursor: loading ? 'not-allowed' : 'pointer', textTransform: 'uppercase', letterSpacing: '0.05em', opacity: loading ? 0.7 : 1 }}>
+              {loading ? 'Processing…' : isSetup ? 'Create Key' : 'Unlock'}
             </button>
           </div>
         </form>
