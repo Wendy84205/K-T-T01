@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Query, Req, UseInterceptors, UploadedFile, Res, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Put, Body, Patch, Param, Delete, UseGuards, Query, Req, UseInterceptors, UploadedFile, Res, BadRequestException } from '@nestjs/common';
 import { Request } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
@@ -51,6 +51,19 @@ export class UsersController {
     const avatarUrl = `/users/avatar/${file.filename}`;
     await this.usersService.update(req.user.userId, { avatarUrl }, req.user.userId);
     return { avatarUrl };
+  }
+
+  @Get('profile/e2ee-bundle')
+  @UseGuards(JwtAuthGuard)
+  async getE2EEBundle(@Req() req) {
+    return this.usersService.getE2EEBundle(req.user.userId);
+  }
+
+  @Put('profile/e2ee-bundle')
+  @UseGuards(JwtAuthGuard)
+  async saveE2EEBundle(@Req() req, @Body() body: { encryptedPrivateKey: string; salt: string; iv: string }) {
+    await this.usersService.saveE2EEBundle(req.user.userId, body);
+    return { success: true };
   }
 
   @Get('profile/activity')

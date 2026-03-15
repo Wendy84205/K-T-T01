@@ -245,13 +245,40 @@ export default function UserHomePage() {
     if (sessionPk) {
       setE2eePrivateKey(sessionPk);
       setE2eeStatus('unlocked');
-    } else if (hasE2EEBundle(user.id)) {
+      return;
+    }
+
+    // Local bundle found → prompt to unlock
+    if (hasE2EEBundle(user.id)) {
       setE2eeStatus('locked');
       setShowE2EEModal(true);
-    } else {
-      setE2eeStatus('setup_needed');
-      setShowE2EEModal(true);
+      return;
     }
+
+    // No local bundle → check server (handles URL/domain change scenarios)
+    import('../../utils/api').then(({ default: api }) => {
+      api.getE2EEBundle().then(serverBundle => {
+        if (serverBundle && serverBundle.encryptedPrivateKey) {
+          // Server has a bundle → pre-populate localStorage and prompt to unlock
+          localStorage.setItem(`e2ee_bundle_${user.id}`, JSON.stringify({
+            encryptedPrivateKey: serverBundle.encryptedPrivateKey,
+            salt: serverBundle.salt,
+            iv: serverBundle.iv,
+            publicKey: serverBundle.publicKey,
+          }));
+          setE2eeStatus('locked');
+          setShowE2EEModal(true);
+        } else {
+          // No bundle anywhere → first-time setup
+          setE2eeStatus('setup_needed');
+          setShowE2EEModal(true);
+        }
+      }).catch(() => {
+        // Fallback: show setup modal if server check fails
+        setE2eeStatus('setup_needed');
+        setShowE2EEModal(true);
+      });
+    });
   }, [user?.id]);
 
   useEffect(() => {
@@ -5064,8 +5091,8 @@ function E2EEPassphraseModal({ mode, userId, onSuccess, onSkip }) {
             width: '64px', height: '64px', borderRadius: '20px', margin: '0 auto 16px',
             background: 'linear-gradient(135deg, #667eea, #764ba2)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: '28px', boxShadow: '0 8px 24px rgba(102,126,234,0.4)'
-          }}>🔑</div>
+            boxShadow: '0 8px 24px rgba(102,126,234,0.4)'
+          }}></div>
           <h2 style={{ color: 'var(--text-main)', margin: '0 0 8px', fontSize: '20px', fontWeight: '900' }}>
             {isSetup ? 'Tạo mã PIN mã hóa' : 'Nhập mã PIN để mở khóa'}
           </h2>
@@ -5152,7 +5179,7 @@ function E2EEPassphraseModal({ mode, userId, onSuccess, onSkip }) {
           {/* Info box */}
           {isSetup && (
             <div style={{ background: 'rgba(102,126,234,0.08)', border: '1px solid rgba(102,126,234,0.2)', borderRadius: '12px', padding: '12px 14px', fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.6, textAlign: 'center' }}>
-              ⚠️ <strong>Ghi nhớ PIN này!</strong> Không thể khôi phục nếu quên. Mất PIN = mất toàn bộ tin nhắn cũ.
+              <strong>Ghi nhớ PIN này!</strong> Không thể khôi phục nếu quên. Mất PIN = mất toàn bộ tin nhắn cũ.
             </div>
           )}
 
@@ -5163,8 +5190,8 @@ function E2EEPassphraseModal({ mode, userId, onSuccess, onSkip }) {
               Skip for now
             </button>
             <button type="submit" disabled={loading}
-              style={{ flex: 2, padding: '14px', borderRadius: '14px', background: 'linear-gradient(135deg, #667eea, #764ba2)', border: 'none', color: '#fff', fontSize: '13px', fontWeight: '900', cursor: loading ? 'not-allowed' : 'pointer', textTransform: 'uppercase', letterSpacing: '0.05em', opacity: loading ? 0.7 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-              {loading ? <><RefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} /> Processing…</> : isSetup ? '🔑 Create Key' : '🔓 Unlock'}
+              style={{ flex: 2, padding: '14px', borderRadius: '14px', background: 'linear-gradient(135deg, #667eea, #764ba2)', border: 'none', color: '#fff', fontSize: '13px', fontWeight: '900', cursor: loading ? 'not-allowed' : 'pointer', textTransform: 'uppercase', letterSpacing: '0.05em', opacity: loading ? 0.7 : 1 }}>
+              {loading ? 'Processing…' : isSetup ? 'Create Key' : 'Unlock'}
             </button>
           </div>
         </form>

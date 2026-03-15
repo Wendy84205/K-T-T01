@@ -109,6 +109,15 @@ export class User {
   @Column({ name: 'public_key', type: 'text', nullable: true })
   publicKey: string;
 
+  @Column({ name: 'e2ee_bundle_encrypted_key', type: 'text', nullable: true })
+  e2eeBundleEncryptedKey: string;
+
+  @Column({ name: 'e2ee_bundle_salt', length: 100, nullable: true })
+  e2eeBundleSalt: string;
+
+  @Column({ name: 'e2ee_bundle_iv', length: 100, nullable: true })
+  e2eeBundleIv: string;
+
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 
