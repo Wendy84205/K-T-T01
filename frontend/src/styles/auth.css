@@ -254,7 +254,7 @@ form{ width: 100%; }
     margin-bottom: 10px;
 }
 
-/* Scrollbar đẹp */
+/* Custom scrollbar */
 .form-scroll::-webkit-scrollbar {
     width: 6px;
 }

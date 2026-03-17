@@ -104,6 +104,11 @@ export default function UserHomePage() {
   const [vaultAuthError, setVaultAuthError] = useState('');
   const [pinnedVersion, setPinnedVersion] = useState(0);
 
+  // Notifications State (Facebook UI style)
+  const [notifications, setNotifications] = useState([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [toastNotifications, setToastNotifications] = useState([]);
+
   // 2. Refs
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
@@ -125,10 +130,34 @@ export default function UserHomePage() {
   const stopRingtoneRef = useRef(null);
 
   // 3. Helper Functions
+  const handleNotification = useCallback((type, message, data = null) => {
+    // 1. Add to local notifications list
+    const newNotification = {
+      id: Date.now() + Math.random(),
+      type,
+      message,
+      data,
+      read: false,
+      timestamp: new Date()
+    };
+
+    setNotifications(prev => [newNotification, ...prev]);
+    if (!showNotifications) {
+      setUnreadNotificationsCount(prev => prev + 1);
+    }
+
+    // 2. Pop up a toast (Facebook-style bottom-left popup)
+    const toastId = Date.now();
+    setToastNotifications(prev => [...prev, { id: toastId, type, message, data }]);
+    setTimeout(() => {
+      setToastNotifications(prev => prev.filter(t => t.id !== toastId));
+    }, 5000);
+  }, [showNotifications]);
+
   const loadUnreadCount = async () => {
     try {
       const data = await api.getNotifications(1, 1);
-      setUnreadNotificationsCount(data.unreadCount || 0);
+      setUnreadNotificationsCount(data.unreadCount || 0); // fallback if backend has unread counts
     } catch (err) {
       console.error('Failed to load unread count', err);
     }
@@ -401,6 +430,15 @@ export default function UserHomePage() {
           });
         });
 
+        // Facebook-style Security & Device Notifications
+        socketService.onSecurityAlert((data) => {
+          handleNotification('security', data.message || 'Security alert detected.', data);
+        });
+
+        socketService.onDeviceLogin((data) => {
+          handleNotification('security', `New device login: ${data.deviceInfo || 'Unknown Device'}`, data);
+        });
+
         const initialOnlineUsers = await socketService.getOnlineUsers();
         if (Array.isArray(initialOnlineUsers)) {
           setOnlineUserIds(new Set(initialOnlineUsers));
@@ -496,6 +534,9 @@ export default function UserHomePage() {
         setTimeout(() => {
           messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
         }, 100);
+      } else {
+        // Trigger Facebook-style notification if chat not active
+        handleNotification('message', `${message.sender?.firstName || 'Someone'} sent you a message.`, message);
       }
       // Also update conversation list (last message, unread count)
       loadConversations(true);
@@ -1526,6 +1567,46 @@ export default function UserHomePage() {
         </div>
       )}
 
+      {/* 🔔 Real-time Facebook-style Toast Notifications */}
+      <div style={{
+        position: 'fixed', bottom: '20px', left: '20px', zIndex: 100000,
+        display: 'flex', flexDirection: 'column', gap: '10px', pointerEvents: 'none'
+      }}>
+        {toastNotifications.map(n => (
+          <div key={n.id} style={{
+            background: 'var(--bg-panel)',
+            borderLeft: `4px solid ${n.type === 'security' ? 'var(--red-color)' : 'var(--primary)'}`,
+            borderRadius: '12px',
+            padding: '12px 16px',
+            boxShadow: '0 10px 30px rgba(0,0,0,0.2)',
+            display: 'flex', alignItems: 'center', gap: '12px',
+            animation: 'slideInLeft 0.3s ease-out',
+            minWidth: '280px', pointerEvents: 'auto',
+            backdropFilter: 'blur(10px)', border: '1px solid var(--border-color)'
+          }}>
+            <div style={{
+              width: '40px', height: '40px', borderRadius: '10px',
+              background: n.type === 'security' ? 'var(--bg-red-soft)' : 'var(--bg-primary-soft)',
+              display: 'flex', alignItems: 'center', justifyCenter: 'center',
+              flexShrink: 0
+            }}>
+              {n.type === 'security' ? <Shield size={20} color="var(--red-color)" /> : <MessageSquare size={20} color="var(--primary)" />}
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: '11px', fontWeight: '900', textTransform: 'uppercase', color: 'var(--text-muted)' }}>
+                {n.type === 'security' ? 'Security Alert' : 'New Message'}
+              </div>
+              <div style={{ fontSize: '13px', color: 'var(--text-main)', fontWeight: '600' }}>
+                {n.message}
+              </div>
+            </div>
+            <button onClick={() => setToastNotifications(prev => prev.filter(t => t.id !== n.id))} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
+              <X size={14} />
+            </button>
+          </div>
+        ))}
+      </div>
+
       {/* ════════════════════════════════════════════════════════
           🔑 E2EE PASSPHRASE MODAL
           ════════════════════════════════════════════════════════ */}
@@ -1618,12 +1699,72 @@ export default function UserHomePage() {
             label="Secure Vault"
           />
           <NavIcon
-            icon={<Bell size={22} />}
-            active={activeTab === 'alerts'}
-            onClick={() => setActiveTab('alerts')}
-            label="Alerts"
-            badge={unreadNotificationsCount}
+            icon={<div style={{ position: 'relative' }}>
+              <Bell size={22} />
+              {unreadNotificationsCount > 0 && (
+                <div style={{
+                  position: 'absolute', top: '-4px', right: '-4px',
+                  background: 'var(--red-color)', color: '#fff',
+                  borderRadius: '50%', width: '16px', height: '16px',
+                  fontSize: '9px', fontWeight: '900', display: 'flex',
+                  alignItems: 'center', justifyContent: 'center',
+                  border: '2px solid var(--bg-main)'
+                }}>
+                  {unreadNotificationsCount}
+                </div>
+              )}
+            </div>}
+            active={showNotifications}
+            onClick={() => {
+              setShowNotifications(!showNotifications);
+              if (!showNotifications) {
+                // Mark all as read conceptually when opening
+                setUnreadNotificationsCount(0);
+              }
+            }}
+            label="Notifications"
           />
+          {showNotifications && (
+            <div style={{
+              position: 'absolute', top: '20px', left: '74px',
+              width: '320px', background: 'var(--bg-panel)',
+              borderRadius: '16px', border: '1px solid var(--border-color)',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.3)', zIndex: 1000,
+              display: 'flex', flexDirection: 'column', overflow: 'hidden'
+            }}>
+              <div style={{ padding: '16px', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '900', color: 'var(--text-main)' }}>Notifications</h3>
+                <span style={{ fontSize: '11px', color: 'var(--primary)', fontWeight: '700', cursor: 'pointer' }} onClick={() => setNotifications([])}>Clear all</span>
+              </div>
+              <div style={{ maxHeight: '400px', overflowY: 'auto', padding: '10px' }}>
+                {notifications.length === 0 ? (
+                  <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>
+                    <BellOff size={32} style={{ marginBottom: '10px', opacity: 0.3 }} />
+                    <div>No new notifications</div>
+                  </div>
+                ) : (
+                  notifications.map(n => (
+                    <div key={n.id} style={{
+                      padding: '12px', borderRadius: '10px', display: 'flex', gap: '12px',
+                      cursor: 'pointer', transition: 'all 0.2s'
+                    }} onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-light)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                      <div style={{
+                        width: '40px', height: '40px', borderRadius: '10px',
+                        background: n.type === 'security' ? 'var(--bg-red-soft)' : 'var(--bg-primary-soft)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
+                      }}>
+                        {n.type === 'security' ? <Shield size={18} color="var(--red-color)" /> : <MessageSquare size={18} color="var(--primary)" />}
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: '13px', color: 'var(--text-main)', fontWeight: '600', lineHeight: 1.4 }}>{n.message}</div>
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>{new Date(n.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
           <NavIcon
             icon={<Settings size={22} />}
             active={activeTab === 'settings'}
@@ -4839,13 +4980,13 @@ function TeamContent({ users, currentUser, onSelect, isAdmin }) {
                 <td style={{ borderTop: '1px solid var(--border-color)', borderBottom: '1px solid var(--border-color)', fontSize: '14px', color: 'var(--text-main)' }}>{u.jobTitle || 'Team Member'}</td>
                 <td style={{ borderTop: '1px solid var(--border-color)', borderBottom: '1px solid var(--border-color)', fontSize: '14px', color: 'var(--text-main)' }}>{u.department}</td>
                 <td style={{ borderTop: '1px solid var(--border-color)', borderBottom: '1px solid var(--border-color)' }}>
-                  <span style={{ 
-                    padding: '4px 12px', 
-                    borderRadius: '20px', 
-                    background: u.status === 'active' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(107, 114, 128, 0.1)', 
-                    color: u.status === 'active' ? '#10b981' : '#6b7280', 
-                    fontSize: '12px', 
-                    fontWeight: '700' 
+                  <span style={{
+                    padding: '4px 12px',
+                    borderRadius: '20px',
+                    background: u.status === 'active' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(107, 114, 128, 0.1)',
+                    color: u.status === 'active' ? '#10b981' : '#6b7280',
+                    fontSize: '12px',
+                    fontWeight: '700'
                   }}>
                     {u.status === 'active' ? 'Online' : (u.status || 'Offline').charAt(0).toUpperCase() + (u.status || 'Offline').slice(1)}
                   </span>
@@ -5094,12 +5235,12 @@ function E2EEPassphraseModal({ mode, userId, onSuccess, onSkip }) {
             boxShadow: '0 8px 24px rgba(102,126,234,0.4)'
           }}></div>
           <h2 style={{ color: 'var(--text-main)', margin: '0 0 8px', fontSize: '20px', fontWeight: '900' }}>
-            {isSetup ? 'Tạo mã PIN mã hóa' : 'Nhập mã PIN để mở khóa'}
+            {isSetup ? 'Create Encryption PIN' : 'Enter PIN to Unlock'}
           </h2>
           <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: '13px', lineHeight: 1.5 }}>
             {isSetup
-              ? 'PIN 6 số bảo vệ private key của bạn. Không bao giờ rời khỏi thiết bị này.'
-              : 'Nhập PIN 6 số để giải mã tin nhắn. Key chỉ lưu trong trình duyệt của bạn.'}
+              ? 'A 6-digit PIN protects your private key. It never leaves this device.'
+              : 'Enter your 6-digit PIN to decrypt messages. The key is only stored in your browser.'}
           </p>
         </div>
 
@@ -5107,7 +5248,7 @@ function E2EEPassphraseModal({ mode, userId, onSuccess, onSkip }) {
           {/* PIN input row */}
           <div>
             <label style={{ display: 'block', fontSize: '11px', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: '12px', textAlign: 'center' }}>
-              {isSetup ? 'Tạo PIN 6 số' : 'Nhập PIN 6 số'}
+              {isSetup ? 'Create 6-digit PIN' : 'Enter 6-digit PIN'}
             </label>
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
               {pin.map((digit, i) => (
@@ -5140,7 +5281,7 @@ function E2EEPassphraseModal({ mode, userId, onSuccess, onSkip }) {
           {isSetup && (
             <div>
               <label style={{ display: 'block', fontSize: '11px', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: '12px', textAlign: 'center' }}>
-                Xác nhận PIN
+                Confirm PIN
               </label>
               <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
                 {confirmPin.map((digit, i) => (
@@ -5179,7 +5320,7 @@ function E2EEPassphraseModal({ mode, userId, onSuccess, onSkip }) {
           {/* Info box */}
           {isSetup && (
             <div style={{ background: 'rgba(102,126,234,0.08)', border: '1px solid rgba(102,126,234,0.2)', borderRadius: '12px', padding: '12px 14px', fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.6, textAlign: 'center' }}>
-              <strong>Ghi nhớ PIN này!</strong> Không thể khôi phục nếu quên. Mất PIN = mất toàn bộ tin nhắn cũ.
+              <strong>Remember this PIN!</strong> Cannot be recovered if forgotten. Lost PIN = lose all previous messages.
             </div>
           )}
 
@@ -5765,7 +5906,7 @@ function ProjectsTasksContent() {
         </div>
 
         <div style={{ height: '1px', background: 'var(--border-color)' }} />
-        
+
         <MyTasksView />
       </div>
 
@@ -5795,7 +5936,7 @@ function ProjectsTasksContent() {
               <div style={{ display: 'grid', gap: '15px', overflowY: 'auto' }}>
                 {tasks.length > 0 ? tasks.map(t => (
                   <div key={t.id} style={{ background: 'var(--bg-app)', padding: '20px', borderRadius: '20px', border: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', gap: '15px', transition: 'all 0.2s' }}>
-                    <div 
+                    <div
                       onClick={() => toggleLocalTask(t)}
                       style={{ width: '24px', height: '24px', borderRadius: '8px', border: `2px solid ${t.status === 'done' ? 'var(--primary)' : 'var(--border-color)'}`, background: t.status === 'done' ? 'var(--primary)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
                     >
