@@ -65,7 +65,7 @@ export default function ManageProjects() {
         try {
             await api.createTask(selectedProject.id, {
                 title: newTask.title,
-                status: 'pending',
+                status: 'todo',
                 priority: newTask.priority,
                 assigneeId: newTask.assigneeId || undefined,
                 dueDate: newTask.dueDate || undefined,
@@ -79,8 +79,8 @@ export default function ManageProjects() {
     };
 
     const toggleTaskStatus = async (task) => {
-        const statusCycle = { pending: 'in_progress', in_progress: 'completed', todo: 'in_progress', done: 'pending', completed: 'pending' };
-        const newStatus = statusCycle[task.status] ?? 'pending';
+        const statusCycle = { todo: 'in_progress', in_progress: 'done', done: 'todo' };
+        const newStatus = statusCycle[task.status] ?? 'todo';
         try {
             await api.updateTask(task.id, { status: newStatus });
             fetchTasks(selectedProject.id);
@@ -113,14 +113,14 @@ export default function ManageProjects() {
     }[priority] || '#8b98a5');
 
     const getTaskStatusIcon = (status) => {
-        if (status === 'completed' || status === 'done') return <CheckCircle2 color="#10b981" size={18} />;
+        if (status === 'done') return <CheckCircle2 color="#10b981" size={18} />;
         if (status === 'in_progress') return <RefreshCw color="#667eea" size={18} className="animate-spin" style={{animationDuration:'3s'}} />;
         return <Circle color="var(--text-muted)" size={18} />;
     };
 
     const calculateProgress = (projectTasks) => {
         if (!projectTasks || projectTasks.length === 0) return 0;
-        const done = projectTasks.filter(t => t.status === 'completed' || t.status === 'done').length;
+        const done = projectTasks.filter(t => t.status === 'done').length;
         return Math.round((done / projectTasks.length) * 100);
     };
 
@@ -189,9 +189,25 @@ export default function ManageProjects() {
                                         <span style={{ color: 'var(--text-main)' }}>{progress}%</span>
                                     </div>
                                     <div style={{ height: '6px', background: 'var(--bg-light)', borderRadius: '10px', overflow: 'hidden', border: '1px solid var(--border-color)' }}>
-                                        <div style={{ width: `${progress}%`, height: '100%', background: 'var(--primary)', borderRadius: '10px', transition: 'width 0.5s ease' }} />
+                                        <div style={{ width: `${progress}%`, height: '100%', background: 'linear-gradient(90deg, var(--primary), #10b981)', borderRadius: '10px', transition: 'width 0.5s ease' }} />
                                     </div>
                                 </div>
+                                {/* Quick Add Task Button */}
+                                <button
+                                    onClick={e => { e.stopPropagation(); handleProjectClick(project); }}
+                                    style={{
+                                        marginTop: '16px', width: '100%', padding: '10px',
+                                        background: 'transparent', border: '1px dashed var(--border-color)',
+                                        borderRadius: '12px', color: 'var(--text-muted)', cursor: 'pointer',
+                                        fontSize: '11px', fontWeight: '900', textTransform: 'uppercase',
+                                        letterSpacing: '0.05em', display: 'flex', alignItems: 'center',
+                                        justifyContent: 'center', gap: '6px', transition: 'all 0.2s',
+                                    }}
+                                    onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.color = 'var(--primary)'; e.currentTarget.style.background = 'var(--primary-light)'; }}
+                                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-color)'; e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.background = 'transparent'; }}
+                                >
+                                    <Plus size={13} /> Add Task
+                                </button>
                             </div>
                         );
                     })}
@@ -282,7 +298,7 @@ export default function ManageProjects() {
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
                                 <label style={{ color: 'var(--text-muted)', fontSize: '10px', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Tasks</label>
                                 <span style={{ color: 'var(--primary)', fontSize: '10px', fontWeight: '900' }}>
-                                    {tasks.filter(t => t.status === 'completed' || t.status === 'done').length}/{tasks.length} Done
+                                    {tasks.filter(t => t.status === 'done').length}/{tasks.length} Done
                                 </span>
                             </div>
                             {loadingTasks ? (
@@ -290,7 +306,7 @@ export default function ManageProjects() {
                             ) : (
                                 <div style={{ display: 'grid', gap: '10px' }}>
                                     {tasks.map(task => {
-                                        const isDone = task.status === 'completed' || task.status === 'done';
+                                        const isDone = task.status === 'done';
                                         const assigneeName = getAssigneeName(task);
                                         return (
                                             <div key={task.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '14px 16px', background: isDone ? 'rgba(16, 185, 129, 0.05)' : 'var(--bg-app)', border: `1px solid ${isDone ? 'rgba(16, 185, 129, 0.2)' : 'var(--border-color)'}`, borderRadius: '14px', transition: 'all 0.2s' }}>

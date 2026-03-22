@@ -1,10 +1,98 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
-    MessageSquare, Search, Lock, Info, Send, Smile, Paperclip, FileText, CheckCheck, Loader2
+    MessageSquare, Search, Lock, Info, Send, Smile, Paperclip, FileText,
+    CheckCheck, Loader2, Key, ShieldCheck, Eye, EyeOff, Hash
 } from 'lucide-react';
 import api from '../../utils/api';
 import socketService from '../../utils/socket';
-import { encryptContent, decryptContent } from '../../utils/crypto';
+import { encryptContent, decryptContent, unlockE2EEWithPassword, hasE2EEBundle } from '../../utils/crypto';
+
+// ─── ConvItem: matches User chat ChatItem style ────────────────────────────────
+function ConvItem({ conv, isSelected, unread, online, onClick, getName, getInitial, formatTime }) {
+    const [hovered, setHovered] = useState(false);
+    const isGroup = conv.conversationType === 'group';
+    return (
+        <div
+            onClick={onClick}
+            onMouseEnter={() => setHovered(true)}
+            onMouseLeave={() => setHovered(false)}
+            style={{
+                padding: '12px 16px',
+                margin: '2px 10px',
+                borderRadius: '16px',
+                cursor: 'pointer',
+                background: isSelected ? 'var(--active-bg, rgba(102,126,234,0.12))' : hovered ? 'var(--bg-light, rgba(255,255,255,0.04))' : 'transparent',
+                transition: 'all 0.25s cubic-bezier(0.4,0,0.2,1)',
+                display: 'flex', gap: '14px', alignItems: 'center',
+                transform: isSelected ? 'translateX(4px)' : 'none',
+                borderLeft: `4px solid ${isSelected ? 'var(--primary)' : 'transparent'}`
+            }}
+        >
+            <div style={{ position: 'relative', flexShrink: 0 }}>
+                <div style={{
+                    width: '48px', height: '48px', borderRadius: '15px',
+                    background: isSelected ? 'var(--primary)' : 'var(--bg-light, rgba(255,255,255,0.06))',
+                    border: '1px solid var(--border-color)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: '18px', fontWeight: '900',
+                    color: isSelected ? '#fff' : 'var(--primary)',
+                    boxShadow: isSelected ? '0 8px 16px rgba(102,126,234,0.25)' : 'none',
+                    transition: 'all 0.3s'
+                }}>
+                    {isGroup ? <Hash size={22} strokeWidth={2.5} /> : getInitial(conv)}
+                </div>
+                {online && !isGroup && (
+                    <div style={{
+                        position: 'absolute', bottom: '0', right: '0',
+                        width: '14px', height: '14px', background: '#10b981',
+                        border: '2.5px solid var(--bg-panel)', borderRadius: '50%',
+                        boxShadow: '0 0 10px rgba(16,185,129,0.4)'
+                    }} />
+                )}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '2px' }}>
+                    <h4 style={{
+                        margin: 0,
+                        color: isSelected ? 'var(--primary)' : 'var(--text-main)',
+                        fontSize: '15px',
+                        fontWeight: (unread > 0 || isSelected) ? '800' : '600',
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        letterSpacing: '-0.01em', transition: 'color 0.2s'
+                    }}>
+                        {getName(conv)}
+                    </h4>
+                    <span style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: '700', opacity: 0.8, flexShrink: 0, marginLeft: '8px' }}>
+                        {conv.lastMessageAt ? formatTime(conv.lastMessageAt) : ''}
+                    </span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <p style={{
+                        margin: 0,
+                        color: unread > 0 ? 'var(--text-main)' : 'var(--text-muted)',
+                        fontSize: '13px',
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        fontWeight: unread > 0 ? '700' : '500', opacity: 0.85
+                    }}>
+                        {conv.lastMessage?.content || 'No signals transmitted'}
+                    </p>
+                    {unread > 0 && (
+                        <div style={{
+                            background: 'var(--primary)', borderRadius: '9px',
+                            minWidth: '20px', height: '18px', padding: '0 6px',
+                            fontSize: '10px', color: '#fff', fontWeight: '900',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            flexShrink: 0, marginLeft: '8px',
+                            boxShadow: '0 4px 8px rgba(102,126,234,0.3)'
+                        }}>
+                            {unread > 99 ? '99+' : unread}
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}
 
 export default function ManageChat() {
     const [user, setUser] = useState(null);
@@ -20,9 +108,20 @@ export default function ManageChat() {
     const [onlineIds, setOnlineIds] = useState(new Set());
     const [showInfo, setShowInfo] = useState(false);
     const [unreadCounts, setUnreadCounts] = useState({});
+
+    // ─── E2EE State ────────────────────────────────────────────────────────────
+    const [e2eeStatus, setE2eeStatus] = useState('checking'); // 'checking' | 'locked' | 'setup_needed' | 'unlocked'
+    const [e2eePrivateKey, setE2eePrivateKey] = useState(null);
+    const [showE2EEModal, setShowE2EEModal] = useState(false);
+    const [unlockPassword, setUnlockPassword] = useState('');
+    const [unlockLoading, setUnlockLoading] = useState(false);
+    const [unlockError, setUnlockError] = useState('');
+    const [showPassphrase, setShowPassphrase] = useState(false);
+
     const messagesEndRef = useRef(null);
     const typingTimerRef = useRef(null);
 
+    // Load profile
     useEffect(() => {
         const loadProfile = async () => {
             try {
@@ -35,7 +134,67 @@ export default function ManageChat() {
         loadProfile();
     }, []);
 
-    // Socket setup
+    // ─── E2EE Init ─────────────────────────────────────────────────────────────
+    useEffect(() => {
+        if (!user?.id) return;
+
+        // Check session cache first (already unlocked this session)
+        const sessionPk = sessionStorage.getItem('e2ee_session_pk');
+        if (sessionPk) {
+            setE2eePrivateKey(sessionPk);
+            setE2eeStatus('unlocked');
+            return;
+        }
+
+        // Local bundle found → prompt passphrase
+        if (hasE2EEBundle(user.id)) {
+            setE2eeStatus('locked');
+            setShowE2EEModal(true);
+            return;
+        }
+
+        // Check server for bundle (e.g. after domain change)
+        api.getE2EEBundle().then(serverBundle => {
+            if (serverBundle?.encryptedPrivateKey) {
+                localStorage.setItem(`e2ee_bundle_${user.id}`, JSON.stringify({
+                    encryptedPrivateKey: serverBundle.encryptedPrivateKey,
+                    salt: serverBundle.salt,
+                    iv: serverBundle.iv,
+                    publicKey: serverBundle.publicKey,
+                }));
+                setE2eeStatus('locked');
+                setShowE2EEModal(true);
+            } else {
+                setE2eeStatus('setup_needed');
+                setShowE2EEModal(true);
+            }
+        }).catch(() => {
+            setE2eeStatus('setup_needed');
+            setShowE2EEModal(true);
+        });
+    }, [user?.id]);
+
+    // ─── Unlock E2EE ───────────────────────────────────────────────────────────
+    const handleUnlockE2EE = async () => {
+        if (!unlockPassword.trim() || !user?.id) return;
+        setUnlockLoading(true);
+        setUnlockError('');
+        try {
+            const privateKey = await unlockE2EEWithPassword(user.id, unlockPassword);
+            if (!privateKey) throw new Error('Invalid passphrase');
+            setE2eePrivateKey(privateKey);
+            sessionStorage.setItem('e2ee_session_pk', privateKey);
+            setE2eeStatus('unlocked');
+            setShowE2EEModal(false);
+            setUnlockPassword('');
+        } catch (err) {
+            setUnlockError('Sai passphrase. Vui lòng thử lại.');
+        } finally {
+            setUnlockLoading(false);
+        }
+    };
+
+    // ─── Socket Setup ──────────────────────────────────────────────────────────
     useEffect(() => {
         if (!user?.id) return;
         const token = localStorage.getItem('accessToken');
@@ -50,18 +209,18 @@ export default function ManageChat() {
         });
 
         socketService.onNewMessage(async (data) => {
-            if (data.content && data.content.startsWith('[E2EE]:')) {
+            if (data.content?.startsWith('[E2EE]:')) {
                 const rawContent = data.content.substring(7);
-                const privateKey = localStorage.getItem(`e2ee_private_key_${user.id}`);
-                if (privateKey) {
+                const pk = sessionStorage.getItem('e2ee_session_pk') || e2eePrivateKey;
+                if (pk) {
                     try {
                         const encryptedData = JSON.parse(rawContent);
-                        if (encryptedData[user.id]) data.content = await decryptContent(encryptedData[user.id], privateKey);
+                        if (encryptedData[user.id]) data.content = await decryptContent(encryptedData[user.id], pk);
                     } catch (e) {
-                        try { data.content = await decryptContent(rawContent, privateKey); } catch (err) { }
+                        try { data.content = await decryptContent(rawContent, pk); } catch { }
                     }
                 } else {
-                    data.content = " [E2EE: Missing Private Key]";
+                    data.content = '🔐 E2EE locked — unlock to read';
                 }
             }
 
@@ -84,69 +243,56 @@ export default function ManageChat() {
         });
 
         return () => socketService.disconnect();
-    }, [user?.id, selectedChat]);
+    }, [user?.id, selectedChat, e2eePrivateKey]);
 
+    // ─── Decrypt helper ────────────────────────────────────────────────────────
+    const decryptMsg = useCallback(async (content) => {
+        if (!content?.startsWith('[E2EE]:')) return content;
+        const rawContent = content.substring(7);
+        const pk = sessionStorage.getItem('e2ee_session_pk') || e2eePrivateKey;
+        if (!pk) return '🔐 E2EE locked — click 🔑 to unlock';
+        try {
+            const encryptedData = JSON.parse(rawContent);
+            if (user?.id && encryptedData[user.id]) return await decryptContent(encryptedData[user.id], pk);
+        } catch { }
+        try { return await decryptContent(rawContent, pk); } catch { }
+        return '🔐 [Decryption failed]';
+    }, [e2eePrivateKey, user?.id]);
+
+    // ─── Load Conversations ─────────────────────────────────────────────────────
     const loadConversations = useCallback(async () => {
         if (!user?.id) return;
         try {
             setLoading(true);
             const dataRes = await api.getConversations();
             const data = dataRes?.conversations || dataRes || [];
-            const privateKey = localStorage.getItem(`e2ee_private_key_${user.id}`);
-            
-            const processedData = await Promise.all(
-                data.map(async (conv) => {
-                    if (conv.lastMessage?.content?.startsWith('[E2EE]:')) {
-                        const rawContent = conv.lastMessage.content.substring(7);
-                        if (!privateKey) {
-                            conv.lastMessage.content = " [E2EE: Missing Private Key]";
-                        } else {
-                            try {
-                                const encryptedData = JSON.parse(rawContent);
-                                if (encryptedData[user.id]) conv.lastMessage.content = await decryptContent(encryptedData[user.id], privateKey);
-                            } catch (e) {
-                                try { conv.lastMessage.content = await decryptContent(rawContent, privateKey); } catch (err) { }
-                            }
-                        }
-                    }
-                    return conv;
-                })
-            );
-            setConversations(processedData);
+            const processed = await Promise.all(data.map(async (conv) => {
+                if (conv.lastMessage?.content) {
+                    conv.lastMessage.content = await decryptMsg(conv.lastMessage.content);
+                }
+                return conv;
+            }));
+            setConversations(processed);
         } catch (err) {
             console.error('Failed to load conversations:', err);
         } finally {
             setLoading(false);
         }
-    }, [user?.id]);
+    }, [user?.id, decryptMsg]);
 
     useEffect(() => { loadConversations(); }, [loadConversations]);
 
+    // ─── Load Messages ─────────────────────────────────────────────────────────
     const loadMessages = useCallback(async (convId) => {
         if (!convId || !user?.id) return;
         try {
             setMsgLoading(true);
             const dataRes = await api.getConversationMessages(convId);
             const rawMessages = dataRes?.messages || dataRes || [];
-            const privateKey = localStorage.getItem(`e2ee_private_key_${user.id}`);
-            
-            const newMessages = await Promise.all(rawMessages.map(async msg => {
-                if (msg.content?.startsWith('[E2EE]:')) {
-                    const rawContent = msg.content.substring(7);
-                    if (!privateKey) {
-                        msg.content = " [E2EE: Missing Private Key]";
-                    } else {
-                        try {
-                            const encryptedData = JSON.parse(rawContent);
-                            if (encryptedData[user.id]) msg.content = await decryptContent(encryptedData[user.id], privateKey);
-                        } catch (e) {
-                            try { msg.content = await decryptContent(rawContent, privateKey); } catch (err) { }
-                        }
-                    }
-                }
-                return msg;
-            }));
-
+            const newMessages = await Promise.all(rawMessages.map(async msg => ({
+                ...msg,
+                content: await decryptMsg(msg.content),
+            })));
             setMessages(newMessages);
             await api.markAsRead(convId);
             setUnreadCounts(prev => ({ ...prev, [convId]: 0 }));
@@ -156,7 +302,7 @@ export default function ManageChat() {
         } finally {
             setMsgLoading(false);
         }
-    }, [user?.id]);
+    }, [user?.id, decryptMsg]);
 
     const handleSelectConv = async (conv) => {
         setSelectedChat(conv.id);
@@ -166,6 +312,7 @@ export default function ManageChat() {
         await loadMessages(conv.id);
     };
 
+    // ─── Send Message ──────────────────────────────────────────────────────────
     const handleSend = async (e) => {
         e.preventDefault();
         if (!input.trim() || !selectedChat || sending) return;
@@ -177,7 +324,7 @@ export default function ManageChat() {
             if (selectedConv?.conversationType === 'direct' && selectedConv.otherUser?.publicKey) {
                 try {
                     const encryptedForRecipient = await encryptContent(finalContent, selectedConv.otherUser.publicKey);
-                    let myPublicKey = user.publicKey;
+                    const myPublicKey = user.publicKey;
                     if (myPublicKey) {
                         const encryptedForMe = await encryptContent(finalContent, myPublicKey);
                         finalContent = `[E2EE]:${JSON.stringify({ [selectedConv.otherUser.id]: encryptedForRecipient, [user.id]: encryptedForMe })}`;
@@ -190,18 +337,9 @@ export default function ManageChat() {
             const msg = await api.sendMessage(selectedChat, finalContent);
             socketService.sendMessage?.(selectedChat, msg);
 
-            if (msg.content?.startsWith('[E2EE]:')) {
-                const rawContent = msg.content.substring(7);
-                const privateKey = localStorage.getItem(`e2ee_private_key_${user.id}`);
-                if (privateKey) {
-                    try {
-                        const encryptedData = JSON.parse(rawContent);
-                        if (encryptedData[user.id]) msg.content = await decryptContent(encryptedData[user.id], privateKey);
-                    } catch (e) { }
-                }
-            }
-
-            setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg]);
+            // Decrypt the sent message for own display
+            const displayMsg = { ...msg, content: await decryptMsg(msg.content) };
+            setMessages(prev => prev.some(m => m.id === displayMsg.id) ? prev : [...prev, displayMsg]);
             setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
             loadConversations();
         } catch (err) {
@@ -240,15 +378,161 @@ export default function ManageChat() {
         return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
     };
 
+    // ─── E2EE Passphrase Modal ─────────────────────────────────────────────────
+    const E2EEModal = () => (
+        <div style={{
+            position: 'fixed', inset: 0, zIndex: 9999,
+            background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center'
+        }}>
+            <div style={{
+                background: 'var(--bg-panel)', borderRadius: '24px',
+                border: '1px solid var(--border-color)', padding: '40px',
+                width: '420px', maxWidth: '90vw',
+                boxShadow: '0 20px 60px rgba(0,0,0,0.5)'
+            }}>
+                {/* Header */}
+                <div style={{ textAlign: 'center', marginBottom: '28px' }}>
+                    <div style={{
+                        width: '64px', height: '64px', background: 'var(--primary)',
+                        borderRadius: '20px', display: 'flex', alignItems: 'center',
+                        justifyContent: 'center', margin: '0 auto 16px',
+                        boxShadow: '0 0 30px rgba(102,126,234,0.4)'
+                    }}>
+                        <Key size={28} color="#fff" />
+                    </div>
+                    <h2 style={{ color: 'var(--text-main)', margin: '0 0 8px', fontSize: '20px', fontWeight: '900', textTransform: 'uppercase' }}>
+                        {e2eeStatus === 'setup_needed' ? 'E2EE Setup Required' : 'Unlock Secure Channel'}
+                    </h2>
+                    <p style={{ color: 'var(--text-secondary)', margin: 0, fontSize: '13px', fontWeight: '500' }}>
+                        {e2eeStatus === 'setup_needed'
+                            ? 'Thiết lập mã hoá đầu cuối từ tài khoản người dùng trước khi sử dụng chat.'
+                            : 'Nhập passphrase để giải mã tin nhắn E2EE trong phiên này.'}
+                    </p>
+                </div>
+
+                {e2eeStatus === 'setup_needed' ? (
+                    <div style={{
+                        background: 'rgba(102,126,234,0.08)', border: '1px solid rgba(102,126,234,0.2)',
+                        borderRadius: '16px', padding: '20px', marginBottom: '20px'
+                    }}>
+                        <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+                            <ShieldCheck size={20} color="var(--primary)" style={{ flexShrink: 0, marginTop: '2px' }} />
+                            <div>
+                                <div style={{ color: 'var(--text-main)', fontSize: '13px', fontWeight: '800', marginBottom: '6px' }}>
+                                    Chưa có E2EE Bundle
+                                </div>
+                                <div style={{ color: 'var(--text-secondary)', fontSize: '12px', lineHeight: '1.6' }}>
+                                    Vui lòng vào tài khoản người dùng → Settings → thiết lập E2EE passphrase trước. Sau đó quay lại đây để unlock.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                ) : (
+                    <>
+                        {/* Passphrase Input */}
+                        <div style={{ marginBottom: '16px' }}>
+                            <label style={{
+                                fontSize: '11px', fontWeight: '900', textTransform: 'uppercase',
+                                color: 'var(--text-muted)', display: 'block', marginBottom: '8px', letterSpacing: '0.05em'
+                            }}>Passphrase</label>
+                            <div style={{
+                                display: 'flex', alignItems: 'center', gap: '10px',
+                                background: 'var(--bg-app)', borderRadius: '14px',
+                                border: `1px solid ${unlockError ? '#ef4444' : 'var(--border-color)'}`,
+                                padding: '0 14px', transition: 'border-color 0.2s'
+                            }}>
+                                <Key size={16} color="var(--text-muted)" />
+                                <input
+                                    type={showPassphrase ? 'text' : 'password'}
+                                    value={unlockPassword}
+                                    onChange={e => { setUnlockPassword(e.target.value); setUnlockError(''); }}
+                                    onKeyDown={e => e.key === 'Enter' && handleUnlockE2EE()}
+                                    placeholder="Nhập passphrase bảo mật..."
+                                    autoFocus
+                                    style={{
+                                        flex: 1, background: 'transparent', border: 'none',
+                                        padding: '14px 0', outline: 'none', color: 'var(--text-main)',
+                                        fontSize: '14px', fontFamily: 'monospace'
+                                    }}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPassphrase(v => !v)}
+                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px' }}
+                                >
+                                    {showPassphrase ? <EyeOff size={16} /> : <Eye size={16} />}
+                                </button>
+                            </div>
+                            {unlockError && (
+                                <p style={{ color: '#ef4444', fontSize: '12px', fontWeight: '600', marginTop: '8px' }}>{unlockError}</p>
+                            )}
+                        </div>
+
+                        <button
+                            onClick={handleUnlockE2EE}
+                            disabled={!unlockPassword.trim() || unlockLoading}
+                            style={{
+                                width: '100%', padding: '14px', background: unlockPassword.trim() ? 'var(--primary)' : 'var(--bg-light)',
+                                color: unlockPassword.trim() ? '#fff' : 'var(--text-muted)',
+                                border: 'none', borderRadius: '14px', fontWeight: '900', fontSize: '14px',
+                                cursor: unlockPassword.trim() ? 'pointer' : 'default',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                                textTransform: 'uppercase', letterSpacing: '0.05em',
+                                transition: 'all 0.2s', marginBottom: '12px'
+                            }}
+                        >
+                            {unlockLoading ? <Loader2 size={18} className="animate-spin" /> : <ShieldCheck size={18} />}
+                            {unlockLoading ? 'Đang xác thực...' : 'Xác thực & Mở khoá'}
+                        </button>
+                    </>
+                )}
+
+                <button
+                    onClick={() => setShowE2EEModal(false)}
+                    style={{
+                        width: '100%', padding: '12px', background: 'transparent',
+                        border: '1px solid var(--border-color)', borderRadius: '12px',
+                        color: 'var(--text-muted)', cursor: 'pointer', fontSize: '13px', fontWeight: '700'
+                    }}
+                >
+                    Bỏ qua (tin nhắn sẽ không được giải mã)
+                </button>
+            </div>
+        </div>
+    );
+
+    // ─── Render ────────────────────────────────────────────────────────────────
     return (
-        <div style={{ display: 'flex', height: '100%', background: 'var(--bg-panel)', overflow: 'hidden' }}>
+        <div style={{ display: 'flex', height: '100%', background: 'var(--bg-panel)', overflow: 'hidden', position: 'relative' }}>
+            {/* E2EE Modal */}
+            {showE2EEModal && <E2EEModal />}
+
             {/* Conversation list */}
             <div style={{
                 width: '300px', flexShrink: 0, borderRight: '1px solid var(--border-color)',
                 display: 'flex', flexDirection: 'column', background: 'var(--bg-main)'
             }}>
                 <div style={{ padding: '24px 20px', borderBottom: '1px solid var(--border-color)' }}>
-                    <h3 style={{ margin: '0 0 16px 0', color: 'var(--text-main)', fontSize: '15px', fontWeight: '900', textTransform: 'uppercase' }}>Secure Channels</h3>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                        <h3 style={{ margin: 0, color: 'var(--text-main)', fontSize: '15px', fontWeight: '900', textTransform: 'uppercase' }}>Secure Channels</h3>
+                        {/* E2EE lock indicator */}
+                        <button
+                            onClick={() => setShowE2EEModal(true)}
+                            title={e2eeStatus === 'unlocked' ? 'E2EE Unlocked — click to re-enter passphrase' : 'E2EE Locked — click to unlock'}
+                            style={{
+                                background: e2eeStatus === 'unlocked' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
+                                border: `1px solid ${e2eeStatus === 'unlocked' ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`,
+                                borderRadius: '10px', padding: '6px 10px', cursor: 'pointer',
+                                display: 'flex', alignItems: 'center', gap: '6px',
+                                color: e2eeStatus === 'unlocked' ? '#10b981' : '#ef4444',
+                                fontSize: '10px', fontWeight: '900', textTransform: 'uppercase',
+                            }}
+                        >
+                            {e2eeStatus === 'unlocked' ? <ShieldCheck size={13} /> : <Key size={13} />}
+                            {e2eeStatus === 'unlocked' ? 'E2EE On' : 'Unlock'}
+                        </button>
+                    </div>
                     <div style={{
                         display: 'flex', alignItems: 'center', gap: '8px',
                         background: 'var(--bg-panel)', borderRadius: '12px', padding: '10px 14px', border: '1px solid var(--border-color)'
@@ -272,63 +556,19 @@ export default function ManageChat() {
                             <p className="font-bold">No active threads</p>
                         </div>
                     ) : (
-                        conversations.map(conv => {
-                            const unread = unreadCounts[conv.id] || 0;
-                            const online = isOnline(conv);
-                            const isSelected = selectedChat === conv.id;
-                            return (
-                                <div
-                                    key={conv.id}
-                                    onClick={() => handleSelectConv(conv)}
-                                    style={{
-                                        padding: '12px 20px', cursor: 'pointer', display: 'flex', gap: '12px',
-                                        alignItems: 'center', background: isSelected ? 'var(--active-bg)' : 'transparent',
-                                        transition: 'all 0.2s', borderLeft: `4px solid ${isSelected ? 'var(--primary)' : 'transparent'}`
-                                    }}
-                                >
-                                    <div style={{ position: 'relative', flexShrink: 0 }}>
-                                        <div style={{
-                                            width: '42px', height: '42px', borderRadius: '12px',
-                                            background: isSelected ? 'var(--primary)' : 'var(--bg-panel)',
-                                            border: '1px solid var(--border-color)',
-                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                            color: isSelected ? '#fff' : 'var(--text-main)', fontWeight: '900', fontSize: '14px',
-                                            shadow: isSelected ? 'var(--shadow-primary)' : 'none'
-                                        }}>
-                                            {getConvInitial(conv)}
-                                        </div>
-                                        {online && (
-                                            <div style={{
-                                                position: 'absolute', bottom: '-2px', right: '-2px', width: '12px', height: '12px',
-                                                background: '#10b981', border: '2px solid var(--bg-main)', borderRadius: '50%'
-                                            }} />
-                                        )}
-                                    </div>
-                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                                            <span style={{ color: 'var(--text-main)', fontWeight: '800', fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                {getConvName(conv)}
-                                            </span>
-                                            <span style={{ color: 'var(--text-muted)', fontSize: '10px', fontWeight: '700' }}>
-                                                {conv.lastMessageAt ? formatTime(conv.lastMessageAt) : ''}
-                                            </span>
-                                        </div>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <span style={{ color: 'var(--text-secondary)', fontSize: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: unread > 0 ? '700' : '400' }}>
-                                                {conv.lastMessage?.content || 'System ready...'}
-                                            </span>
-                                            {unread > 0 && (
-                                                <span style={{
-                                                    background: 'var(--primary)', color: '#fff', fontSize: '10px', fontWeight: '900',
-                                                    minWidth: '18px', height: '18px', borderRadius: '6px', display: 'flex',
-                                                    alignItems: 'center', justifyContent: 'center', padding: '0 4px'
-                                                }}>{unread > 99 ? '99+' : unread}</span>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-                            );
-                        })
+                        conversations.map(conv => (
+                            <ConvItem
+                                key={conv.id}
+                                conv={conv}
+                                isSelected={selectedChat === conv.id}
+                                unread={unreadCounts[conv.id] || 0}
+                                online={isOnline(conv)}
+                                onClick={() => handleSelectConv(conv)}
+                                getName={getConvName}
+                                getInitial={getConvInitial}
+                                formatTime={formatTime}
+                            />
+                        ))
                     )}
                 </div>
             </div>
@@ -355,7 +595,7 @@ export default function ManageChat() {
                                 <div style={{
                                     width: '46px', height: '46px', borderRadius: '14px',
                                     background: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                    color: '#fff', fontWeight: '900', fontSize: '18px', shadow: 'var(--shadow-primary)'
+                                    color: '#fff', fontWeight: '900', fontSize: '18px'
                                 }}>
                                     {getConvInitial(selectedConv)}
                                 </div>
@@ -363,6 +603,15 @@ export default function ManageChat() {
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
                                         <h2 style={{ color: 'var(--text-main)', fontWeight: '900', fontSize: '16px', margin: 0 }}>{getConvName(selectedConv)}</h2>
                                         <Lock size={12} color="var(--primary)" />
+                                        {/* E2EE status badge */}
+                                        <span style={{
+                                            fontSize: '9px', fontWeight: '900', textTransform: 'uppercase', padding: '2px 7px', borderRadius: '6px',
+                                            background: e2eeStatus === 'unlocked' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
+                                            color: e2eeStatus === 'unlocked' ? '#10b981' : '#ef4444',
+                                            border: `1px solid ${e2eeStatus === 'unlocked' ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`,
+                                        }}>
+                                            {e2eeStatus === 'unlocked' ? '🔓 E2EE Active' : '🔐 Locked'}
+                                        </span>
                                     </div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                         <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: isOnline(selectedConv) ? '#10b981' : 'var(--text-muted)' }} />
@@ -373,11 +622,10 @@ export default function ManageChat() {
                                 </div>
                             </div>
                             <button onClick={() => setShowInfo(!showInfo)} style={{
-                                background: showInfo ? 'var(--primary-light)' : 'var(--bg-panel)', 
+                                background: showInfo ? 'var(--primary-light)' : 'var(--bg-panel)',
                                 border: '1px solid var(--border-color)',
-                                color: showInfo ? 'var(--primary)' : 'var(--text-secondary)', 
-                                padding: '10px', borderRadius: '12px',
-                                cursor: 'pointer', transition: 'all 0.2s'
+                                color: showInfo ? 'var(--primary)' : 'var(--text-secondary)',
+                                padding: '10px', borderRadius: '12px', cursor: 'pointer', transition: 'all 0.2s'
                             }}>
                                 <Info size={20} />
                             </button>
@@ -407,9 +655,8 @@ export default function ManageChat() {
                                                             {showAvatar && (
                                                                 <div style={{
                                                                     width: '32px', height: '32px', borderRadius: '10px', background: 'var(--bg-light)',
-                                                                    border: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', 
-                                                                    justifyContent: 'center', color: 'var(--primary)',
-                                                                    fontSize: '12px', fontWeight: '900'
+                                                                    border: '1px solid var(--border-color)', display: 'flex', alignItems: 'center',
+                                                                    justifyContent: 'center', color: 'var(--primary)', fontSize: '12px', fontWeight: '900'
                                                                 }}>
                                                                     {senderName.charAt(0)}
                                                                 </div>
@@ -425,7 +672,6 @@ export default function ManageChat() {
                                                             padding: '12px 16px', borderRadius: isOwn ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
                                                             color: isOwn ? '#fff' : 'var(--text-main)', fontSize: '14px', lineHeight: '1.6', wordBreak: 'break-word',
                                                             border: isOwn ? 'none' : '1px solid var(--border-color)',
-                                                            shadow: isOwn ? 'var(--shadow-primary)' : 'none'
                                                         }}>
                                                             {msg.messageType === 'file' ? (
                                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
@@ -448,7 +694,6 @@ export default function ManageChat() {
                                             );
                                         })
                                     )}
-
                                     {typingUsers.length > 0 && (
                                         <div style={{ display: 'flex', gap: '10px', alignItems: 'center', opacity: 0.6 }}>
                                             <div style={{ background: 'var(--bg-main)', padding: '10px 16px', borderRadius: '16px 16px 16px 4px', display: 'flex', gap: '4px' }}>
@@ -463,8 +708,20 @@ export default function ManageChat() {
                                 </div>
 
                                 <footer style={{ padding: '20px 28px', background: 'var(--bg-main)', borderTop: '1px solid var(--border-color)' }}>
+                                    {e2eeStatus !== 'unlocked' && (
+                                        <div style={{
+                                            display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 16px', marginBottom: '12px',
+                                            background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)',
+                                            borderRadius: '12px', cursor: 'pointer'
+                                        }} onClick={() => setShowE2EEModal(true)}>
+                                            <Key size={14} color="#ef4444" />
+                                            <span style={{ color: '#ef4444', fontSize: '12px', fontWeight: '700' }}>
+                                                E2EE chưa được mở khoá — tin nhắn gửi đi sẽ không được mã hoá. <u>Nhấn để unlock</u>
+                                            </span>
+                                        </div>
+                                    )}
                                     <form onSubmit={handleSend} style={{ display: 'flex', gap: '12px' }}>
-                                        <div style={{ flex: 1, background: 'var(--bg-panel)', borderRadius: '16px', border: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', padding: '0 16px', shadow: 'inset 0 2px 4px rgba(0,0,0,0.02)' }}>
+                                        <div style={{ flex: 1, background: 'var(--bg-panel)', borderRadius: '16px', border: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', padding: '0 16px' }}>
                                             <Paperclip size={20} color="var(--text-muted)" style={{ cursor: 'pointer' }} />
                                             <input
                                                 value={input}
@@ -481,8 +738,7 @@ export default function ManageChat() {
                                             style={{
                                                 width: '54px', height: '54px', background: input.trim() ? 'var(--primary)' : 'var(--bg-light)',
                                                 borderRadius: '16px', border: 'none', color: '#fff', cursor: 'pointer',
-                                                display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s',
-                                                shadow: input.trim() ? 'var(--shadow-primary)' : 'none'
+                                                display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s'
                                             }}
                                         >
                                             {sending ? <Loader2 size={24} className="animate-spin" /> : <Send size={22} />}
@@ -494,17 +750,16 @@ export default function ManageChat() {
                             {showInfo && selectedConv && (
                                 <aside style={{ width: '300px', borderLeft: '1px solid var(--border-color)', background: 'var(--bg-main)', display: 'flex', flexDirection: 'column' }}>
                                     <div style={{ padding: '40px 24px', textAlign: 'center', borderBottom: '1px solid var(--border-color)' }}>
-                                        <div style={{ width: '80px', height: '80px', background: 'var(--primary)', borderRadius: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '32px', fontWeight: '900', margin: '0 auto 20px', shadow: 'var(--shadow-primary)' }}>
+                                        <div style={{ width: '80px', height: '80px', background: 'var(--primary)', borderRadius: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '32px', fontWeight: '900', margin: '0 auto 20px' }}>
                                             {getConvInitial(selectedConv)}
                                         </div>
                                         <h3 style={{ color: 'var(--text-main)', margin: '0 0 6px 0', fontSize: '18px', fontWeight: '900' }}>{getConvName(selectedConv)}</h3>
-                                        <span style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', tracking: '0.05em' }}>
+                                        <span style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: '800', textTransform: 'uppercase' }}>
                                             {isGroup ? `${selectedConv.members?.length || 0} protocol members` : 'Direct Liaison'}
                                         </span>
                                     </div>
-
                                     <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
-                                        <h4 style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: '900', textTransform: 'uppercase', marginBottom: '16px', tracking: '0.1em' }}>
+                                        <h4 style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: '900', textTransform: 'uppercase', marginBottom: '16px' }}>
                                             {isGroup ? 'Clearance List' : 'Subject Profile'}
                                         </h4>
                                         {isGroup && (selectedConv.members || []).map(m => (
@@ -519,7 +774,6 @@ export default function ManageChat() {
                                             </div>
                                         ))}
                                     </div>
-
                                     <div style={{ padding: '24px', borderTop: '1px solid var(--border-color)' }}>
                                         <div style={{ padding: '16px', background: 'var(--bg-primary-soft)', borderRadius: '16px', border: '1px solid var(--border-primary-soft)', display: 'flex', gap: '12px' }}>
                                             <Lock size={18} color="var(--primary)" style={{ flexShrink: 0 }} />

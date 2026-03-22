@@ -116,15 +116,28 @@ export default function ManageReports() {
                                 <TrendingUp size={18} color="var(--primary)" />
                                 <h3 style={{ margin: 0, fontSize: '13px', fontWeight: '900', color: 'var(--text-main)', textTransform: 'uppercase' }}>Communication Density (30D)</h3>
                             </div>
-                            <div style={{ flex: 1, display: 'flex', alignItems: 'flex-end', gap: '8px', paddingBottom: '16px' }}>
-                                {(data.security?.dailyStats || [40, 70, 45, 90, 65, 80, 55]).map((h, i) => (
-                                    <div key={i} style={{
-                                        flex: 1, height: `${(h.count || h) % 100}%`,
-                                        background: 'linear-gradient(to top, var(--primary), #6366f1)',
-                                        borderRadius: '6px', opacity: 0.3 + (i * 0.1), minHeight: '8px',
-                                        transition: 'height 1s ease-out'
-                                    }} />
-                                ))}
+                        <div style={{ flex: 1, display: 'flex', alignItems: 'flex-end', gap: '6px', paddingBottom: '16px', height: '250px' }}>
+                                {(() => {
+                                    const rawData = (data.security?.dailyStats?.length > 0)
+                                        ? data.security.dailyStats.map(h => typeof h === 'object' ? (h.count || 0) : h)
+                                        : [40, 70, 45, 90, 65, 80, 55];
+                                    const maxVal = Math.max(...rawData, 1);
+                                    return rawData.map((h, i) => {
+                                        const heightPct = Math.max(8, Math.round((h / maxVal) * 100));
+                                        return (
+                                            <div key={i} style={{
+                                                flex: 1,
+                                                height: `${heightPct}%`,
+                                                background: `linear-gradient(to top, var(--primary), #6366f1)`,
+                                                borderRadius: '6px 6px 0 0',
+                                                opacity: 0.5 + (i / rawData.length) * 0.5,
+                                                minHeight: '8px',
+                                                transition: 'height 1s ease-out',
+                                                boxShadow: '0 0 8px rgba(99,102,241,0.3)'
+                                            }} />
+                                        );
+                                    });
+                                })()}
                             </div>
                         </div>
 

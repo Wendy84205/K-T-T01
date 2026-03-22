@@ -1,109 +1,93 @@
-/* Premium Chat Aesthetics */
+/* Ultra Premium Chat Aesthetics - KTT01 */
 
 @keyframes typing {
-    0% {
-        transform: translateY(0px);
-        opacity: 0.5;
-    }
-
-    50% {
-        transform: translateY(-4px);
-        opacity: 1;
-    }
-
-    100% {
-        transform: translateY(0px);
-        opacity: 0.5;
-    }
+    0% { transform: translateY(0px); opacity: 0.5; }
+    50% { transform: translateY(-4px); opacity: 1; box-shadow: 0 0 10px var(--primary); }
+    100% { transform: translateY(0px); opacity: 0.5; }
 }
 
 .typing-dots {
-    display: flex;
-    gap: 4px;
-    align-items: center;
-    height: 12px;
+    display: flex; gap: 4px; align-items: center; height: 12px;
 }
 
 .typing-dots span {
-    width: 6px;
-    height: 6px;
+    width: 6px; height: 6px;
     background-color: var(--primary);
-    border-radius: 50%;
-    display: inline-block;
+    border-radius: 50%; display: inline-block;
     animation: typing 1s infinite ease-in-out;
 }
 
-.typing-dots span:nth-child(2) {
-    animation-delay: 0.2s;
-}
-
-.typing-dots span:nth-child(3) {
-    animation-delay: 0.4s;
-}
+.typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+.typing-dots span:nth-child(3) { animation-delay: 0.4s; }
 
 .shimmer {
-    background: linear-gradient(90deg, #f1f3f5 25%, #ffffff 50%, #f1f3f5 75%);
+    background: linear-gradient(90deg, rgba(255,255,255,0.02) 25%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.02) 75%);
     background-size: 200% 100%;
-    animation: shimmer 1.5s infinite;
+    animation: shimmer 2s infinite linear;
 }
 
 @keyframes shimmer {
-    0% {
-        background-position: 200% 0;
-    }
-
-    100% {
-        background-position: -200% 0;
-    }
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
 }
 
 .message-appear {
-    animation: messageAppear 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    animation: messageAppear 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
 }
 
 @keyframes messageAppear {
-    from {
-        opacity: 0;
-        transform: translateY(10px) scale(0.95);
-    }
-
-    to {
-        opacity: 1;
-        transform: translateY(0) scale(1);
-    }
+    from { opacity: 0; transform: translateY(15px) scale(0.95); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
+/* Glass Panels */
 .glass-panel {
-    background: #ffffff;
-    border: 1px solid var(--border-color);
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+    background: rgba(13, 17, 26, 0.45) !important;
+    backdrop-filter: blur(24px) saturate(150%) !important;
+    -webkit-backdrop-filter: blur(24px) saturate(150%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
+/* Message Bubbles */
 .chat-bubble-own {
-    background: var(--primary);
+    background: linear-gradient(135deg, var(--primary) 0%, #818cf8 100%);
     color: #ffffff;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3), inset 0 1px 0 rgba(255,255,255,0.2);
+    border: 1px solid rgba(99, 102, 241, 0.5);
+    border-radius: 18px 18px 4px 18px;
 }
 
 .chat-bubble-other {
-    background: #ffffff;
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(10px) saturate(150%);
     color: var(--text-main);
-    border: 1px solid var(--border-color);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255,255,255,0.05);
+    border-radius: 18px 18px 18px 4px;
+}
+
+/* Custom Scrollbar for Chat */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(99, 102, 241, 0.5);
 }
 
 @keyframes callPulse {
-    0% {
-        transform: scale(1);
-        box-shadow: 0 0 0 0 rgba(0, 123, 255, 0.4);
-    }
-
-    50% {
-        transform: scale(1.05);
-        box-shadow: 0 0 0 20px rgba(0, 123, 255, 0);
-    }
-
-    100% {
-        transform: scale(1);
-        box-shadow: 0 0 0 0 rgba(0, 123, 255, 0);
-    }
+    0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.6); }
+    50% { transform: scale(1.05); box-shadow: 0 0 0 20px rgba(99, 102, 241, 0); }
+    100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(99, 102, 241, 0); }
 }
