@@ -20,6 +20,7 @@ import { ValidationService } from './services/validation.service';
 import { EmployeeIdGeneratorService } from './services/employee-id-generator.service';
 import { TokenService } from './services/token.service';
 import { SessionService } from './services/session.service';
+import { MailService } from './services/mail.service';
 
 // Strategies
 import { JwtStrategy } from './strategies/jwt.strategy';
@@ -56,9 +57,10 @@ import { UsersModule } from '../users/users.module';
     EmployeeIdGeneratorService,
     TokenService,
     SessionService,
+    MailService,
     JwtStrategy,
     LocalStrategy
   ],
-  exports: [AuthService, RegisterService, JwtModule],
+  exports: [AuthService, RegisterService, JwtModule, MailService],
 })
 export class AuthModule { }

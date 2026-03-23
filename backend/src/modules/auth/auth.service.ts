@@ -11,6 +11,8 @@ import { MfaSetting } from '../../database/entities/auth/mfa-setting.entity';
 import { MfaService } from '../mfa/mfa.service';
 import { SecurityService } from '../security/security.service';
 import { UserSession } from '../../database/entities/auth/user-session.entity';
+import { MailService } from './services/mail.service';
+import * as crypto from 'crypto';
 
 @Injectable()
 export class AuthService {
@@ -27,6 +29,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly mfaService: MfaService,
     private readonly securityService: SecurityService,
+    private readonly mailService: MailService,
   ) { }
 
   // Validate user for login
@@ -455,5 +458,64 @@ export class AuthService {
     }
 
     return await bcrypt.compare(password, user.passwordHash);
+  }
+
+  async forgotPassword(email: string): Promise<void> {
+    const user = await this.userRepository.findOne({ where: { email } });
+    if (!user) {
+      // Return silently to prevent email enumeration attacks
+      return;
+    }
+
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const hashedToken = await bcrypt.hash(resetToken, 10);
+    const expires = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
+
+    user.resetToken = hashedToken;
+    user.resetTokenExpires = expires;
+    await this.userRepository.save(user);
+
+    // Front end URL (e.g. localhost:3000/reset-password?token=XYZ)
+    // Pass raw token to email because we only stored hashed token
+    const clientUrl = process.env.CLIENT_URL || 'http://localhost:3000';
+    const link = `${clientUrl}/reset-password?token=${resetToken}&email=${user.email}`;
+
+    await this.mailService.sendPasswordResetEmail(user.email, link);
+  }
+
+  async resetPassword(token: string, email: string, newPassword: string): Promise<void> {
+    const user = await this.userRepository.findOne({ where: { email } });
+    
+    if (!user || !user.resetToken || !user.resetTokenExpires) {
+      throw new BadRequestException('Invalid or expired password reset token');
+    }
+
+    if (new Date() > user.resetTokenExpires) {
+      throw new BadRequestException('Invalid or expired password reset token');
+    }
+
+    const isValid = await bcrypt.compare(token, user.resetToken);
+    if (!isValid) {
+      throw new BadRequestException('Invalid or expired password reset token');
+    }
+
+    // Hash new password
+    const newPasswordHash = await bcrypt.hash(newPassword, 10);
+    
+    // Update user
+    user.passwordHash = newPasswordHash;
+    user.resetToken = null;
+    user.resetTokenExpires = null;
+    
+    // Auto-unlock account if it was locked due to brute force
+    if (user.isLocked) {
+      user.isLocked = false;
+      user.accountLockedUntil = null;
+      user.lockReason = null;
+      user.failedLoginAttempts = 0;
+    }
+
+    await this.userRepository.save(user);
+    this.securityService.logSecurityEvent('PASSWORD_CHANGED', user.id, 'User reset password successfully via email', {}, 'MEDIUM');
   }
 }
