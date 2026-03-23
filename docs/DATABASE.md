@@ -1,193 +1,97 @@
-# Database Documentation — KTT01 CyberSecure
+# Tài liệu Cơ sở Dữ liệu — KTT01 CyberSecure
 
-## Overview
-
-| Property | Value |
-|---|---|
-| RDBMS | MySQL 8.x |
-| ORM | TypeORM (NestJS) |
-| Database Name | `cybersecure_db` |
-| Collation | `utf8mb4_unicode_ci` |
-| Primary Keys | UUIDs (`char(36)`) for main entities |
+Tài liệu này mô tả cấu trúc các bảng dữ liệu trong hệ thống KTT01, được quản lý bởi **MySQL 8.0** và **TypeORM**.
 
 ---
 
-## 🏗️ Core Tables
+## Tổng quan Kỹ thuật
 
-### 1. `users`
-Central identity table storing all user credentials, profile info, and security states.
+| Thuộc tính | Giá trị |
+|---|---|
+| **RDBMS** | MySQL 8.x |
+| **ORM** | TypeORM (NestJS) |
+| **Tên Database** | `cybersecure_db` |
+| **Collation** | `utf8mb4_unicode_ci` |
+| **Khóa chính** | UUIDs (`char(36)`) cho các thực thể chính |
 
-| Column | Type | Description |
+---
+
+## 🏗️ Các bảng cốt lõi (Core Tables)
+
+### 1. Bảng `users` (Người dùng)
+Lưu trữ danh tính, thông tin đăng nhập và trạng thái bảo mật.
+
+| Cột | Kiểu dữ liệu | Mô tả |
 |---|---|---|
 | `id` | `char(36)` | PK (UUID) |
-| `username` | `varchar(50)` | Unique Login ID |
-| `email` | `varchar(255)` | Unique Email |
-| `password_hash` | `varchar(255)` | Bcrypt hash |
-| `status` | `enum('pending','active','banned')` | Account status |
-| `is_active` / `is_locked` | `tinyint(1)` | Security flags |
-| `security_clearance_level` | `tinyint` | 1-5 clearance level |
-| `public_key` | `text` | E2EE RSA Public Key |
-| `e2ee_bundle_encrypted_key` | `longtext` | Encrypted E2EE Private Key (PBKDF2/AES) |
-| `e2ee_bundle_salt` / `_iv` | `varchar(100)` | Crypto parameters |
+| `username` | `varchar(50)` | Tên đăng nhập (Duy nhất) |
+| `email` | `varchar(255)` | Email (Duy nhất) |
+| `password_hash` | `varchar(255)` | Mã băm mật khẩu (Bcrypt) |
+| `status` | `enum` | Trạng thái: `pending`, `active`, `banned` |
+| `is_locked` | `tinyint(1)` | Cờ khóa tài khoản (Security Lockdown) |
+| `security_clearance` | `tinyint` | Cấp độ bảo mật (1-5) |
+| `public_key` | `text` | Khóa RSA Public cho E2EE |
+| `e2ee_bundle` | `longtext` | Private Key đã mã hóa (Sao lưu trên Server) |
 
-### 2. `teams` & `team_members`
-Organizational structure and groupings.
-
-**`teams`**
-| Column | Type | Description |
-|---|---|---|
-| `id` | `varchar(36)` | PK (UUID) |
-| `name` | `varchar(100)` | Division/Team name |
-| `default_security_level`| `tinyint` | Default clearance for members |
-| `parent_team_id` | `varchar(36)` | Hierarchy FK |
-| `manager_id` | `varchar(36)` | FK to `users` |
-
-**`team_members`**
-| Column | Type | Description |
-|---|---|---|
-| `team_id` | `varchar(36)` | FK to `teams` |
-| `user_id` | `varchar(36)` | FK to `users` |
-| `role_in_team` | `varchar(50)` | e.g. 'admin', 'member' |
-| `security_clearance` | `tinyint` | Member's specific clearance |
+### 2. Bảng `teams` & `team_members`
+Quản lý cấu trúc tổ chức và phân quyền nhóm.
 
 ---
 
-## 🔐 Auth & Roles
+## 🔐 Xác thực & Phiên làm việc
 
-### 3. `roles` & `user_roles`
-RBAC (Role-Based Access Control) implementation. Contains default roles: `Admin`, `Manager`, `User`.
+### 3. Bảng `user_sessions`
+Quản lý các phiên đăng nhập để có thể thu hồi (Revoke) ngay lập tức.
 
-### 4. `user_sessions`
-Active login sessions for session management and instant revocation.
-
-| Column | Type | Description |
+| Cột | Kiểu dữ liệu | Mô tả |
 |---|---|---|
-| `id` | `char(36)` | Session ID (JWT JTI) |
-| `user_id` | `char(36)` | FK |
-| `device_id` | `varchar(255)` | Browser/Device fingerprint |
-| `ip_address` | `varchar(45)` | Login IP |
-| `expires_at` | `timestamp` | Absolute expiration limit |
-| `revoked_at` | `timestamp` | If not null, session is dead |
-
-### 5. `mfa_settings`
-Two-factor authentication configurations.
-| Column | Type | Description |
-|---|---|---|
-| `user_id` | `char(36)` | FK |
-| `totp_secret` | `varchar(255)` | Encrypted TOTP seed |
-| `totp_enabled` | `tinyint(1)` | Boolean flag |
+| `id` | `char(36)` | ID phiên (JWT JTI) |
+| `user_id` | `char(36)` | FK liên kết người dùng |
+| `ip_address` | `varchar(45)` | IP khi đăng nhập |
+| `revoked_at` | `timestamp` | Nếu không NULL, phiên này đã bị vô hiệu hóa |
 
 ---
 
-## 💬 Chat & Communications
+## 💬 Liên lạc & Tin nhắn
 
-### 6. `conversations` & `conversation_members`
-Chat rooms (both Direct Messages and Groups).
+### 4. Bảng `messages` (Tin nhắn E2EE)
+Toàn bộ nội dung tin nhắn được lưu dưới dạng bản mã (Ciphertext).
 
-**`conversations`**
-| Column | Type | Description |
-|---|---|---|
-| `id` | `char(36)` | Room ID |
-| `type` | `varchar(20)` | 'direct' or 'group' |
-| `encryption_enabled` | `tinyint(1)` | Always 1 for E2EE |
-
-**`conversation_members`**
-| Column | Type | Description |
-|---|---|---|
-| `conversation_id` | `char(36)` | FK |
-| `user_id` | `char(36)` | FK |
-| `role` | `varchar(20)` | 'admin' or 'member' |
-
-### 7. `messages`
-The actual chat history. Payload is always encrypted cipher-text.
-
-| Column | Type | Description |
+| Cột | Kiểu dữ liệu | Mô tả |
 |---|---|---|
 | `id` | `char(36)` | PK |
-| `conversation_id` | `char(36)` | FK |
-| `sender_id` | `char(36)` | FK |
-| `content` | `text` | **Encrypted Ciphertext** |
-| `is_encrypted` | `tinyint(1)` | Flag |
-| `self_destruct_time` | `int` | TTL in seconds (optional) |
-
-_Support tables: `message_reactions`, `message_read_receipts`, `pinned_messages`_
+| `conversation_id`| `char(36)` | FK liên kết phòng chat |
+| `content` | `text` | **Nội dung đã mã hóa E2EE** |
+| `is_encrypted` | `tinyint(1)` | Luôn là 1 cho các tin nhắn bảo mật |
 
 ---
 
-## 📂 File Storage
+## 📂 Lưu trữ Tệp tin
 
-### 8. `files` & `folders`
-Virtual file system for encrypted documents.
+### 5. Bảng `files` (Tệp tin mã hóa)
+Quản lý siêu dữ liệu (Metadata) của các tệp tin đã mã hóa.
 
-**`files`**
-| Column | Type | Description |
+| Cột | Kiểu dữ liệu | Mô tả |
 |---|---|---|
 | `id` | `varchar(36)` | PK |
-| `owner_id` | `char(36)` | FK to Uploader |
-| `path` | `varchar(500)` | Physical path on disk |
-| `mime_type` | `varchar(255)` | File type |
-| `encryption_iv` | `varchar(255)` | Crypto IV |
-| `security_level` | `tinyint` | Required clearance to view |
-
-### 9. `file_shares`
-Access Control Lists (ACL) for files.
-| Column | Type | Description |
-|---|---|---|
-| `file_id` | `varchar(36)` | FK |
-| `target_user_id` | `char(36)` | User granted access |
-| `permission` | `varchar(50)` | 'view', 'edit', 'admin' |
-
-_Support tables: `file_versions`, `file_integrity_logs`_
+| `path` | `varchar(500)` | Đường dẫn vật lý trên ổ đĩa (`.enc`) |
+| `encryption_iv` | `varchar(255)` | Vector khởi tạo cho AES-GCM |
+| `checksum` | `varchar(255)` | Mã băm SHA-256 để kiểm tra tính toàn vẹn |
 
 ---
 
-## 🚨 Security & Audit
+## 🚨 Nhật ký & Giám sát
 
-### 10. `audit_logs`
-Immutable record of all system actions.
-| Column | Type | Description |
+### 6. Bảng `audit_logs`
+Ghi lại mọi hành động nhạy cảm trên hệ thống (Bản ghi bất biến).
+
+| Cột | Kiểu dữ liệu | Mô tả |
 |---|---|---|
-| `user_id` | `char(36)` | Who performed the action |
-| `event_type` | `varchar(100)` | e.g. `USER_LOGIN`, `FILE_DELETED` |
-| `entity_id` | `char(36)` | ID of the affected record |
-| `description` | `text` | Human readable details |
-| `ip_address` | `varchar(45)` | Source IP |
-
-### 11. `security_incidents`
-Alerts generated by the system (e.g. brute force, anomaly detection).
-| Column | Type | Description |
-|---|---|---|
-| `severity` | `varchar(20)` | 'low', 'medium', 'high', 'critical' |
-| `event_type` | `varchar(100)` | The rule that triggered |
-| `resolved` | `tinyint(1)` | Whether SecOps handled it |
-
-### 12. `rate_limits`
-Tracks endpoint abuse per IP/User to block brute forcing.
+| `event_type` | `varchar(100)` | Loại sự kiện (VD: `LOGIN`, `FILE_DELETE`) |
+| `entity_id` | `char(36)` | ID của đối tượng bị tác động |
+| `description` | `text` | Chi tiết hành động bằng ngôn ngữ tự nhiên |
 
 ---
 
-## 📋 Projects & Tasks
-
-### 13. `projects` & `project_tasks`
-Task tracking and management module.
-
-**`projects`**
-| Column | Type | Description |
-|---|---|---|
-| `id` | `char(36)` | PK |
-| `name` | `varchar(200)` | Project title |
-| `status` | `varchar(50)` | e.g. 'active', 'completed' |
-| `security_clearance_required` | `tinyint` | Clearance needed to view |
-
-**`project_tasks`**
-| Column | Type | Description |
-|---|---|---|
-| `id` | `char(36)` | PK |
-| `project_id` | `char(36)` | FK |
-| `assigned_to` | `char(36)` | FK `users` |
-| `status` | `varchar(50)` | 'todo', 'in_progress', 'done', 'blocked' |
-
----
-
-## Migrations Note
-Database schema changes are managed via TypeORM synchronization mixed with raw SQL scripts located in `backend/src/database/migrations/`.
+## Ghi chú về Migrations
+Các thay đổi về cấu trúc Database được quản lý thông qua TypeORM Migrations hoặc các script SQL thủ công trong thư mục `backend/src/database/migrations/`.

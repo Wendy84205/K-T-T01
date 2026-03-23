@@ -1,299 +1,109 @@
-# Frontend Documentation — KTT01 CyberSecure
+# Tài liệu Frontend — CSEP KTT01
 
-## Overview
-
-| Property | Value |
-|---|---|
-| Framework | React 18 |
-| Language | JavaScript (ES2022) |
-| State Management | React Hooks (`useState`, `useEffect`, `useContext`) |
-| Routing | React Router DOM v6 |
-| Real-time | Socket.IO Client |
-| Encryption | Web Crypto API (SubtleCrypto) |
-| UI | Vanilla CSS (CSS Variables for theming) |
-| Charts | Recharts |
-| Config | `/src/config.js` (auto-updated by tunnel script) |
+Tài liệu này mô tả kiến trúc, thành phần và quy trình vận hành của giao diện người dùng (Frontend) hệ thống KTT01, được xây dựng trên nền tảng **React 18** với trải nghiệm người dùng (UX) hiện đại và bảo mật cao.
 
 ---
 
-## Project Structure
+## Tổng quan Công nghệ
 
-```
+| Đặc tính | Giá trị |
+|---|---|
+| **Framework** | React 18 |
+| **Ngôn ngữ** | JavaScript (ES2022) |
+| **Quản lý Trạng thái** | React Hooks (`useState`, `useEffect`, `useContext`) |
+| **Định tuyến (Routing)** | React Router DOM v6 |
+| **Thời gian thực** | Socket.IO Client |
+| **Mã hóa (E2EE)** | Web Crypto API (SubtleCrypto) |
+| **Giao diện (UI)** | Vanilla CSS (Sử dụng hệ thống CSS Variables) |
+| **Biểu đồ** | Recharts |
+
+---
+
+## Cấu trúc Thư mục Dự án
+
+```text
 frontend/src/
-├── App.js                  # Root router and protected routes
-├── config.js               # Backend URL configuration
-├── index.css               # Global styles and CSS variables
-├── layouts/                # Layout shells (sidebar + header)
-│   ├── UserLayout.js       # Layout for regular users
-│   ├── AdminLayout.js      # Layout for Admins
-│   └── ManageLayout.js     # Layout for Managers
+├── App.js                  # Định tuyến gốc và các Route bảo vệ
+├── config.js               # Cấu hình URL Backend (tự động cập nhật)
+├── index.css               # Phong cách toàn cầu và biến CSS
+├── layouts/                # Các khung giao diện chính (Sidebar + Header)
+│   ├── UserLayout.js       # Giao diện cho nhân viên thường
+│   ├── AdminLayout.js      # Giao diện cho Quản trị viên
+│   └── ManageLayout.js     # Giao diện cho Quản lý (Manager)
 ├── pages/
-│   ├── LoginPage.js        # Login entry point
-│   ├── admin/              # Admin-only pages
-│   ├── manage/             # Manager-only pages
-│   └── user/               # User pages
+│   ├── LoginPage.js        # Cổng đăng nhập chính
+│   ├── ResetPasswordPage.js# Cổng đặt lại mật khẩu
+│   ├── admin/              # Các trang đặc quyền Admin
+│   ├── manage/             # Các trang đặc quyền Manager
+│   └── user/               # Các trang chức năng người dùng
 ├── components/
-│   ├── Auth/               # Login form, MFA, access denied
-│   └── chat/               # Chat UI components
-├── context/                # React context (theme, etc.)
-├── styles/                 # Additional CSS files
-└── utils/
-    ├── api.js              # Centralized API client (all HTTP calls)
-    ├── crypto.js           # E2EE encryption utilities
-    └── socket.js           # Socket.IO service wrapper
+│   ├── Auth/               # Form đăng nhập, MFA, Thông báo lỗi
+│   └── chat/               # Các thành phần giao diện Chat E2EE
+├── utils/
+│   ├── api.js              # Client API tập trung (Axios/Fetch wrapper)
+│   ├── crypto.js           # Thư viện tiện ích mã hóa E2EE (Web Crypto)
+│   └── socket.js           # Dịch vụ Socket.IO client
 ```
 
 ---
 
-## Routing (App.js)
+## Luồng Giao diện & Chức năng Chính
 
-| Path | Component | Access |
-|---|---|---|
-| `/login` | `LoginPage` | Public |
-| `/` | Redirect to `/home` | Protected |
-| `/home` | `UserHomePage` | User/Manager/Admin |
-| `/dashboard` | `UserDashboard` | User/Manager/Admin |
-| `/profile` | `ProfilePage` | User/Manager/Admin |
-| `/documents` | `DocumentsPage` | User/Manager/Admin |
-| `/analytics` | `UserAnalytics` | User/Manager/Admin |
-| `/manage/overview` | `ManageOverview` | Manager/Admin |
-| `/manage/team` | `ManageTeam` | Manager/Admin |
-| `/manage/projects` | `ManageProjects` | Manager/Admin |
-| `/manage/reports` | `ManageReports` | Manager/Admin |
-| `/manage/settings` | `ManageSettings` | Manager/Admin |
-| `/manage/chat` | `ManageChat` | Manager/Admin |
-| `/manage/documents` | `ManageDocuments` | Manager/Admin |
-| `/admin/home` | `AdminHomePage` | Admin only |
-| `/admin/users` | `UsersPage` | Admin only |
-| `/admin/security` | `SecurityPage` | Admin only |
-| `/admin/security-rules` | `SecurityRulesPage` | Admin only |
-| `/admin/network` | `NetworkPage` | Admin only |
-| `/admin/logs` | `LogsPage` | Admin only |
-| `/admin/teams` | `TeamsPage` | Admin only |
-| `/admin/settings` | `SettingsPage` | Admin only |
+### 1. Hệ thống Trang chủ (`/home` — UserHomePage)
+Đây là trung tâm điều hành của người dùng, tích hợp nhiều chức năng trong một giao diện duy nhất:
+
+- **Chat E2EE**: Hệ thống nhắn tin thời gian thực, có hỗ trợ Reaction, chia sẻ file, ghim tin nhắn và trả lời trích dẫn.
+- **Trung tâm Thông báo**: Hiển thị các cảnh báo bảo mật, thông báo nhiệm vụ mới và tin nhắn chưa đọc.
+- **Nhiệm vụ của tôi (My Tasks)**: Quản lý danh sách công việc được giao, cập nhật tiến độ và gửi báo cáo.
+- **Cài đặt bảo mật**: Thiết lập MFA, đổi mật khẩu, quản lý phiên đăng nhập và xem nhật ký hoạt động cá nhân.
+
+### 2. Quản lý Tài liệu (`/documents`)
+Văn phòng số an toàn cho phép:
+- Tải lên tệp tin và tự động mã hóa AES-256-GCM tại backend.
+- Chia sẻ tệp với nhiều cấp độ quyền (`Xem`, `Sửa`, `Toàn quyền`).
+- Kiểm tra tính toàn vẹn (Integrity Check) để đảm bảo file không bị Hacker can thiệp.
+
+### 3. Hệ thống Quản trị & Giám sát (Admin & Manager)
+- **Security Dashboard**: Theo dõi các sự kiện bảo mật theo thời gian thực.
+- **Network Traffic**: Trực quan hóa lưu lượng mạng và các kết nối đang hoạt động.
+- **Audit Logs**: Truy xuất nhật ký mọi thay đổi trên hệ thống để phục vụ điều tra.
 
 ---
 
-## Layouts
+## Cơ chế Bảo mật tại Frontend
 
-### UserLayout
-- Sidebar with: Home, Dashboard, Profile, Documents, Analytics tabs
-- Notification bell with unread badge
-- Dark mode toggle
-- Profile dropdown with account settings
+Hệ thống tuân thủ nghiêm ngặt các nguyên tắc bảo mật:
 
-### AdminLayout
-- Sidebar with full Admin navigation
-- Management, Security, Network, Logs, Teams, Settings sections
-
-### ManageLayout
-- Sidebar for Manager role
-- Team, Projects, Reports, Settings, Chat, Documents sections
-
----
-
-## Pages
-
-### `/home` — UserHomePage
-
-The main hub for users. Contains multiple views accessible via sidebar:
-
-| View | Description |
+| Lĩnh vực | Triển khai thực tế |
 |---|---|
-| **Chat** | Full messaging interface with E2EE, reactions, file sharing, pinned messages, replies |
-| **Alerts** | Notification center with filters (all/unread/security) |
-| **My Tasks** | Tasks assigned to the user with status cycling and progress report submission |
-| **Settings** | Profile edit, MFA setup, password change, preferences, sessions, activity logs |
-
-**E2EE PIN Modal** (`E2EEPassphraseModal`):
-- Appears on login if session has no E2EE key
-- Mode `setup_needed`: User creates a new 6-digit PIN (generates RSA key pair, uploads public key)
-- Mode `locked`: User enters existing PIN to unlock their private key
-- Automatically checks server bundle if localStorage is empty (cross-device support)
-
-### `/dashboard` — UserDashboard
-- Quick stats cards (tasks, messages, files)
-- Activity feed
-- Recent conversations
-
-### `/profile` — ProfilePage
-- Display user info: name, email, department, job title, employee ID, clearance level
-
-### `/documents` — DocumentsPage
-- File manager with upload, download, version history
-- File sharing with permission levels (`view`, `edit`, `admin`)
-- File integrity verification
-
-### `/analytics` — UserAnalytics
-- Personal activity analytics
-- Charts for message activity, file usage
+| **Lưu trữ Token** | `localStorage` (Chỉ dành cho Access Token) |
+| **Khóa Private Key** | Lưu trong `sessionStorage` (RAM), tự xóa khi đóng trình duyệt |
+| **Mã hóa E2EE** | Thực hiện hoàn toàn tại Client bằng Web Crypto API trước khi gửi HTTP Request |
+| **Bảo vệ mã PIN** | Sử dụng **PBKDF2 (310,000 rounds)** để băm mã PIN người dùng thành khóa mã hóa |
+| **Xác thực 2 lớp** | Quy trình 2 bước với `tempToken` và mã TOTP 6 số từ ứng dụng Authenticator |
 
 ---
 
-## Admin Pages
-
-### `/admin/users` — UsersPage
-- Paginated user table with search/filter
-- Create, edit, activate, ban, hard-delete users
-- Assign roles, reset passwords
-- Bulk status updates
-- Global lockdown trigger
-
-### `/admin/security` — SecurityPage
-- Security dashboard overview (incidents, alerts, events)
-- Audit log viewer with filters
-- Security event timeline
-- IP blocking/unblocking
-- Rate limit management
-
-### `/admin/security-rules` — SecurityRulesPage
-- List and manage security policies
-- Enable/disable rules
-
-### `/admin/network` — NetworkPage
-- Network traffic visualization (Recharts)
-- Active connection map
-- Bandwidth usage metrics
-
-### `/admin/logs` — LogsPage
-- System log viewer with level filter (info, warn, error, debug)
-
-### `/admin/teams` — TeamsPage
-- Teams management: create, edit members, update roles
-
-### `/admin/settings` — SettingsPage
-- System-wide configuration
-
----
-
-## Manager Pages
-
-### `/manage/overview` — ManageOverview
-- Team KPIs, project progress, member status overview
-
-### `/manage/team` — ManageTeam
-- Team member list, workload view, role management
-
-### `/manage/projects` — ManageProjects
-- Project/task management
-- Assign tasks with priority, due date
-- Task status pipeline (todo → in_progress → done)
-
-### `/manage/reports` — ManageReports
-- Report generation with filters
-- Progress report submissions from team members
-
-### `/manage/chat` — ManageChat
-- Team-focused messaging view
-
-### `/manage/documents` — ManageDocuments
-- Shared document vault for the team with drag-and-drop upload
-
----
-
-## Core Utilities
-
-### `utils/api.js`
-Centralized HTTP client. All calls include the `Authorization: Bearer <token>` header automatically.
-
-Key methods:
-```js
-api.login(username, password)          // POST /auth/login
-api.verifyMfa(token, tempToken)        // POST /auth/verify-mfa
-api.getProfile()                       // GET /auth/profile
-api.getConversations()                 // GET /chat/conversations
-api.sendMessage(convId, content, ...)  // POST /chat/conversations/:id/messages
-api.uploadFile(formData)               // POST /files/upload
-api.getE2EEBundle()                    // GET /users/profile/e2ee-bundle
-api.saveE2EEBundle(bundle)             // PUT /users/profile/e2ee-bundle
-api.getMyTasks()                       // GET /v1/projects/tasks/my
-api.getNotifications()                 // GET /notifications
-```
-
-### `utils/crypto.js`
-Client-side encryption using the **Web Crypto API** (zero backend dependency for actual crypto).
-
-| Function | Description |
-|---|---|
-| `setupE2EEWithPassword(userId, pin)` | Generate RSA-2048 key pair, encrypt private key with PIN via PBKDF2+AES-GCM, store locally + upload to server |
-| `unlockE2EEWithPassword(userId, pin)` | Load bundle from localStorage or server, decrypt private key using PIN |
-| `encryptHybrid(content, recipientKeysMap)` | AES-GCM encrypt content, RSA-OAEP encrypt AES key per recipient |
-| `decryptHybrid(payload, privateKey, myId)` | Reverse of encryptHybrid |
-| `hasE2EEBundle(userId)` | Quick check if localStorage has the bundle |
-| `deriveAesKeyFromPassword(password, salt)` | PBKDF2 key derivation (310,000 iterations, SHA-256) |
-
-### `utils/socket.js`
-Socket.IO client service:
-```js
-socketService.connect(token, userId)   // Connect and authenticate
-socketService.onNotification(cb)       // Subscribe to notifications
-socketService.onTaskAssigned(cb)       // Subscribe to task assignments
-socketService.emit(event, data)        // Send event
-socketService.disconnect()             // Clean disconnect
-```
-
----
-
-## Theming
-
-The app uses **CSS Variables** for full dark/light mode support, defined in `index.css`:
-
-```css
---bg-app          /* Main background */
---bg-panel        /* Panel/card background */
---bg-light        /* Lighter background */
---text-main       /* Primary text */
---text-muted      /* Secondary/muted text */
---primary         /* Brand color (#667eea) */
---primary-light   /* Light primary (glow effects) */
---border-color    /* All borders */
---shadow          /* Box shadows */
---green-color     /* Success indicators */
---red-color       /* Error/danger indicators */
---accent-amber    /* Warning indicators */
-```
-
-Dark mode is toggled via `localStorage.setItem('darkMode', true)` and applied by toggling a class on `document.body`.
-
----
-
-## Security Considerations
-
-| Area | Implementation |
-|---|---|
-| Token storage | `localStorage` (accessToken) + `sessionStorage` (E2EE private key per session) |
-| E2EE private key | Never sent to server in plain form — only PBKDF2+AES-GCM encrypted bundle |
-| PIN | Never leaves the device — used only client-side for key derivation |
-| Message content | Encrypted before HTTP request — server only ever sees ciphertext |
-| Session expiry | JWT with expiry + server-side session revocation |
-| MFA | TOTP (Time-based One-Time Password) via `tempToken` two-step flow |
-
----
-
-## Development Setup
+## Hướng dẫn Phát triển
 
 ```bash
-# Install dependencies
+# Cài đặt thư viện
 cd frontend && npm install
 
-# Start dev server (connects to backend via config.js)
+# Chạy môi trường phát triển (Local)
 npm start
 
-# For external sharing, use the Cloudflare tunnel script:
+# Cập nhật URL Backend tự động (khi dùng Cloudflare)
+# Scripts này sẽ tự động ghi đè file src/config.js
 cd ../scripts && ./start-tunnels.sh
 ```
 
-> `config.js` is auto-updated by `start-tunnels.sh` with the current backend URL.
-
 ---
 
-## Key Dependencies
+## Các biến CSS chính (Theming)
 
-| Package | Purpose |
-|---|---|
-| `react-router-dom` | Client-side routing |
-| `socket.io-client` | Real-time WebSocket communication |
-| `recharts` | Data visualization charts |
-| `react-scripts` | CRA build tooling |
-| `@emoji-mart/react` | Emoji picker component |
-| `lucide-react` | Icon library |
+Hệ thống hỗ trợ Dark/Light mode linh hoạt qua các biến CSS tại `index.css`:
+- `--primary`: Màu chủ đạo dự án (`#667eea`).
+- `--bg-app`: Màu nền chính.
+- `--text-main`: Màu chữ chính.
+- `--green-color` / `--red-color`: Trạng thái Thành công / Lỗi.
