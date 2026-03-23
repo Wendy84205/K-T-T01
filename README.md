@@ -179,7 +179,7 @@ docker-compose up --build -d
 
 **Tài khoản mặc định:**
 - Email: `admin@cybersecure.com`
-- Password: `Admin@123` *(Hoặc mật khẩu anh/chị vừa thay đổi thông qua tính năng Reset)*
+- Password: `Admin@123456`
 
 ---
 
