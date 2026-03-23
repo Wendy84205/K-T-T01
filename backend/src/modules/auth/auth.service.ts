@@ -11,6 +11,8 @@ import { MfaSetting } from '../../database/entities/auth/mfa-setting.entity';
 import { MfaService } from '../mfa/mfa.service';
 import { SecurityService } from '../security/security.service';
 import { UserSession } from '../../database/entities/auth/user-session.entity';
+import { MailService } from './services/mail.service';
+import * as crypto from 'crypto';
 
 @Injectable()
 export class AuthService {
@@ -27,6 +29,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly mfaService: MfaService,
     private readonly securityService: SecurityService,
+    private readonly mailService: MailService,
   ) { }
 
   // Validate user for login
@@ -127,14 +130,20 @@ export class AuthService {
   // Login method - returns temporary token if MFA required and configured; otherwise full token
   async login(user: User): Promise<LoginResponseDto | { requiresMfa: boolean; tempToken: string; mfaMethods: string[] }> {
 
-    // Use robust role fetching
-    const rolesData = await this.userRepository.findOne({
-      where: { id: user.id },
-      relations: ['roles']
-    });
-    const roles: string[] = rolesData?.roles?.map(r => r.name) || [];
+    // Fetch role IDs first
+    const userRoles: any[] = await this.userRepository.query(
+      "SELECT `role_id` FROM `user_roles` WHERE `user_id` = ?",
+      [user.id]
+    );
 
-    // FIX: Ensure default admin is correctly identified for redirection
+    const roleIds = userRoles.map(ur => ur.role_id);
+
+    // Implementation of a robust role fetching that bypasses possible SQL issues
+    const allRoles: any[] = await this.userRepository.query("SELECT * FROM `roles` LIMIT 100");
+    const roles: string[] = allRoles
+      .filter(r => roleIds.includes(r.id))
+      .map(r => r.name);
+
     if (user.email === 'admin@cybersecure.local' && !roles.includes('Admin')) {
       roles.push('Admin');
     }
@@ -153,7 +162,7 @@ export class AuthService {
 
     // FORCED MFA LOGIC: Nếu user.mfaRequired = true thì bắt buộc phải qua Stage 3
     if (user.mfaRequired) {
-      if (mfaMethods.length === 0) mfaMethods.push('totp'); // Mặc định hiện TOTP
+      if (mfaMethods.length === 0) mfaMethods.push('totp'); // Mặc định hiện TOTP 
       this.securityService.logSecurityEvent('MFA_STEP_REQUIRED', user.id, `MFA verification step required for user: ${user.email}`, { methods: mfaMethods }, 'LOW');
       const tempPayload = {
         sub: user.id,
@@ -218,7 +227,6 @@ export class AuthService {
         mfaSetupRequired: mfaSetupRequired || undefined,
         securityClearanceLevel: user.securityClearanceLevel,
         roles,
-        publicKey: user.publicKey,
       },
     };
   }
@@ -235,12 +243,19 @@ export class AuthService {
       throw new UnauthorizedException('User not found or inactive');
     }
 
-    // Use robust role fetching
-    const rolesData = await this.userRepository.findOne({
-      where: { id: userId },
-      relations: ['roles']
-    });
-    const roles: string[] = rolesData?.roles?.map(r => r.name) || [];
+    // Fetch role IDs first
+    const userRoles: any[] = await this.userRepository.query(
+      "SELECT `role_id` FROM `user_roles` WHERE `user_id` = ?",
+      [userId]
+    );
+
+    const roleIds = userRoles.map(ur => ur.role_id);
+
+    // Universal Workaround: Fetch all roles and filter in memory
+    const allRoles: any[] = await this.userRepository.query("SELECT * FROM `roles` LIMIT 100");
+    const roles: string[] = allRoles
+      .filter(r => roleIds.includes(r.id))
+      .map(r => r.name);
 
     if (user.email === 'admin@cybersecure.local' && !roles.includes('Admin')) {
       roles.push('Admin');
@@ -310,7 +325,6 @@ export class AuthService {
         mfaVerified: true,
         securityClearanceLevel: user.securityClearanceLevel,
         roles,
-        publicKey: user.publicKey,
       },
     };
   }
@@ -344,9 +358,30 @@ export class AuthService {
   // Get user profile
   async getUserProfile(userId: string) {
     const user = await this.userRepository.findOne({
-      where: { id: userId },
-      relations: ['roles']
+      where: { id: userId }
     });
+
+    const isAllowed = user && (user.status === 'active' || user.isActive === true);
+
+    if (!isAllowed) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    // Fetch role IDs first
+    const userRoles: any[] = await this.userRepository.query(
+      "SELECT `role_id` FROM `user_roles` WHERE `user_id` = ?",
+      [userId]
+    );
+
+    const roleIds = userRoles.map(ur => ur.role_id);
+    // Universal Workaround: Fetch all roles and filter in memory
+    const allRoles: any[] = await this.userRepository.query("SELECT * FROM `roles` LIMIT 200");
+    const rolesEntities = allRoles.filter(r => {
+      const rId = r.id || r.ID || r.role_id;
+      return roleIds.includes(rId);
+    });
+
+    (user as any).roles = rolesEntities;
     return user;
   }
 
@@ -412,9 +447,75 @@ export class AuthService {
       // Silent fail
     }
   }
+
   async verifyPassword(userId: string, password: string): Promise<boolean> {
-    const user = await this.userRepository.findOne({ where: { id: userId } });
-    if (!user) return false;
-    return bcrypt.compare(password, user.passwordHash);
+    const user = await this.userRepository.findOne({
+      where: { id: userId }
+    });
+
+    if (!user) {
+      return false;
+    }
+
+    return await bcrypt.compare(password, user.passwordHash);
+  }
+
+  async forgotPassword(email: string): Promise<void> {
+    const user = await this.userRepository.findOne({ where: { email } });
+    if (!user) {
+      // Return silently to prevent email enumeration attacks
+      return;
+    }
+
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const hashedToken = await bcrypt.hash(resetToken, 10);
+    const expires = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
+
+    user.resetToken = hashedToken;
+    user.resetTokenExpires = expires;
+    await this.userRepository.save(user);
+
+    // Front end URL (e.g. localhost:3000/reset-password?token=XYZ)
+    // Pass raw token to email because we only stored hashed token
+    const clientUrl = process.env.CLIENT_URL || 'http://localhost:3000';
+    const link = `${clientUrl}/reset-password?token=${resetToken}&email=${user.email}`;
+
+    await this.mailService.sendPasswordResetEmail(user.email, link);
+  }
+
+  async resetPassword(token: string, email: string, newPassword: string): Promise<void> {
+    const user = await this.userRepository.findOne({ where: { email } });
+    
+    if (!user || !user.resetToken || !user.resetTokenExpires) {
+      throw new BadRequestException('Invalid or expired password reset token');
+    }
+
+    if (new Date() > user.resetTokenExpires) {
+      throw new BadRequestException('Invalid or expired password reset token');
+    }
+
+    const isValid = await bcrypt.compare(token, user.resetToken);
+    if (!isValid) {
+      throw new BadRequestException('Invalid or expired password reset token');
+    }
+
+    // Hash new password
+    const newPasswordHash = await bcrypt.hash(newPassword, 10);
+    
+    // Update user
+    user.passwordHash = newPasswordHash;
+    user.resetToken = null;
+    user.resetTokenExpires = null;
+    
+    // Auto-unlock account if it was locked due to brute force
+    if (user.isLocked) {
+      user.isLocked = false;
+      user.accountLockedUntil = null;
+      user.lockReason = null;
+      user.failedLoginAttempts = 0;
+    }
+
+    await this.userRepository.save(user);
+    this.securityService.logSecurityEvent('PASSWORD_CHANGED', user.id, 'User reset password successfully via email', {}, 'MEDIUM');
   }
 }

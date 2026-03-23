@@ -121,6 +121,20 @@ class ApiClient {
     });
   }
 
+  async requestPasswordReset(email) {
+    return this.request('/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+  }
+
+  async resetPasswordWithToken(token, email, newPassword) {
+    return this.request('/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ token, email, newPassword }),
+    });
+  }
+
   async heartbeat() {
     try {
       return await this.request('/auth/heartbeat', { method: 'POST' });

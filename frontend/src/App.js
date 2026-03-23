@@ -8,6 +8,8 @@ import ManagerRoute from './components/ManagerRoute';
 import CallIncomingBanner from './components/CallIncomingBanner';
 
 import LoginPage from './pages/LoginPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 import AdminLayout from './layouts/AdminLayout';
 import ManageLayout from './layouts/ManageLayout';
 import AdminHomePage from './pages/admin/AdminHomePage';
@@ -54,6 +56,8 @@ function App() {
           <CallIncomingBanner />
           <Routes>
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
 
             {/* USER Routes */}
             <Route

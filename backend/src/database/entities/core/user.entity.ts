@@ -118,6 +118,12 @@ export class User {
   @Column({ name: 'e2ee_bundle_iv', length: 100, nullable: true })
   e2eeBundleIv: string;
 
+  @Column({ name: 'reset_token', length: 255, nullable: true })
+  resetToken: string;
+
+  @Column({ name: 'reset_token_expires', nullable: true })
+  resetTokenExpires: Date;
+
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 

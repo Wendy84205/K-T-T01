@@ -789,13 +789,13 @@ export function StickerPicker({ onSelect, onClose }) {
     };
 
     const categories = [
-        { id: 'emotions', icon: Smile, label: 'Cảm xúc' },
-        { id: 'animals', icon: Users, label: 'Động vật' },
-        { id: 'food', icon: StickyNote, label: 'Ăn uống' },
-        { id: 'activities', icon: Star, label: 'Hoạt động' },
-        { id: 'travel', icon: MapPin, label: 'Du lịch' },
-        { id: 'objects', icon: Settings, label: 'Vật dụng' },
-        { id: 'symbols', icon: Heart, label: 'Biểu tượng' }
+        { id: 'emotions', icon: Smile, label: 'Emotions' },
+        { id: 'animals', icon: Users, label: 'Animals' },
+        { id: 'food', icon: StickyNote, label: 'Food & Drink' },
+        { id: 'activities', icon: Star, label: 'Activities' },
+        { id: 'travel', icon: MapPin, label: 'Travel & Places' },
+        { id: 'objects', icon: Settings, label: 'Objects' },
+        { id: 'symbols', icon: Heart, label: 'Symbols' }
     ];
 
     return (
@@ -807,7 +807,7 @@ export function StickerPicker({ onSelect, onClose }) {
         }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--border-color)' }}>
                 <span style={{ fontSize: '13px', fontWeight: '800', color: 'var(--text-main)' }}>
-                    {categories.find(c => c.id === currentCategory)?.label || 'Cảm xúc'}
+                    {categories.find(c => c.id === currentCategory)?.label || 'Emotions'}
                 </span>
                 <X size={18} color="var(--text-muted)" style={{ cursor: 'pointer' }} onClick={onClose} />
             </div>

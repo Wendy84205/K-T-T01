@@ -104,6 +104,11 @@ export default function UserHomePage() {
   const [vaultAuthError, setVaultAuthError] = useState('');
   const [pinnedVersion, setPinnedVersion] = useState(0);
 
+  // Notifications State (Facebook UI style)
+  const [notifications, setNotifications] = useState([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [toastNotifications, setToastNotifications] = useState([]);
+
   // 2. Refs
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
@@ -125,10 +130,34 @@ export default function UserHomePage() {
   const stopRingtoneRef = useRef(null);
 
   // 3. Helper Functions
+  const handleNotification = useCallback((type, message, data = null) => {
+    // 1. Add to local notifications list
+    const newNotification = {
+      id: Date.now() + Math.random(),
+      type,
+      message,
+      data,
+      read: false,
+      timestamp: new Date()
+    };
+
+    setNotifications(prev => [newNotification, ...prev]);
+    if (!showNotifications) {
+      setUnreadNotificationsCount(prev => prev + 1);
+    }
+
+    // 2. Pop up a toast (Facebook-style bottom-left popup)
+    const toastId = Date.now();
+    setToastNotifications(prev => [...prev, { id: toastId, type, message, data }]);
+    setTimeout(() => {
+      setToastNotifications(prev => prev.filter(t => t.id !== toastId));
+    }, 5000);
+  }, [showNotifications]);
+
   const loadUnreadCount = async () => {
     try {
       const data = await api.getNotifications(1, 1);
-      setUnreadNotificationsCount(data.unreadCount || 0);
+      setUnreadNotificationsCount(data.unreadCount || 0); // fallback if backend has unread counts
     } catch (err) {
       console.error('Failed to load unread count', err);
     }
@@ -401,6 +430,15 @@ export default function UserHomePage() {
           });
         });
 
+        // Facebook-style Security & Device Notifications
+        socketService.onSecurityAlert((data) => {
+          handleNotification('security', data.message || 'Security alert detected.', data);
+        });
+
+        socketService.onDeviceLogin((data) => {
+          handleNotification('security', `New device login: ${data.deviceInfo || 'Unknown Device'}`, data);
+        });
+
         const initialOnlineUsers = await socketService.getOnlineUsers();
         if (Array.isArray(initialOnlineUsers)) {
           setOnlineUserIds(new Set(initialOnlineUsers));
@@ -496,6 +534,9 @@ export default function UserHomePage() {
         setTimeout(() => {
           messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
         }, 100);
+      } else {
+        // Trigger Facebook-style notification if chat not active
+        handleNotification('message', `${message.sender?.firstName || 'Someone'} sent you a message.`, message);
       }
       // Also update conversation list (last message, unread count)
       loadConversations(true);
@@ -1526,6 +1567,59 @@ export default function UserHomePage() {
         </div>
       )}
 
+      {/* 🔔 Real-time Facebook-style Toast Notifications */}
+      <div style={{
+        position: 'fixed', bottom: '20px', left: '20px', zIndex: 100000,
+        display: 'flex', flexDirection: 'column', gap: '10px', pointerEvents: 'none'
+      }}>
+        {toastNotifications.map(n => (
+          <div key={n.id} style={{
+            background: 'var(--bg-panel)',
+            borderLeft: `4px solid ${n.type === 'security' ? 'var(--red-color)' : 'var(--primary)'}`,
+            borderRadius: '12px',
+            padding: '12px 16px',
+            boxShadow: '0 10px 30px rgba(0,0,0,0.2)',
+            display: 'flex', alignItems: 'center', gap: '12px',
+            animation: 'slideInLeft 0.3s ease-out',
+            minWidth: '280px', pointerEvents: 'auto',
+            backdropFilter: 'blur(10px)', border: '1px solid var(--border-color)'
+          }}>
+            <div 
+              style={{ display: 'flex', flex: 1, gap: '12px', cursor: 'pointer' }}
+              onClick={() => {
+                if (n.type === 'message') {
+                  setActiveTab('messages');
+                  if (n.data?.conversationId) handleSelectUser(n.data.conversationId);
+                } else if (n.type === 'security') {
+                  setActiveTab('alerts');
+                }
+                setToastNotifications(prev => prev.filter(t => t.id !== n.id));
+              }}
+            >
+              <div style={{
+                width: '40px', height: '40px', borderRadius: '10px',
+                background: n.type === 'security' ? 'var(--bg-red-soft)' : 'var(--bg-primary-soft)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                flexShrink: 0
+              }}>
+                {n.type === 'security' ? <Shield size={20} color="var(--red-color)" /> : <MessageSquare size={20} color="var(--primary)" />}
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: '11px', fontWeight: '900', textTransform: 'uppercase', color: 'var(--text-muted)' }}>
+                  {n.type === 'security' ? 'Security Alert' : 'New Message'}
+                </div>
+                <div style={{ fontSize: '13px', color: 'var(--text-main)', fontWeight: '600' }}>
+                  {n.message}
+                </div>
+              </div>
+            </div>
+            <button onClick={() => setToastNotifications(prev => prev.filter(t => t.id !== n.id))} className="bg-transparent border-none cursor-pointer text-[var(--text-muted)] hover:text-white transition-colors p-1 rounded-full hover:bg-[rgba(255,255,255,0.1)]">
+              <X size={14} />
+            </button>
+          </div>
+        ))}
+      </div>
+
       {/* ════════════════════════════════════════════════════════
           🔑 E2EE PASSPHRASE MODAL
           ════════════════════════════════════════════════════════ */}
@@ -1617,13 +1711,26 @@ export default function UserHomePage() {
             }}
             label="Secure Vault"
           />
+          {/* NOTIFICATIONS TAB ICON */}
           <NavIcon
-            icon={<Bell size={22} />}
-            active={activeTab === 'alerts'}
-            onClick={() => setActiveTab('alerts')}
-            label="Alerts"
-            badge={unreadNotificationsCount}
+            icon={<div style={{ position: 'relative' }}>
+              <Bell size={22} />
+              {unreadNotificationsCount > 0 && (
+                <div className="absolute -top-1 -right-1 bg-[var(--red-color)] text-white rounded-full w-4 h-4 text-[9px] font-black flex items-center justify-center border-2 border-[var(--bg-main)] shadow-[0_0_10px_var(--red-color)]">
+                  {unreadNotificationsCount}
+                </div>
+              )}
+            </div>}
+            active={activeTab === 'notifications'}
+            onClick={() => {
+              setActiveTab('notifications');
+              setShowNotifications(false);
+              setUnreadNotificationsCount(0);
+              if (isMobile) setShowSidebarOnMobile(false);
+            }}
+            label="Notifications"
           />
+
           <NavIcon
             icon={<Settings size={22} />}
             active={activeTab === 'settings'}
@@ -1764,7 +1871,9 @@ export default function UserHomePage() {
             <div style={{ padding: '24px 20px 8px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                 <span style={{ fontSize: '12px', fontWeight: '800', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.12em', opacity: 0.8 }}>Channels</span>
-                <button onClick={() => setShowGroupModal(true)} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', transition: 'all 0.2s' }} onMouseEnter={e => { e.currentTarget.style.color = 'var(--primary)'; e.currentTarget.style.transform = 'scale(1.1)'; }} onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.transform = 'scale(1)'; }}><Plus size={18} /></button>
+                <button onClick={() => setShowGroupModal(true)} className="bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.05)] text-[var(--text-secondary)] cursor-pointer transition-all duration-300 hover:text-[var(--primary)] hover:scale-110 hover:bg-[rgba(99,102,241,0.15)] hover:border-[rgba(99,102,241,0.3)] shadow-sm hover:shadow-[0_0_15px_rgba(99,102,241,0.3)] p-2 rounded-xl">
+                  <Plus size={18} />
+                </button>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                 {conversations
@@ -1795,7 +1904,9 @@ export default function UserHomePage() {
             <div style={{ padding: '28px 20px 8px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                 <span style={{ fontSize: '12px', fontWeight: '800', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.12em', opacity: 0.8 }}>Direct Messages</span>
-                <button onClick={handleStartNewChat} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', transition: 'all 0.2s' }} onMouseEnter={e => { e.currentTarget.style.color = 'var(--primary)'; e.currentTarget.style.transform = 'scale(1.1)'; }} onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.transform = 'scale(1)'; }}><Plus size={18} /></button>
+                <button onClick={handleStartNewChat} className="bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.05)] text-[var(--text-secondary)] cursor-pointer transition-all duration-300 hover:text-[var(--primary)] hover:scale-110 hover:bg-[rgba(99,102,241,0.15)] hover:border-[rgba(99,102,241,0.3)] shadow-sm hover:shadow-[0_0_15px_rgba(99,102,241,0.3)] p-2 rounded-xl">
+                  <Plus size={18} />
+                </button>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                 {conversations
@@ -1851,18 +1962,7 @@ export default function UserHomePage() {
             background: 'var(--bg-panel)',
             zIndex: 5
           }}>
-            <div style={{
-              width: '120px',
-              height: '120px',
-              background: 'var(--bg-primary-soft)',
-              borderRadius: '35px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              border: '1px solid var(--border-primary-soft)'
-            }}>
-              <MessageSquare size={60} color="var(--primary)" />
-            </div>
+
             <div style={{ textAlign: 'center' }}>
               <h2 style={{ margin: '0 0 10px 0', fontSize: '24px', fontWeight: '900', textTransform: 'uppercase', tracking: '-0.02em', color: 'var(--text-main)' }}>KTT01 Secure Terminal</h2>
               <p style={{ color: 'var(--text-secondary)', margin: 0, fontSize: '14px', fontWeight: '500' }}>Quantum-safe end-to-end encrypted protocol active.</p>
@@ -1881,6 +1981,14 @@ export default function UserHomePage() {
           />
         )}
         {activeTab === 'alerts' && <AlertsContent onUpdateCount={loadUnreadCount} />}
+        {activeTab === 'notifications' && (
+          <NotificationsContent 
+            notifications={notifications} 
+            handleSelectUser={handleSelectUser} 
+            setActiveTab={setActiveTab} 
+            setNotifications={setNotifications}
+          />
+        )}
         {activeTab === 'calls' && <CallsContent />}
         {activeTab === 'vault' && !selectedChat && (
           <div style={{ width: '100%', maxWidth: '1000px', flex: 1, display: 'flex', flexDirection: 'column', padding: '20px' }}>
@@ -2526,28 +2634,20 @@ export default function UserHomePage() {
             padding: '40px'
           }}>
             <>
-              <div style={{
-                width: '120px',
-                height: '120px',
-                background: 'rgba(102, 126, 234, 0.1)',
-                borderRadius: '30px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}>
-                <MessageSquare size={60} color="#667eea" />
-              </div>
+
               <div style={{ textAlign: 'center' }}>
                 <h2 style={{ color: '#fff', margin: '0 0 10px 0', fontSize: '24px' }}>
                   {activeTab === 'messages' && !selectedChat && 'Select a conversation'}
                   {activeTab === 'vault' && 'Your Encrypted Files'}
                   {activeTab === 'alerts' && 'Security Alerts'}
                   {activeTab === 'settings' && 'Settings & Preferences'}
+                  {activeTab === 'notifications' && 'Notifications Center'}
                 </h2>
                 <p style={{ color: '#8b98a5', margin: 0, fontSize: '14px' }}>
                   {activeTab === 'messages' && 'All messages are end-to-end encrypted'}
                   {activeTab === 'vault' && 'AES-256 encryption for all files'}
                   {activeTab === 'alerts' && 'Real-time security monitoring'}
+                  {activeTab === 'notifications' && 'Review your secure system alerts'}
                 </p>
               </div>
             </>
@@ -2909,8 +3009,8 @@ export default function UserHomePage() {
                   <div style={{ color: '#ef4444', fontSize: '13px', marginBottom: '15px' }}>{vaultAuthError}</div>
                 )}
                 <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-                  <button type="button" onClick={handleVaultAuthCancel} style={{ padding: '10px 20px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent', color: 'var(--text-main)', cursor: 'pointer' }}>Cancel</button>
-                  <button type="submit" style={{ padding: '10px 20px', borderRadius: '8px', border: 'none', background: 'var(--primary)', color: '#fff', cursor: 'pointer', fontWeight: '500' }}>Unlock Vault</button>
+                  <button type="button" onClick={handleVaultAuthCancel} className="px-6 py-2.5 rounded-xl border border-[rgba(255,255,255,0.05)] bg-[rgba(255,255,255,0.03)] text-white cursor-pointer hover:bg-[rgba(255,255,255,0.05)] transition-all font-bold text-xs uppercase tracking-widest shadow-sm">Cancel</button>
+                  <button type="submit" className="px-6 py-2.5 rounded-xl border border-[rgba(99,102,241,0.5)] bg-gradient-to-r from-[var(--primary)] to-indigo-600 text-white cursor-pointer font-black text-xs uppercase tracking-widest hover:shadow-[0_0_20px_rgba(99,102,241,0.4)] transition-all active:scale-95 shadow-md">Unlock Vault</button>
                 </div>
               </form>
             </div>
@@ -4397,8 +4497,8 @@ function SettingsContent({ user, darkMode, toggleDarkMode }) {
                   <input type="password" placeholder="New Password" value={passData.newPass} onChange={e => setPassData({ ...passData, newPass: e.target.value })} style={{ padding: '10px', background: 'var(--bg-main)', border: '1px solid var(--border-color)', borderRadius: '8px', color: 'var(--text-main)', outline: 'none' }} />
                   <input type="password" placeholder="Confirm New Password" value={passData.confirmPass} onChange={e => setPassData({ ...passData, confirmPass: e.target.value })} style={{ padding: '10px', background: 'var(--bg-main)', border: '1px solid var(--border-color)', borderRadius: '8px', color: 'var(--text-main)', outline: 'none' }} />
                   <div style={{ display: 'flex', gap: '10px' }}>
-                    <button onClick={handlePassUpdate} style={{ flex: 1, padding: '10px', background: '#667eea', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>Save Password</button>
-                    <button onClick={() => setIsChangingPass(false)} style={{ flex: 1, padding: '10px', background: 'var(--bg-main)', border: '1px solid var(--border-color)', color: 'var(--text-main)', borderRadius: '8px', cursor: 'pointer' }}>Cancel</button>
+                    <button onClick={handlePassUpdate} className="flex-1 p-3 rounded-xl border border-[rgba(99,102,241,0.5)] bg-gradient-to-r from-[var(--primary)] to-indigo-600 text-white cursor-pointer font-black text-xs uppercase tracking-widest hover:shadow-[0_0_20px_rgba(99,102,241,0.4)] transition-all active:scale-95 shadow-md">Save Password</button>
+                    <button onClick={() => setIsChangingPass(false)} className="flex-1 p-3 rounded-xl border border-[rgba(255,255,255,0.05)] bg-[rgba(255,255,255,0.03)] text-white cursor-pointer hover:bg-[rgba(255,255,255,0.05)] transition-all font-bold text-xs uppercase tracking-widest shadow-sm">Cancel</button>
                   </div>
                 </div>
               )}
@@ -4565,125 +4665,73 @@ function ContactsContent({ users, onSelect }) {
   }) || [];
 
   return (
-    <div style={{ padding: '40px', color: 'var(--text-main)', height: '100%', display: 'flex', flexDirection: 'column', maxWidth: '1400px', margin: '0 auto', overflow: 'hidden' }}>
-      <header style={{ marginBottom: '40px' }}>
-        <h2 style={{ fontSize: '38px', margin: 0, fontWeight: '900', color: 'var(--text-main)', letterSpacing: '-0.03em' }}>Directory</h2>
-        <p style={{ color: 'var(--text-secondary)', marginTop: '8px', fontSize: '16px', fontWeight: '500' }}>Connect with your colleagues securely</p>
+    <div className="flex flex-col h-full w-full p-8 lg:p-12 overflow-hidden animate-in fade-in duration-500">
+      <header className="mb-10">
+        <div className="flex items-center gap-3 mb-2">
+          <div className="p-2.5 bg-[rgba(99,102,241,0.15)] rounded-2xl border border-[rgba(99,102,241,0.3)] shadow-[0_0_20px_rgba(99,102,241,0.3)]">
+            <Users size={28} className="text-[var(--primary)]" />
+          </div>
+          <h2 className="text-4xl lg:text-5xl font-black text-white tracking-tight drop-shadow-lg">Directory</h2>
+        </div>
+        <p className="text-[var(--text-secondary)] text-sm lg:text-base font-medium ml-[60px]">Connect with your colleagues securely.</p>
       </header>
 
-      <div style={{ marginBottom: '40px', position: 'relative', maxWidth: '600px' }}>
-        <Search size={22} style={{ position: 'absolute', left: '20px', top: '50%', transform: 'translateY(-50%)', color: 'var(--primary)' }} />
+      <div className="mb-10 relative max-w-xl group">
+        <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none">
+          <Search size={22} className="text-[var(--text-muted)] group-focus-within:text-[var(--primary)] transition-colors duration-300" />
+        </div>
         <input
           value={term}
           onChange={e => setTerm(e.target.value)}
           placeholder="Search for colleagues..."
-          style={{
-            width: '100%',
-            padding: '18px 20px 18px 60px',
-            background: 'var(--bg-panel)',
-            border: '2px solid var(--border-color)',
-            borderRadius: '20px',
-            color: 'var(--text-main)',
-            outline: 'none',
-            fontSize: '16px',
-            fontWeight: '600',
-            transition: 'all 0.3s ease',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
-            boxSizing: 'border-box'
-          }}
-          onFocus={e => (e.target.style.borderColor = 'var(--primary)')}
-          onBlur={e => (e.target.style.borderColor = 'var(--border-color)')}
+          className="w-full bg-[rgba(13,17,26,0.6)] backdrop-blur-xl border border-[rgba(255,255,255,0.05)] text-white text-base font-semibold rounded-2xl py-4 pl-14 pr-6 outline-none transition-all duration-300 focus:border-[var(--primary)] focus:bg-[rgba(99,102,241,0.05)] focus:shadow-[0_0_30px_rgba(99,102,241,0.2)] placeholder-[var(--text-muted)] hover:bg-[rgba(255,255,255,0.03)]"
         />
       </div>
 
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-        gap: '20px',
-        overflowY: 'auto',
-        paddingBottom: '40px',
-        scrollbarWidth: 'none'
-      }}>
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 overflow-y-auto pb-10 pr-2 custom-scrollbar">
         {filtered.length > 0 ? (
           filtered.map(u => (
             <div
               key={u.id}
               onClick={() => onSelect(u.id)}
+              className="group relative flex items-center gap-5 p-6 rounded-3xl cursor-pointer transition-all duration-500 overflow-hidden"
               style={{
-                background: 'var(--bg-panel)',
-                padding: '24px',
-                borderRadius: '28px',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '16px',
-                transition: 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
-                border: '1px solid var(--border-color)',
-                position: 'relative',
-                overflow: 'hidden'
+                background: 'rgba(13, 17, 26, 0.6)',
+                backdropFilter: 'blur(20px)',
+                border: '1px solid rgba(255,255,255,0.05)',
+                boxShadow: '0 10px 30px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05)'
               }}
               onMouseEnter={e => {
-                e.currentTarget.style.transform = 'translateY(-8px)';
                 e.currentTarget.style.borderColor = 'var(--primary)';
-                e.currentTarget.style.boxShadow = '0 20px 40px rgba(0,0,0,0.2)';
+                e.currentTarget.style.boxShadow = '0 15px 40px rgba(99,102,241,0.2), inset 0 1px 0 rgba(255,255,255,0.1)';
+                e.currentTarget.style.transform = 'translateY(-4px)';
               }}
               onMouseLeave={e => {
+                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.05)';
+                e.currentTarget.style.boxShadow = '0 10px 30px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05)';
                 e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.borderColor = 'var(--border-color)';
-                e.currentTarget.style.boxShadow = 'none';
               }}
             >
-              <div style={{
-                width: '64px',
-                height: '64px',
-                borderRadius: '22px',
-                background: 'linear-gradient(135deg, var(--primary) 0%, #a855f7 100%)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '26px',
-                fontWeight: '900',
-                color: '#fff',
-                flexShrink: 0,
-                boxShadow: '0 8px 16px rgba(102, 126, 234, 0.2)'
-              }}>
+              {/* Ambient Hover Glow */}
+              <div className="absolute -inset-4 opacity-0 group-hover:opacity-20 transition-opacity duration-500 blur-2xl pointer-events-none" style={{ background: 'radial-gradient(circle at top right, var(--primary), transparent 70%)' }} />
+
+              <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-black text-white shrink-0 shadow-[0_8px_16px_rgba(99,102,241,0.3)] bg-gradient-to-br from-[var(--primary)] to-indigo-600 transition-transform duration-500 group-hover:scale-110">
                 {u.firstName?.charAt(0)}
               </div>
 
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: '800', fontSize: '18px', color: 'var(--text-main)', marginBottom: '4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              <div className="flex-1 min-w-0 z-10">
+                <div className="font-extrabold text-lg text-white mb-1 truncate tracking-tight group-hover:text-[var(--primary)] transition-colors">
                   {u.firstName} {u.lastName}
                 </div>
-                <div style={{
-                  display: 'inline-block',
-                  background: 'rgba(102, 126, 234, 0.1)',
-                  color: 'var(--primary)',
-                  fontSize: '11px',
-                  fontWeight: '800',
-                  padding: '4px 10px',
-                  borderRadius: '8px',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.05em',
-                  marginBottom: '6px'
-                }}>
+                <div className="inline-block bg-[rgba(99,102,241,0.1)] text-[var(--primary)] text-[10px] font-black px-3 py-1 rounded-lg uppercase tracking-widest mb-2 shadow-sm border border-[rgba(99,102,241,0.2)]">
                   {u.department || 'OFFICE'}
                 </div>
-                <div style={{ fontSize: '13px', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: '500' }}>
+                <div className="text-sm text-[var(--text-muted)] truncate font-semibold">
                   {u.email}
                 </div>
               </div>
 
-              <div style={{
-                position: 'absolute',
-                top: '12px',
-                right: '12px',
-                width: '10px',
-                height: '10px',
-                borderRadius: '50%',
-                background: 'var(--green-color)',
-                boxShadow: '0 0 10px var(--green-color)',
-                border: '2px solid var(--bg-panel)'
-              }} />
+              <div className="absolute top-4 right-4 w-3 h-3 rounded-full bg-[var(--green-color)] shadow-[0_0_12px_var(--green-color)] border-2 border-[rgba(13,17,26,0.8)]" />
             </div>
           ))
         ) : (
@@ -4782,8 +4830,8 @@ function TeamContent({ users, currentUser, onSelect, isAdmin }) {
             style={{ width: '100%', background: 'var(--bg-main)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '15px', color: 'var(--text-main)', height: '100px', outline: 'none', marginBottom: '15px', boxSizing: 'border-box' }}
           />
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-            <button onClick={() => setShowBroadcast(false)} style={{ background: 'transparent', border: 'none', color: '#8b98a5', padding: '10px 20px', cursor: 'pointer' }}>Cancel</button>
-            <button onClick={handleBroadcast} style={{ background: '#667eea', border: 'none', color: '#fff', padding: '10px 25px', borderRadius: '10px', cursor: 'pointer', fontWeight: '600' }}>Send Broadcast</button>
+            <button onClick={() => setShowBroadcast(false)} className="px-6 py-2.5 rounded-xl border border-[rgba(255,255,255,0.05)] bg-[rgba(255,255,255,0.03)] text-white cursor-pointer hover:bg-[rgba(255,255,255,0.05)] transition-all font-bold text-xs uppercase tracking-widest shadow-sm">Cancel</button>
+            <button onClick={handleBroadcast} className="px-6 py-2.5 rounded-xl border border-[rgba(99,102,241,0.5)] bg-gradient-to-r from-[var(--primary)] to-indigo-600 text-white cursor-pointer font-black text-xs uppercase tracking-widest hover:shadow-[0_0_20px_rgba(99,102,241,0.4)] transition-all active:scale-95 shadow-md">Send Broadcast</button>
           </div>
         </div>
       )}
@@ -4839,13 +4887,13 @@ function TeamContent({ users, currentUser, onSelect, isAdmin }) {
                 <td style={{ borderTop: '1px solid var(--border-color)', borderBottom: '1px solid var(--border-color)', fontSize: '14px', color: 'var(--text-main)' }}>{u.jobTitle || 'Team Member'}</td>
                 <td style={{ borderTop: '1px solid var(--border-color)', borderBottom: '1px solid var(--border-color)', fontSize: '14px', color: 'var(--text-main)' }}>{u.department}</td>
                 <td style={{ borderTop: '1px solid var(--border-color)', borderBottom: '1px solid var(--border-color)' }}>
-                  <span style={{ 
-                    padding: '4px 12px', 
-                    borderRadius: '20px', 
-                    background: u.status === 'active' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(107, 114, 128, 0.1)', 
-                    color: u.status === 'active' ? '#10b981' : '#6b7280', 
-                    fontSize: '12px', 
-                    fontWeight: '700' 
+                  <span style={{
+                    padding: '4px 12px',
+                    borderRadius: '20px',
+                    background: u.status === 'active' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(107, 114, 128, 0.1)',
+                    color: u.status === 'active' ? '#10b981' : '#6b7280',
+                    fontSize: '12px',
+                    fontWeight: '700'
                   }}>
                     {u.status === 'active' ? 'Online' : (u.status || 'Offline').charAt(0).toUpperCase() + (u.status || 'Offline').slice(1)}
                   </span>
@@ -5094,12 +5142,12 @@ function E2EEPassphraseModal({ mode, userId, onSuccess, onSkip }) {
             boxShadow: '0 8px 24px rgba(102,126,234,0.4)'
           }}></div>
           <h2 style={{ color: 'var(--text-main)', margin: '0 0 8px', fontSize: '20px', fontWeight: '900' }}>
-            {isSetup ? 'Tạo mã PIN mã hóa' : 'Nhập mã PIN để mở khóa'}
+            {isSetup ? 'Create Encryption PIN' : 'Enter PIN to Unlock'}
           </h2>
           <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: '13px', lineHeight: 1.5 }}>
             {isSetup
-              ? 'PIN 6 số bảo vệ private key của bạn. Không bao giờ rời khỏi thiết bị này.'
-              : 'Nhập PIN 6 số để giải mã tin nhắn. Key chỉ lưu trong trình duyệt của bạn.'}
+              ? 'A 6-digit PIN protects your private key. It never leaves this device.'
+              : 'Enter your 6-digit PIN to decrypt messages. The key is only stored in your browser.'}
           </p>
         </div>
 
@@ -5107,7 +5155,7 @@ function E2EEPassphraseModal({ mode, userId, onSuccess, onSkip }) {
           {/* PIN input row */}
           <div>
             <label style={{ display: 'block', fontSize: '11px', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: '12px', textAlign: 'center' }}>
-              {isSetup ? 'Tạo PIN 6 số' : 'Nhập PIN 6 số'}
+              {isSetup ? 'Create 6-digit PIN' : 'Enter 6-digit PIN'}
             </label>
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
               {pin.map((digit, i) => (
@@ -5140,7 +5188,7 @@ function E2EEPassphraseModal({ mode, userId, onSuccess, onSkip }) {
           {isSetup && (
             <div>
               <label style={{ display: 'block', fontSize: '11px', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: '12px', textAlign: 'center' }}>
-                Xác nhận PIN
+                Confirm PIN
               </label>
               <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
                 {confirmPin.map((digit, i) => (
@@ -5179,7 +5227,7 @@ function E2EEPassphraseModal({ mode, userId, onSuccess, onSkip }) {
           {/* Info box */}
           {isSetup && (
             <div style={{ background: 'rgba(102,126,234,0.08)', border: '1px solid rgba(102,126,234,0.2)', borderRadius: '12px', padding: '12px 14px', fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.6, textAlign: 'center' }}>
-              <strong>Ghi nhớ PIN này!</strong> Không thể khôi phục nếu quên. Mất PIN = mất toàn bộ tin nhắn cũ.
+              <strong>Remember this PIN!</strong> Cannot be recovered if forgotten. Lost PIN = lose all previous messages.
             </div>
           )}
 
@@ -5195,6 +5243,170 @@ function E2EEPassphraseModal({ mode, userId, onSuccess, onSkip }) {
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+function NotificationsContent({ notifications, handleSelectUser, setActiveTab, setNotifications }) {
+  const [filter, setFilter] = React.useState('all');
+
+  const filtered = notifications.filter(n => {
+    if (filter === 'messages') return n.type === 'message';
+    if (filter === 'security') return n.type === 'security';
+    return true;
+  });
+
+  const msgCount = notifications.filter(n => n.type === 'message').length;
+  const secCount = notifications.filter(n => n.type === 'security').length;
+
+  const filterTabs = [
+    { key: 'all', label: 'All', count: notifications.length },
+    { key: 'messages', label: 'Messages', count: msgCount },
+    { key: 'security', label: 'Security', count: secCount },
+  ];
+
+  return (
+    <div className="flex flex-col h-full w-full overflow-hidden" style={{ background: 'transparent' }}>
+      {/* ─── HEADER ─────────────────────────────────────── */}
+      <div className="shrink-0 px-10 pt-10 pb-6 border-b border-[rgba(255,255,255,0.05)]" style={{ background: 'rgba(13,17,26,0.7)', backdropFilter: 'blur(24px)' }}>
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-5">
+            <div className="relative">
+              <div className="absolute inset-0 bg-[var(--primary)] blur-[20px] opacity-40 rounded-2xl" />
+              <div className="relative p-3 bg-[rgba(99,102,241,0.15)] rounded-2xl border border-[rgba(99,102,241,0.4)] shadow-[0_0_25px_rgba(99,102,241,0.3)]">
+                <Bell size={30} className="text-[var(--primary)]" />
+              </div>
+            </div>
+            <div>
+              <h2 className="text-3xl font-black text-white tracking-tight" style={{ textShadow: '0 0 30px rgba(99,102,241,0.5)' }}>Notification Center</h2>
+              <p className="text-[var(--text-muted)] text-xs font-bold uppercase tracking-[0.15em] mt-0.5">Secure transmission signals & system events</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setNotifications([])}
+            className="px-5 py-2.5 rounded-xl border border-[rgba(255,255,255,0.05)] bg-[rgba(255,255,255,0.02)] text-[var(--text-muted)] hover:text-red-400 hover:border-[rgba(239,68,68,0.3)] cursor-pointer hover:bg-[rgba(239,68,68,0.05)] transition-all font-bold text-[10px] uppercase tracking-[0.15em]"
+          >
+            Clear All
+          </button>
+        </div>
+
+        {/* Filter Tabs */}
+        <div className="flex gap-2">
+          {filterTabs.map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => setFilter(tab.key)}
+              className={`relative px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-[0.15em] cursor-pointer transition-all duration-300 ${
+                filter === tab.key
+                  ? 'bg-[rgba(99,102,241,0.15)] text-[var(--primary)] border border-[rgba(99,102,241,0.4)] shadow-[0_0_20px_rgba(99,102,241,0.2)]'
+                  : 'text-[var(--text-muted)] hover:text-white border border-transparent hover:border-[rgba(255,255,255,0.05)] hover:bg-[rgba(255,255,255,0.03)]'
+              }`}
+            >
+              {tab.label}
+              {tab.count > 0 && (
+                <span className={`ml-2 inline-flex items-center justify-center w-5 h-5 rounded-full text-[9px] font-black ${
+                  filter === tab.key
+                    ? 'bg-[var(--primary)] text-white shadow-[0_0_10px_var(--primary)]'
+                    : 'bg-[rgba(255,255,255,0.08)] text-[var(--text-muted)]'
+                }`}>
+                  {tab.count}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ─── LIST ───────────────────────────────────────── */}
+      <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+        {filtered.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full text-center py-24">
+            <div className="relative mb-8">
+              <div className="absolute inset-0 bg-indigo-700 blur-[60px] opacity-10 rounded-full scale-150" />
+              <div className="relative p-10 rounded-[2.5rem] bg-[rgba(255,255,255,0.02)] border border-[rgba(255,255,255,0.04)] shadow-inner">
+                <BellOff size={52} className="text-[var(--text-muted)] opacity-30" />
+              </div>
+            </div>
+            <h3 className="text-2xl font-black text-white uppercase tracking-[0.2em] mb-3">All Clear</h3>
+            <p className="text-[var(--text-secondary)] font-semibold text-sm max-w-xs">
+              {filter === 'all' ? 'No notifications in the queue.' : `No ${filter} notifications found.`}
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-3 max-w-4xl mx-auto">
+            {filtered.map((n, i) => {
+              const isSecurity = n.type === 'security';
+              const accentColor = isSecurity ? 'var(--red-color)' : 'var(--primary)';
+              const accentRgb = isSecurity ? '239,68,68' : '99,102,241';
+              return (
+                <div
+                  key={n.id}
+                  onClick={() => {
+                    if (n.type === 'message') {
+                      setActiveTab('messages');
+                      if (n.data?.conversationId) handleSelectUser(n.data.conversationId);
+                    } else if (n.type === 'security') {
+                      setActiveTab('alerts');
+                    }
+                  }}
+                  className="group relative flex items-center gap-5 p-5 rounded-2xl cursor-pointer overflow-hidden transition-all duration-300"
+                  style={{
+                    background: 'rgba(13,17,26,0.5)',
+                    backdropFilter: 'blur(20px)',
+                    border: '1px solid rgba(255,255,255,0.04)',
+                    boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
+                  }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.borderColor = `rgba(${accentRgb},0.4)`;
+                    e.currentTarget.style.boxShadow = `0 8px 30px rgba(${accentRgb},0.15), inset 0 1px 0 rgba(255,255,255,0.07)`;
+                    e.currentTarget.style.transform = 'translateY(-2px)';
+                    e.currentTarget.style.background = `rgba(${accentRgb},0.04)`;
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.borderColor = 'rgba(255,255,255,0.04)';
+                    e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.4)';
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    e.currentTarget.style.background = 'rgba(13,17,26,0.5)';
+                  }}
+                >
+                  {/* Left accent line */}
+                  <div className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-2xl opacity-70 group-hover:opacity-100 transition-opacity"
+                       style={{ background: `linear-gradient(to bottom, transparent, ${accentColor}, transparent)` }} />
+
+                  {/* Icon */}
+                  <div className="relative shrink-0">
+                    <div className="absolute inset-0 blur-[12px] opacity-30 rounded-xl" style={{ background: accentColor }} />
+                    <div className="relative w-12 h-12 rounded-xl flex items-center justify-center border border-[rgba(255,255,255,0.05)]"
+                         style={{ background: `rgba(${accentRgb},0.08)` }}>
+                      {isSecurity
+                        ? <Shield size={22} style={{ color: accentColor }} />
+                        : <MessageSquare size={22} style={{ color: accentColor }} />
+                      }
+                    </div>
+                  </div>
+
+                  {/* Body */}
+                  <div className="flex-1 min-w-0 z-10">
+                    <div className="flex items-center gap-3 mb-1">
+                      <span className="text-[10px] font-black uppercase tracking-[0.18em] px-2.5 py-0.5 rounded-full border"
+                            style={{ color: accentColor, borderColor: `rgba(${accentRgb},0.3)`, background: `rgba(${accentRgb},0.06)` }}>
+                        {isSecurity ? '🔴 Security Threat' : '💬 Message'}
+                      </span>
+                      <span className="text-[10px] font-bold text-[var(--text-muted)] ml-auto shrink-0">
+                        {new Date(n.timestamp).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                      </span>
+                    </div>
+                    <p className="text-white font-semibold leading-snug truncate">{n.message}</p>
+                  </div>
+
+                  {/* Arrow */}
+                  <ChevronRight size={18} className="shrink-0 text-[var(--text-muted)] group-hover:text-white group-hover:translate-x-1 transition-all duration-300 z-10" />
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -5640,6 +5852,7 @@ function MyTasksView() {
 }
 
 function ProjectsTasksContent() {
+  const { isManager, isAdmin } = useAuth();
   const [projects, setProjects] = useState([]);
   const [selectedProject, setSelectedProject] = useState(null);
   const [tasks, setTasks] = useState([]);
@@ -5647,9 +5860,27 @@ function ProjectsTasksContent() {
   const [tasksLoading, setTasksLoading] = useState(false);
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
   const [showNewTaskModal, setShowNewTaskModal] = useState(false);
+  const [viewMode, setViewMode] = useState('kanban'); // 'kanban' | 'list'
+  const [taskFilter, setTaskFilter] = useState('all'); // 'all' | 'todo' | 'in_progress' | 'done'
+  const [availUsers, setAvailUsers] = useState([]);
+  const [completionToast, setCompletionToast] = useState(null); // { title: string }
+
+  // New project form
   const [newProjectName, setNewProjectName] = useState('');
   const [newProjectDesc, setNewProjectDesc] = useState('');
+  const [newProjectDeadline, setNewProjectDeadline] = useState('');
+
+  // New task form
   const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [newTaskDesc, setNewTaskDesc] = useState('');
+  const [newTaskPriority, setNewTaskPriority] = useState('medium');
+  const [newTaskDue, setNewTaskDue] = useState('');
+  const [newTaskAssignee, setNewTaskAssignee] = useState('');
+
+  const STATUS_COLOR = { todo: '#8b98a5', in_progress: '#667eea', done: '#10b981' };
+  const STATUS_LABEL = { todo: 'To Do', in_progress: 'In Progress', done: 'Done' };
+  const PRIORITY_COLOR = { low: '#10b981', medium: '#667eea', high: '#f59e0b', critical: '#ef4444' };
+  const PRIORITY_ICON = { low: '▽', medium: '◆', high: '▲', critical: '🔴' };
 
   const loadProjects = useCallback(async () => {
     try {
@@ -5663,220 +5894,443 @@ function ProjectsTasksContent() {
     }
   }, []);
 
+  useEffect(() => { loadProjects(); }, [loadProjects]);
   useEffect(() => {
-    loadProjects();
-  }, [loadProjects]);
+    api.getChatUsers().then(u => setAvailUsers(Array.isArray(u) ? u : [])).catch(() => {});
+  }, []);
 
   const loadTasks = async (projectId) => {
     try {
       setTasksLoading(true);
       const data = await api.getProjectTasks(projectId);
       setTasks(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error('Failed to load tasks:', err);
-    } finally {
-      setTasksLoading(false);
-    }
+    } catch (err) { console.error('Failed to load tasks:', err); }
+    finally { setTasksLoading(false); }
   };
 
-  const handleProjectClick = (p) => {
-    setSelectedProject(p);
-    loadTasks(p.id);
-  };
+  const handleProjectClick = (p) => { setSelectedProject(p); loadTasks(p.id); setTaskFilter('all'); };
 
   const handleCreateProject = async () => {
     if (!newProjectName.trim()) return;
     try {
-      await api.createProject({ name: newProjectName, description: newProjectDesc });
-      setNewProjectName('');
-      setNewProjectDesc('');
+      await api.createProject({ name: newProjectName, description: newProjectDesc, deadline: newProjectDeadline || undefined });
+      setNewProjectName(''); setNewProjectDesc(''); setNewProjectDeadline('');
       setShowNewProjectModal(false);
       loadProjects();
-    } catch (err) {
-      alert('Failed to create project');
-    }
+    } catch (err) { alert('Failed to create project'); }
   };
 
   const handleCreateTask = async () => {
     if (!newTaskTitle.trim() || !selectedProject) return;
     try {
-      await api.createTask(selectedProject.id, { title: newTaskTitle });
-      setNewTaskTitle('');
+      await api.createTask(selectedProject.id, {
+        title: newTaskTitle,
+        description: newTaskDesc,
+        priority: newTaskPriority,
+        dueDate: newTaskDue || undefined,
+        assigneeId: newTaskAssignee || undefined,
+      });
+      setNewTaskTitle(''); setNewTaskDesc(''); setNewTaskPriority('medium'); setNewTaskDue(''); setNewTaskAssignee('');
       setShowNewTaskModal(false);
       loadTasks(selectedProject.id);
-    } catch (err) {
-      alert('Failed to create task');
-    }
+    } catch (err) { alert('Failed to create task'); }
   };
 
-  const toggleLocalTask = async (task) => {
+  const handleCycleStatus = async (task) => {
+    const cycle = { todo: 'in_progress', in_progress: 'done', done: 'todo' };
+    const newStatus = cycle[task.status] || 'in_progress';
     try {
-      const newStatus = task.status === 'done' ? 'todo' : 'done';
       await api.updateTask(task.id, { status: newStatus });
       setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: newStatus } : t));
-    } catch (err) {
-      alert('Failed to update task');
-    }
+      if (newStatus === 'done') {
+        setCompletionToast({ title: task.title });
+        setTimeout(() => setCompletionToast(null), 3500);
+      }
+    } catch (err) { alert('Failed to update'); }
   };
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'active': case 'in_progress': return '#10b981';
-      case 'planned': return '#667eea';
-      case 'on_hold': return '#f59e0b';
-      case 'completed': return '#8b98a5';
-      default: return '#8b98a5';
-    }
+  const getProjectProgress = (p) => {
+    const projectTasks = p.tasks || tasks.filter(t => t.projectId === p.id);
+    if (!projectTasks.length) return 0;
+    return Math.round((projectTasks.filter(t => t.status === 'done').length / projectTasks.length) * 100);
+  };
+
+  const getStatusBadge = (status) => {
+    const colors = { active: '#10b981', planned: '#667eea', on_hold: '#f59e0b', completed: '#8b98a5' };
+    const labels = { active: '● Active', planned: '◎ Planned', on_hold: '⏸ On Hold', completed: '✓ Completed' };
+    return { color: colors[status] || '#8b98a5', label: labels[status] || status };
+  };
+
+  const isOverdue = (task) => task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'done';
+
+  const filteredTasks = taskFilter === 'all' ? tasks
+    : tasks.filter(t => t.status === taskFilter);
+
+  const kanbanCols = [
+    { key: 'todo', label: 'To Do', icon: '○', color: '#8b98a5' },
+    { key: 'in_progress', label: 'In Progress', icon: '◑', color: '#667eea' },
+    { key: 'done', label: 'Done', icon: '●', color: '#10b981' },
+  ];
+
+  // Shared inline styles
+  const inputStyle = { width: '100%', padding: '11px 14px', borderRadius: '10px', background: 'var(--bg-app)', border: '1px solid var(--border-color)', color: 'var(--text-main)', outline: 'none', fontWeight: '600', fontSize: '14px', boxSizing: 'border-box', fontFamily: 'inherit' };
+
+  const TaskCard = ({ task, compact = false }) => {
+    const overdue = isOverdue(task);
+    const priColor = PRIORITY_COLOR[task.priority] || '#8b98a5';
+    const statColor = STATUS_COLOR[task.status] || '#8b98a5';
+    const assigneeName = availUsers.find(u => u.id === task.assigneeId);
+    return (
+      <div style={{
+        background: 'var(--bg-panel)', borderRadius: '16px', padding: compact ? '12px' : '16px',
+        border: `1px solid ${overdue ? '#ef444435' : 'var(--border-color)'}`,
+        boxShadow: overdue ? '0 0 0 1px #ef444420' : 'none',
+        transition: 'all 0.2s', cursor: 'default',
+        borderLeft: `3px solid ${priColor}`,
+      }}>
+        {/* Title row */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+          <button
+            onClick={() => handleCycleStatus(task)}
+            title={`${STATUS_LABEL[task.status]} — click to advance`}
+            style={{
+              width: '20px', height: '20px', borderRadius: '50%', flexShrink: 0, marginTop: '2px',
+              border: `2px solid ${statColor}`, background: task.status === 'done' ? statColor : 'transparent',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+            }}
+          >
+            {task.status === 'done' && <Check size={11} color="#fff" />}
+            {task.status === 'in_progress' && <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: statColor }} />}
+          </button>
+          <span style={{
+            fontWeight: '700', fontSize: '13px', color: 'var(--text-main)', lineHeight: '1.4', flex: 1,
+            textDecoration: task.status === 'done' ? 'line-through' : 'none',
+            opacity: task.status === 'done' ? 0.55 : 1,
+          }}>{task.title}</span>
+          {overdue && <span style={{ fontSize: '8px', fontWeight: '900', color: '#ef4444', background: '#ef444415', padding: '2px 6px', borderRadius: '6px', flexShrink: 0 }}>OVERDUE</span>}
+        </div>
+
+        {/* Description */}
+        {task.description && !compact && (
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '8px', lineHeight: '1.5', paddingLeft: '30px' }}>{task.description}</div>
+        )}
+
+        {/* Badges row */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '10px', paddingLeft: '30px', flexWrap: 'wrap' }}>
+          {task.priority && (
+            <span style={{ fontSize: '9px', fontWeight: '900', textTransform: 'uppercase', color: priColor, background: `${priColor}18`, padding: '2px 7px', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '3px' }}>
+              {PRIORITY_ICON[task.priority]} {task.priority}
+            </span>
+          )}
+          {task.dueDate && (
+            <span style={{ fontSize: '10px', fontWeight: '600', color: overdue ? '#ef4444' : 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '3px' }}>
+              <Clock size={9} />{new Date(task.dueDate).toLocaleDateString('vi-VN')}
+            </span>
+          )}
+          {assigneeName && (
+            <span style={{ fontSize: '10px', fontWeight: '600', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '3px' }}>
+              <User size={9} />{assigneeName.firstName || assigneeName.username}
+            </span>
+          )}
+          {!assigneeName && task.assigneeId && (
+            <span style={{ fontSize: '10px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '3px' }}>
+              <User size={9} />Assigned
+            </span>
+          )}
+        </div>
+      </div>
+    );
   };
 
   return (
-    <div style={{ padding: '30px', color: 'var(--text-main)', height: '100%', display: 'flex', gap: '40px', maxWidth: '1600px', margin: '0 auto', width: '100%' }}>
-      {/* Left Column: Projects List */}
-      <div style={{ width: '350px', display: 'flex', flexDirection: 'column', gap: '30px' }}>
-        <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-            <h2 style={{ fontSize: '28px', margin: 0, fontWeight: '900', color: 'var(--text-main)', letterSpacing: '-0.5px' }}>Secure Projects</h2>
+    <div style={{ padding: '24px 30px', color: 'var(--text-main)', height: '100%', display: 'flex', gap: '32px', maxWidth: '1600px', margin: '0 auto', width: '100%', boxSizing: 'border-box', overflow: 'hidden' }}>
+
+      {/* ─── Left: Projects List ─── */}
+      <div style={{ width: '300px', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: '20px', overflowY: 'auto' }}>
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h2 style={{ fontSize: '22px', margin: 0, fontWeight: '900', color: 'var(--text-main)', letterSpacing: '-0.5px' }}>
+            <Layers size={18} style={{ marginRight: '8px', verticalAlign: 'middle', opacity: 0.7 }} />
+            Projects
+          </h2>
+          {(isManager || isAdmin) && (
             <button
               onClick={() => setShowNewProjectModal(true)}
-              style={{ width: '36px', height: '36px', background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(0, 123, 255, 0.3)' }}
+              style={{ width: '32px', height: '32px', background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(102,126,234,0.35)' }}
             >
-              <Plus size={20} />
+              <Plus size={17} />
             </button>
-          </div>
-
-          {loading ? <div style={{ color: 'var(--text-muted)' }}>Decrypting projects...</div> : (
-            <div style={{ display: 'grid', gap: '15px', overflowY: 'auto', maxHeight: '400px', paddingRight: '10px' }}>
-              {projects.map(p => (
-                <div key={p.id} onClick={() => handleProjectClick(p)} style={{ background: 'var(--bg-panel)', padding: '20px', borderRadius: '20px', border: `1px solid ${selectedProject?.id === p.id ? 'var(--primary)' : 'var(--border-color)'}`, cursor: 'pointer', transition: 'all 0.2s', boxShadow: selectedProject?.id === p.id ? '0 8px 20px rgba(0, 0, 0, 0.1)' : 'none' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
-                    <span style={{ fontSize: '9px', fontWeight: '900', textTransform: 'uppercase', color: getStatusColor(p.status), background: `${getStatusColor(p.status)}15`, padding: '4px 8px', borderRadius: '6px', letterSpacing: '0.5px' }}>{p.status}</span>
-                    <Layers size={14} color="#8b98a5" />
-                  </div>
-                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '800', color: 'var(--text-main)' }}>{p.name}</h3>
-                  <div style={{ marginTop: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11px', color: 'var(--text-muted)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><Clock size={12} /> {p.deadline ? new Date(p.deadline).toLocaleDateString() : 'Active'}</div>
-                    <ChevronRight size={14} />
-                  </div>
-                </div>
-              ))}
-              {projects.length === 0 && <div style={{ color: 'var(--text-muted)', fontSize: '12px', padding: '10px' }}>No secure projects initialized.</div>}
-            </div>
           )}
         </div>
 
-        <div style={{ height: '1px', background: 'var(--border-color)' }} />
-        
-        <MyTasksView />
-      </div>
-
-      {/* Right Column: Project Details & Tasks */}
-      <div style={{ flex: 1, position: 'relative' }}>
-        {selectedProject ? (
-          <div style={{ background: 'var(--bg-panel)', borderRadius: '32px', padding: '40px', border: '1px solid var(--border-color)', height: '100%', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 40px rgba(0,0,0,0.1)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '30px' }}>
-              <div>
-                <h2 style={{ fontSize: '32px', fontWeight: '900', margin: 0, color: 'var(--text-main)' }}>{selectedProject.name}</h2>
-                <p style={{ margin: '10px 0 0 0', color: 'var(--text-muted)', fontSize: '15px', fontWeight: '500', maxWidth: '600px', lineHeight: '1.5' }}>{selectedProject.description}</p>
-              </div>
-              <div style={{ display: 'flex', gap: '12px' }}>
-                <button
-                  onClick={() => setShowNewTaskModal(true)}
-                  style={{ padding: '10px 20px', background: 'var(--bg-selected)', color: 'var(--primary)', border: 'none', borderRadius: '14px', cursor: 'pointer', fontWeight: '800', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}
+        {/* Project cards */}
+        {loading ? (
+          <div style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Loading projects...</div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {projects.map(p => {
+              const badge = getStatusBadge(p.status);
+              const progress = getProjectProgress(p);
+              const taskCount = (p.tasks || []).length;
+              const doneCount = (p.tasks || []).filter(t => t.status === 'done').length;
+              const isSelected = selectedProject?.id === p.id;
+              return (
+                <div
+                  key={p.id}
+                  onClick={() => handleProjectClick(p)}
+                  style={{
+                    background: 'var(--bg-panel)', padding: '16px', borderRadius: '16px',
+                    border: `1px solid ${isSelected ? 'var(--primary)' : 'var(--border-color)'}`,
+                    cursor: 'pointer', transition: 'all 0.2s',
+                    boxShadow: isSelected ? '0 4px 20px rgba(102,126,234,0.2)' : 'none',
+                  }}
                 >
-                  <Plus size={16} /> Add Task
-                </button>
-                <button onClick={() => setSelectedProject(null)} style={{ background: 'var(--bg-light)', border: 'none', color: 'var(--text-main)', width: '40px', height: '40px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><X size={20} /></button>
-              </div>
-            </div>
-
-            <div style={{ height: '1px', background: 'var(--border-color)', marginBottom: '30px' }} />
-
-            {tasksLoading ? <div style={{ color: 'var(--text-muted)' }}>Accessing archives...</div> : (
-              <div style={{ display: 'grid', gap: '15px', overflowY: 'auto' }}>
-                {tasks.length > 0 ? tasks.map(t => (
-                  <div key={t.id} style={{ background: 'var(--bg-app)', padding: '20px', borderRadius: '20px', border: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', gap: '15px', transition: 'all 0.2s' }}>
-                    <div 
-                      onClick={() => toggleLocalTask(t)}
-                      style={{ width: '24px', height: '24px', borderRadius: '8px', border: `2px solid ${t.status === 'done' ? 'var(--primary)' : 'var(--border-color)'}`, background: t.status === 'done' ? 'var(--primary)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
-                    >
-                      {t.status === 'done' && <Check size={16} color="#fff" />}
-                    </div>
-                    <div>
-                      <div style={{ color: 'var(--text-main)', fontWeight: '700', fontSize: '15px', textDecoration: t.status === 'done' ? 'line-through' : 'none', opacity: t.status === 'done' ? 0.6 : 1 }}>{t.title}</div>
-                      {t.priority && <span style={{ fontSize: '9px', fontWeight: '900', textTransform: 'uppercase', color: '#ef4444', marginTop: '4px', display: 'inline-block' }}>{t.priority} priority</span>}
-                    </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                    <span style={{ fontSize: '9px', fontWeight: '900', color: badge.color, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{badge.label}</span>
+                    <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>{doneCount}/{taskCount} tasks</span>
                   </div>
-                )) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px', color: 'var(--text-muted)', textAlign: 'center' }}>
-                    <div style={{ opacity: 0.1, marginBottom: '20px' }}><Layers size={64} /></div>
-                    <div style={{ fontWeight: '800', fontSize: '18px', color: 'var(--text-main)' }}>No Tasks found in Secure Vault</div>
-                    <div style={{ fontSize: '14px', marginTop: '5px' }}>Start by adding a new assignment to this project.</div>
+                  <div style={{ fontWeight: '800', fontSize: '14px', color: 'var(--text-main)', marginBottom: '10px', lineHeight: '1.3' }}>{p.name}</div>
+                  {/* Progress bar */}
+                  <div style={{ height: '4px', background: 'var(--border-color)', borderRadius: '4px', overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${progress}%`, background: badge.color, borderRadius: '4px', transition: 'width 0.5s ease' }} />
                   </div>
-                )}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', fontSize: '10px', color: 'var(--text-muted)' }}>
+                    <span>{progress}% complete</span>
+                    {p.deadline && <span><Clock size={9} style={{ verticalAlign: 'middle', marginRight: '2px' }} />{new Date(p.deadline).toLocaleDateString('vi-VN')}</span>}
+                  </div>
+                </div>
+              );
+            })}
+            {projects.length === 0 && (
+              <div style={{ color: 'var(--text-muted)', fontSize: '12px', padding: '20px', textAlign: 'center', background: 'var(--bg-light)', borderRadius: '12px', border: '1px dashed var(--border-color)' }}>
+                No projects found.
               </div>
             )}
           </div>
+        )}
+
+        <div style={{ height: '1px', background: 'var(--border-color)' }} />
+        <MyTasksView />
+      </div>
+
+      {/* ─── Right: Project Details & Tasks ─── */}
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        {selectedProject ? (
+          <>
+            {/* Project header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px', flexShrink: 0 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <h2 style={{ fontSize: '26px', fontWeight: '900', margin: 0, color: 'var(--text-main)' }}>{selectedProject.name}</h2>
+                  <span style={{ fontSize: '9px', fontWeight: '900', color: getStatusBadge(selectedProject.status).color, background: `${getStatusBadge(selectedProject.status).color}15`, padding: '3px 8px', borderRadius: '6px', textTransform: 'uppercase', flexShrink: 0 }}>
+                    {selectedProject.status}
+                  </span>
+                </div>
+                {selectedProject.description && (
+                  <p style={{ margin: '8px 0 0 0', color: 'var(--text-muted)', fontSize: '13px', lineHeight: '1.5', maxWidth: '600px' }}>{selectedProject.description}</p>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+                {/* View toggle */}
+                <div style={{ display: 'flex', background: 'var(--bg-light)', borderRadius: '10px', padding: '3px', gap: '2px' }}>
+                  {['kanban', 'list'].map(mode => (
+                    <button key={mode} onClick={() => setViewMode(mode)} style={{
+                      padding: '6px 12px', borderRadius: '8px', border: 'none', cursor: 'pointer',
+                      background: viewMode === mode ? 'var(--bg-panel)' : 'transparent',
+                      color: viewMode === mode ? 'var(--primary)' : 'var(--text-muted)',
+                      fontWeight: '700', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '5px',
+                      boxShadow: viewMode === mode ? '0 2px 8px rgba(0,0,0,0.1)' : 'none',
+                    }}>
+                      {mode === 'kanban' ? <Layers size={14} /> : <List size={14} />}
+                      {mode === 'kanban' ? 'Kanban' : 'List'}
+                    </button>
+                  ))}
+                </div>
+                {(isManager || isAdmin) && (
+                  <button
+                    onClick={() => setShowNewTaskModal(true)}
+                    style={{ padding: '8px 16px', background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: '800', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px', boxShadow: '0 4px 12px rgba(102,126,234,0.3)' }}
+                  >
+                    <Plus size={15} /> Add Task
+                  </button>
+                )}
+                <button onClick={() => setSelectedProject(null)} style={{ background: 'var(--bg-light)', border: 'none', color: 'var(--text-muted)', width: '36px', height: '36px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><X size={16} /></button>
+              </div>
+            </div>
+
+            {/* Stats bar */}
+            <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexShrink: 0 }}>
+              {[
+                { label: 'Total', value: tasks.length, color: 'var(--text-muted)' },
+                { label: 'To Do', value: tasks.filter(t => t.status === 'todo').length, color: '#8b98a5' },
+                { label: 'In Progress', value: tasks.filter(t => t.status === 'in_progress').length, color: '#667eea' },
+                { label: 'Done', value: tasks.filter(t => t.status === 'done').length, color: '#10b981' },
+              ].map(s => (
+                <div key={s.label} style={{ background: 'var(--bg-panel)', borderRadius: '12px', padding: '10px 16px', border: '1px solid var(--border-color)', textAlign: 'center', minWidth: '70px' }}>
+                  <div style={{ fontSize: '20px', fontWeight: '900', color: s.color }}>{s.value}</div>
+                  <div style={{ fontSize: '10px', fontWeight: '700', color: 'var(--text-muted)', textTransform: 'uppercase', marginTop: '2px' }}>{s.label}</div>
+                </div>
+              ))}
+              {/* Overall progress bar */}
+              <div style={{ flex: 1, background: 'var(--bg-panel)', borderRadius: '12px', padding: '10px 16px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '11px', fontWeight: '700', color: 'var(--text-muted)' }}>
+                  <span>Overall Progress</span>
+                  <span style={{ color: '#10b981' }}>{tasks.length ? Math.round((tasks.filter(t => t.status === 'done').length / tasks.length) * 100) : 0}%</span>
+                </div>
+                <div style={{ height: '6px', background: 'var(--border-color)', borderRadius: '6px', overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${tasks.length ? Math.round((tasks.filter(t => t.status === 'done').length / tasks.length) * 100) : 0}%`, background: 'linear-gradient(90deg, #667eea, #10b981)', borderRadius: '6px', transition: 'width 0.5s ease' }} />
+                </div>
+              </div>
+            </div>
+
+            {/* Filter tabs (list mode only) */}
+            {viewMode === 'list' && (
+              <div style={{ display: 'flex', gap: '6px', marginBottom: '16px', flexShrink: 0 }}>
+                {[['all', 'All'], ['todo', 'To Do'], ['in_progress', 'In Progress'], ['done', 'Done']].map(([key, label]) => (
+                  <button key={key} onClick={() => setTaskFilter(key)} style={{
+                    padding: '6px 14px', borderRadius: '20px', border: 'none', cursor: 'pointer',
+                    background: taskFilter === key ? 'var(--primary)' : 'var(--bg-light)',
+                    color: taskFilter === key ? '#fff' : 'var(--text-muted)',
+                    fontWeight: '700', fontSize: '12px',
+                  }}>{label}</button>
+                ))}
+              </div>
+            )}
+
+            {/* Tasks body */}
+            {tasksLoading ? (
+              <div style={{ color: 'var(--text-muted)', padding: '40px', textAlign: 'center' }}>Loading tasks...</div>
+            ) : tasks.length === 0 ? (
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', textAlign: 'center', background: 'var(--bg-panel)', borderRadius: '20px', border: '1px dashed var(--border-color)' }}>
+                <Layers size={48} style={{ opacity: 0.15, marginBottom: '16px' }} />
+                <div style={{ fontWeight: '800', fontSize: '16px', color: 'var(--text-main)' }}>No tasks yet</div>
+                <div style={{ fontSize: '13px', marginTop: '4px' }}>{(isManager || isAdmin) ? 'Click "Add Task" to create the first task.' : 'No tasks have been assigned yet.'}</div>
+              </div>
+            ) : viewMode === 'kanban' ? (
+              /* Kanban Board */
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+                {kanbanCols.map(col => {
+                  const colTasks = tasks.filter(t => t.status === col.key);
+                  return (
+                    <div key={col.key} style={{ display: 'flex', flexDirection: 'column', background: 'var(--bg-light)', borderRadius: '20px', border: '1px solid var(--border-color)', overflow: 'hidden' }}>
+                      {/* Column header */}
+                      <div style={{ padding: '16px 16px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, borderBottom: `2px solid ${col.color}20` }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ fontSize: '16px', color: col.color }}>{col.icon}</span>
+                          <span style={{ fontWeight: '900', fontSize: '13px', color: 'var(--text-main)' }}>{col.label}</span>
+                        </div>
+                        <span style={{ background: `${col.color}20`, color: col.color, fontWeight: '900', fontSize: '11px', padding: '2px 8px', borderRadius: '20px' }}>{colTasks.length}</span>
+                      </div>
+                      {/* Column tasks */}
+                      <div style={{ flex: 1, overflowY: 'auto', padding: '12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                        {colTasks.map(task => <TaskCard key={task.id} task={task} compact />)}
+                        {colTasks.length === 0 && (
+                          <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px', padding: '20px', opacity: 0.6 }}>Empty</div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              /* List view */
+              <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {filteredTasks.map(task => <TaskCard key={task.id} task={task} />)}
+                {filteredTasks.length === 0 && (
+                  <div style={{ color: 'var(--text-muted)', padding: '40px', textAlign: 'center' }}>No tasks in this filter.</div>
+                )}
+              </div>
+            )}
+          </>
         ) : (
-          <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-panel)', borderRadius: '32px', border: '1px dashed var(--border-color)', color: 'var(--text-muted)' }}>
-            <Shield size={48} style={{ opacity: 0.2, marginBottom: '20px' }} />
-            <h3 style={{ fontSize: '20px', fontWeight: '800', color: 'var(--text-main)' }}>Select a Project to View Intelligence</h3>
-            <p style={{ fontSize: '14px' }}>Click on a project card to view active tasks and status reports.</p>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-panel)', borderRadius: '24px', border: '1px dashed var(--border-color)', color: 'var(--text-muted)' }}>
+            <Shield size={48} style={{ opacity: 0.15, marginBottom: '20px' }} />
+            <h3 style={{ fontSize: '18px', fontWeight: '800', color: 'var(--text-main)', margin: '0 0 8px 0' }}>Select a Project</h3>
+            <p style={{ fontSize: '13px', margin: 0 }}>Click on a project card to view tasks and status.</p>
           </div>
         )}
       </div>
 
+      {/* ─── Modal: New Project ─── */}
       {showNewProjectModal && (
-        <Modal title="Initialize Secure Project" onClose={() => setShowNewProjectModal(false)}>
-          <div style={{ padding: '25px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        <Modal title="New Secure Project" onClose={() => setShowNewProjectModal(false)}>
+          <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div>
-              <label style={{ fontSize: '12px', fontWeight: '900', textTransform: 'uppercase', color: 'var(--text-muted)', display: 'block', marginBottom: '8px' }}>Project Codename</label>
-              <input
-                placeholder="Enter project name..."
-                value={newProjectName}
-                onChange={e => setNewProjectName(e.target.value)}
-                style={{ width: '100%', padding: '14px', borderRadius: '12px', background: 'var(--bg-app)', border: '1px solid var(--border-color)', color: 'var(--text-main)', outline: 'none', fontWeight: '600' }}
-              />
+              <label style={{ fontSize: '11px', fontWeight: '900', textTransform: 'uppercase', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>Project Name *</label>
+              <input placeholder="e.g. Network Security Upgrade" value={newProjectName} onChange={e => setNewProjectName(e.target.value)} style={inputStyle} />
             </div>
             <div>
-              <label style={{ fontSize: '12px', fontWeight: '900', textTransform: 'uppercase', color: 'var(--text-muted)', display: 'block', marginBottom: '8px' }}>Briefing / Description</label>
-              <textarea
-                placeholder="Describe the project objective..."
-                value={newProjectDesc}
-                onChange={e => setNewProjectDesc(e.target.value)}
-                style={{ width: '100%', padding: '14px', borderRadius: '12px', background: 'var(--bg-app)', border: '1px solid var(--border-color)', color: 'var(--text-main)', height: '120px', outline: 'none', resize: 'none', fontWeight: '500' }}
-              />
+              <label style={{ fontSize: '11px', fontWeight: '900', textTransform: 'uppercase', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>Description</label>
+              <textarea placeholder="Project objectives and scope..." value={newProjectDesc} onChange={e => setNewProjectDesc(e.target.value)} style={{ ...inputStyle, height: '100px', resize: 'none' }} />
             </div>
-            <button
-              onClick={handleCreateProject}
-              style={{ padding: '16px', background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: '14px', fontWeight: '900', cursor: 'pointer', fontSize: '15px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', marginTop: '10px' }}
-            >
-              <ShieldCheck size={20} /> Initialize Security Project
+            <div>
+              <label style={{ fontSize: '11px', fontWeight: '900', textTransform: 'uppercase', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>Deadline</label>
+              <input type="date" value={newProjectDeadline} onChange={e => setNewProjectDeadline(e.target.value)} style={inputStyle} />
+            </div>
+            <button onClick={handleCreateProject} style={{ padding: '13px', background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: '12px', fontWeight: '900', cursor: 'pointer', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+              <ShieldCheck size={18} /> Create Project
             </button>
           </div>
         </Modal>
       )}
 
+      {/* ─── Modal: New Task ─── */}
       {showNewTaskModal && (
-        <Modal title="Add Operational Task" onClose={() => setShowNewTaskModal(false)}>
-          <div style={{ padding: '25px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        <Modal title="Add Task" onClose={() => setShowNewTaskModal(false)}>
+          <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
             <div>
-              <label style={{ fontSize: '12px', fontWeight: '900', textTransform: 'uppercase', color: 'var(--text-muted)', display: 'block', marginBottom: '8px' }}>Task Description</label>
-              <input
-                placeholder="What needs to be done?"
-                value={newTaskTitle}
-                onChange={e => setNewTaskTitle(e.target.value)}
-                style={{ width: '100%', padding: '14px', borderRadius: '12px', background: 'var(--bg-app)', border: '1px solid var(--border-color)', color: 'var(--text-main)', outline: 'none', fontWeight: '600' }}
-              />
+              <label style={{ fontSize: '11px', fontWeight: '900', textTransform: 'uppercase', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>Task Title *</label>
+              <input placeholder="What needs to be done?" value={newTaskTitle} onChange={e => setNewTaskTitle(e.target.value)} style={inputStyle} />
             </div>
-            <button
-              onClick={handleCreateTask}
-              style={{ padding: '16px', background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: '14px', fontWeight: '900', cursor: 'pointer', fontSize: '15px' }}
-            >
-              Deploy Task to Project
+            <div>
+              <label style={{ fontSize: '11px', fontWeight: '900', textTransform: 'uppercase', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>Description</label>
+              <textarea placeholder="Details, acceptance criteria..." value={newTaskDesc} onChange={e => setNewTaskDesc(e.target.value)} style={{ ...inputStyle, height: '80px', resize: 'none' }} />
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: '900', textTransform: 'uppercase', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>Priority</label>
+                <select value={newTaskPriority} onChange={e => setNewTaskPriority(e.target.value)} style={{ ...inputStyle }}>
+                  {['low', 'medium', 'high', 'critical'].map(p => <option key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: '900', textTransform: 'uppercase', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>Due Date</label>
+                <input type="date" value={newTaskDue} onChange={e => setNewTaskDue(e.target.value)} style={inputStyle} />
+              </div>
+            </div>
+            <div>
+              <label style={{ fontSize: '11px', fontWeight: '900', textTransform: 'uppercase', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>Assign To</label>
+              <select value={newTaskAssignee} onChange={e => setNewTaskAssignee(e.target.value)} style={inputStyle}>
+                <option value="">— Unassigned —</option>
+                {availUsers.map(u => <option key={u.id} value={u.id}>{u.firstName} {u.lastName} ({u.username})</option>)}
+              </select>
+            </div>
+            <button onClick={handleCreateTask} style={{ padding: '13px', background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: '12px', fontWeight: '900', cursor: 'pointer', fontSize: '14px' }}>
+              Deploy Task
             </button>
           </div>
         </Modal>
       )}
+      {/* ─── Completion Toast ─── */}
+      {completionToast && (
+        <div style={{
+          position: 'fixed', bottom: '28px', right: '28px', zIndex: 9999,
+          background: 'linear-gradient(135deg, #10b981, #059669)',
+          color: '#fff', borderRadius: '16px', padding: '14px 20px',
+          display: 'flex', alignItems: 'center', gap: '10px',
+          boxShadow: '0 8px 30px rgba(16,185,129,0.4)',
+          animation: 'slideUp 0.3s ease-out',
+          maxWidth: '320px',
+        }}>
+          <span style={{ fontSize: '20px' }}>✅</span>
+          <div>
+            <div style={{ fontWeight: '900', fontSize: '13px' }}>Task Completed!</div>
+            <div style={{ fontSize: '11px', opacity: 0.85, marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '240px' }}>{completionToast.title}</div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
+

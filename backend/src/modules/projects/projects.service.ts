@@ -1,7 +1,7 @@
 // src/modules/projects/projects.service.ts
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import { Project } from '../../database/entities/team-collaboration/project.entity';
 import { ProjectTask } from '../../database/entities/team-collaboration/project-task.entity';
 import { ChatGateway } from '../chat/chat.gateway';
@@ -17,8 +17,25 @@ export class ProjectsService {
   ) {}
 
   async findAll(userId: string): Promise<Project[]> {
+    // Use raw UNION SQL: find all project IDs the user is involved in
+    // (creator, has assigned tasks, or is team member)
+    const rows: any[] = await this.projectRepository.query(`
+      SELECT DISTINCT p.id FROM projects p WHERE p.creator_id = ?
+      UNION
+      SELECT DISTINCT pt.project_id FROM project_tasks pt WHERE pt.assignee_id = ?
+      UNION
+      SELECT DISTINCT p2.id FROM projects p2
+        INNER JOIN teams t ON t.id = p2.team_id
+        INNER JOIN team_members tm ON tm.team_id = t.id
+        WHERE tm.user_id = ?
+    `, [userId, userId, userId]);
+
+    if (rows.length === 0) return [];
+
+    const projectIds = rows.map(r => r.id);
+
     return this.projectRepository.find({
-      where: [{ creatorId: userId }, { team: { members: { userId } } }],
+      where: { id: In(projectIds) },
       relations: ['tasks'],
       order: { createdAt: 'DESC' },
     });

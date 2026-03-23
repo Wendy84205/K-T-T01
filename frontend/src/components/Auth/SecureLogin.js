@@ -74,12 +74,12 @@ function SecureLogin() {
     }, [mfaRequired]);
 
     const handleLogin = async (e) => {
-        e.preventDefault(); // ngăn chặn trang web tải trang khi nhấn nút submit
-        setError(""); // xóa lỗi    
-        setLoading(true); // bật loading 
+        e.preventDefault(); // prevent default form submission
+        setError(""); // clear error
+        setLoading(true); // show loading
 
         try {
-            const response = await api.login(identifier, password); // gửi thông tin định danh (email, username) và mật khẩu đến api 
+            const response = await api.login(identifier, password); // send identifier (email, username) and password to api
 
             if (response.requiresMfa) {
                 setMfaRequired(true);
@@ -196,18 +196,18 @@ function SecureLogin() {
 
     const ensureE2EEKeys = async (user) => {
         try {
-            const privateKey = localStorage.getItem(`e2ee_private_key_${user.id}`); // localStrong.getItem để xem máy user đã có private key chưa
+            const privateKey = localStorage.getItem(`e2ee_private_key_${user.id}`); // check local storage to see if user has a private key
 
             // If no private key locally OR user has no public key on server, (re)generate
             if (!privateKey || !user.publicKey) {
                 console.log("[E2EE] Generating secure key pair...");
-                const { publicKey, privateKey: newPrivateKey } = await generateKeyPair(); // generateKeyPair để tạo cặp khóa
+                const { publicKey, privateKey: newPrivateKey } = await generateKeyPair(); // generate new key pair
 
                 // Save private key locally
-                localStorage.setItem(`e2ee_private_key_${user.id}`, newPrivateKey); // localStrong.setItem để lưu private key
+                localStorage.setItem(`e2ee_private_key_${user.id}`, newPrivateKey); // save private key to local storage
 
                 // Upload public key to server
-                await api.updateProfile({ publicKey }); // Gửi khoá công khai lên server qua api updateProfile để user khác dùng nó mã hoá tin nhắn gửi cho user
+                await api.updateProfile({ publicKey }); // send public key to server via updateProfile api so other users can use it to encrypt messages sent to this user
 
                 // CRITICAL: Refresh user profile in AuthContext so we have the NEW publicKey for encryption
                 if (loadUser) await loadUser();

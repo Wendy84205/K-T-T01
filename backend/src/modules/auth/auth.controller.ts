@@ -128,4 +128,30 @@ export class AuthController {
   healthCheck() {
     return { status: 'Auth service is running' };
   }
+  @Public()
+  @Post('forgot-password')
+  @HttpCode(HttpStatus.OK)
+  async forgotPassword(@Body('email') email: string) {
+    if (!email) {
+      throw new BadRequestException('Email is required');
+    }
+    await this.authService.forgotPassword(email);
+    return { success: true, message: 'If the email exists, a password reset link has been sent.' };
+  }
+
+  @Public()
+  @Post('reset-password')
+  @HttpCode(HttpStatus.OK)
+  async resetPassword(@Body() body: any) {
+    const { token, email, newPassword } = body;
+    if (!token || !email || !newPassword) {
+      throw new BadRequestException('Token, email, and newPassword are required');
+    }
+    if (newPassword.length < 8) {
+      throw new BadRequestException('Password must be at least 8 characters long');
+    }
+
+    await this.authService.resetPassword(token, email, newPassword);
+    return { success: true, message: 'Password has been reset successfully' };
+  }
 }

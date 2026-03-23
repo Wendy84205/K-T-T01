@@ -191,6 +191,14 @@ class SocketService {
         this._on('notification', callback);
     }
 
+    onSecurityAlert(callback) {
+        this._on('security_alert', callback);
+    }
+
+    onDeviceLogin(callback) {
+        this._on('device_login', callback);
+    }
+
     onTaskAssigned(callback) {
         this._on('task-assigned', callback);
     }

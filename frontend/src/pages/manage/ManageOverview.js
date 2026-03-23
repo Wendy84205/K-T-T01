@@ -31,7 +31,7 @@ export default function ManageOverview() {
             setTeam(userData?.slice(0, 5) || []);
             
             const allTasks = projectData?.reduce((acc, p) => [...acc, ...(p.tasks || [])], []) || [];
-            const pendingTasks = allTasks.filter(t => t.status !== 'completed').length;
+            const pendingTasks = allTasks.filter(t => t.status !== 'completed' && t.status !== 'done').length;
 
             setStats({
                 totalProjects: projectData?.length || 0,
@@ -54,7 +54,7 @@ export default function ManageOverview() {
 
     const calculateProgress = (tasks) => {
         if (!tasks || tasks.length === 0) return 0;
-        const completed = tasks.filter(t => t.status === 'completed').length;
+        const completed = tasks.filter(t => t.status === 'completed' || t.status === 'done').length;
         return Math.round((completed / tasks.length) * 100);
     };
 
