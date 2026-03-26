@@ -266,7 +266,7 @@ export class AuthService {
     }
 
     /* 
-    // BYPASS FOR TESTING: Cho phép 123456 để test luồng nhanh
+    // BYPASS FOR TESTING
     let isVerified = token === '123456';
     if (!isVerified) {
       const mfaResult = await this.mfaService.verifyTotpLogin(userId, token);
