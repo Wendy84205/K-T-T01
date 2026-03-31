@@ -398,7 +398,7 @@ export class ChatService implements OnModuleInit {
         const message = this.messageRepository.create({
             conversationId,
             senderId: userId,
-            content: `[System Message]`, // Fallback content for DB
+            content: `[System Message]`,
             encryptedContent: encrypted,
             initializationVector: iv,
             authTag: tag,

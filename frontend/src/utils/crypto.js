@@ -18,10 +18,6 @@ const AES_ALGORITHM = {
 
 const PBKDF2_ITERATIONS = 310_000; // OWASP 2023 recommended minimum
 
-// ============================================================
-// 🔑 PASSWORD-DERIVED KEY FUNCTIONS (PBKDF2)
-// ============================================================
-
 /**
  * Derive a 256-bit AES-GCM key from a password + salt using PBKDF2.
  * The SAME password + SAME salt always produces the SAME key.
@@ -50,7 +46,7 @@ export async function deriveAesKeyFromPassword(password, saltBase64) {
  */
 export async function encryptPrivateKeyWithPassword(privateKeyBase64, password) {
     const salt = window.crypto.getRandomValues(new Uint8Array(32));
-    const iv   = window.crypto.getRandomValues(new Uint8Array(12));
+    const iv = window.crypto.getRandomValues(new Uint8Array(12));
     const saltB64 = arrayBufferToBase64(salt);
 
     const aesKey = await deriveAesKeyFromPassword(password, saltB64);

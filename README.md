@@ -9,7 +9,7 @@
 
 **Hệ thống quản lý giao tiếp và tài liệu nội bộ doanh nghiệp với bảo mật cấp cao**
 
-[Tính năng](#tính-năng-chính) | [Cài đặt nhanh](#cài-đặt-nhanh) | [Hướng dẫn chi tiết](#hướng-dẫn-chi-tiết) | [Bảo mật](#security-best-practices)
+[Tính năng](#tính-năng-chính) | [Cài đặt nhanh](#cài-đặt-nhanh) | [Hướng dẫn chi tiết](#hướng-dẫn-chi-tiết) | [Bảo mật & Kiến trúc](./docs/SECURITY_ARCHITECTURE.md)
 
 </div>
 

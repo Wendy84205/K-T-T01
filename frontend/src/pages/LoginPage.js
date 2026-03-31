@@ -9,7 +9,6 @@ export default function LoginPage() {
   const from = location.state?.from?.pathname || '/dashboard';
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
 
-  // Parallax effect for the background orbs based on mouse movement
   useEffect(() => {
     const handleMouseMove = (e) => {
       setMousePosition({
