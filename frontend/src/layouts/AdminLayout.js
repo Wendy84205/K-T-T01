@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import E2EESecurityGate from '../components/Auth/E2EESecurityGate';
 import '../styles/admin.css';
 
 const navItems = [
@@ -248,135 +249,137 @@ export default function AdminLayout() {
       {/* ════════════════════════════════
           MAIN BODY
       ════════════════════════════════ */}
-      <div className="admin-body">
+      <E2EESecurityGate>
+        <div className="admin-body">
 
-        {/* Top header */}
-        <header className="admin-header">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-            <button className="admin-mobile-toggle" onClick={() => setIsMobileOpen(p => !p)}>
-              <i className={`bx ${isMobileOpen ? 'bx-x' : 'bx-menu'}`} />
-            </button>
+          {/* Top header */}
+          <header className="admin-header">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+              <button className="admin-mobile-toggle" onClick={() => setIsMobileOpen(p => !p)}>
+                <i className={`bx ${isMobileOpen ? 'bx-x' : 'bx-menu'}`} />
+              </button>
 
-            {/* Breadcrumb */}
-            <div className="admin-breadcrumb">
-              <span style={{ color: 'var(--text-muted)' }}>{breadcrumb[0]}</span>
-              <i className="bx bx-chevron-right" style={{ fontSize: '14px', color: 'var(--text-muted)' }} />
-              <span style={{ color: 'var(--primary)', fontWeight: 700 }}>{breadcrumb[1]}</span>
+              {/* Breadcrumb */}
+              <div className="admin-breadcrumb">
+                <span style={{ color: 'var(--text-muted)' }}>{breadcrumb[0]}</span>
+                <i className="bx bx-chevron-right" style={{ fontSize: '14px', color: 'var(--text-muted)' }} />
+                <span style={{ color: 'var(--primary)', fontWeight: 700 }}>{breadcrumb[1]}</span>
+              </div>
             </div>
-          </div>
 
-          {/* Right actions */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            {/* Right actions */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
 
-            {/* Context search / live badge */}
-            {location.pathname === '/admin/dashboard' && (
-              <div className="search-container">
-                <i className="bx bx-search" />
-                <input type="text" className="search-input" placeholder="Search IP, Log ID, User..." />
-              </div>
-            )}
+              {/* Context search / live badge */}
+              {location.pathname === '/admin/dashboard' && (
+                <div className="search-container">
+                  <i className="bx bx-search" />
+                  <input type="text" className="search-input" placeholder="Search IP, Log ID, User..." />
+                </div>
+              )}
 
-            {location.pathname === '/admin/logs' && (
-              <div className="live-badge">
-                <div className="live-dot" />
-                LIVE MONITORING
-              </div>
-            )}
+              {location.pathname === '/admin/logs' && (
+                <div className="live-badge">
+                  <div className="live-dot" />
+                  LIVE MONITORING
+                </div>
+              )}
 
-            {/* Notification bell */}
-            <div className="notif-wrapper">
-              <div
-                className={`notif-bell-btn ${isNotifOpen ? 'active' : ''}`}
-                onClick={handleNotifClick}
-              >
-                <i className="bx bx-bell" style={{ fontSize: '20px', color: isNotifOpen ? 'var(--primary)' : 'var(--text-secondary)' }} />
-                {unreadCount > 0 && (
-                  <div style={{
-                    position: 'absolute', top: '6px', right: '6px',
-                    width: '8px', height: '8px',
-                    background: 'var(--red-color)',
-                    borderRadius: '50%', border: '2px solid var(--bg-main)',
-                    boxShadow: '0 0 8px var(--red-color)',
-                  }} />
+              {/* Notification bell */}
+              <div className="notif-wrapper">
+                <div
+                  className={`notif-bell-btn ${isNotifOpen ? 'active' : ''}`}
+                  onClick={handleNotifClick}
+                >
+                  <i className="bx bx-bell" style={{ fontSize: '20px', color: isNotifOpen ? 'var(--primary)' : 'var(--text-secondary)' }} />
+                  {unreadCount > 0 && (
+                    <div style={{
+                      position: 'absolute', top: '6px', right: '6px',
+                      width: '8px', height: '8px',
+                      background: 'var(--red-color)',
+                      borderRadius: '50%', border: '2px solid var(--bg-main)',
+                      boxShadow: '0 0 8px var(--red-color)',
+                    }} />
+                  )}
+                </div>
+
+                {isNotifOpen && (
+                  <div className="notif-dropdown" onClick={e => e.stopPropagation()}>
+                    <div className="notif-header">
+                      <span>Notifications</span>
+                      <button
+                        onClick={() => setNotifications(n => n.map(x => ({ ...x, read: true })))}
+                        style={{ background: 'none', border: 'none', color: 'var(--primary)', fontSize: '11px', cursor: 'pointer', fontWeight: 700 }}
+                      >Mark all read</button>
+                    </div>
+                    <div className="notif-list">
+                      {notifications.length > 0 ? notifications.map(n => (
+                        <div key={n.id} className={`notif-item ${n.read ? 'read' : ''}`}>
+                          <div className="notif-icon" style={{ background: `${n.color}18`, color: n.color }}>
+                            <i className={`bx ${n.icon}`} />
+                          </div>
+                          <div className="notif-info">
+                            <div className="notif-title">{n.title}</div>
+                            <div className="notif-time">{n.time}</div>
+                          </div>
+                        </div>
+                      )) : (
+                        <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '13px' }}>
+                          <i className="bx bx-check-double" style={{ fontSize: '32px', marginBottom: '8px', display: 'block', color: 'var(--green-color)' }} />
+                          All clear! No alerts.
+                        </div>
+                      )}
+                    </div>
+                    <div className="notif-footer">
+                      <button className="notif-clear-btn" onClick={() => { setNotifications([]); setIsNotifOpen(false); }}>Clear All</button>
+                      <button className="notif-view-all" onClick={() => { navigate('/admin/logs'); setIsNotifOpen(false); }}>View All Logs</button>
+                    </div>
+                  </div>
                 )}
               </div>
 
-              {isNotifOpen && (
-                <div className="notif-dropdown" onClick={e => e.stopPropagation()}>
-                  <div className="notif-header">
-                    <span>Notifications</span>
-                    <button
-                      onClick={() => setNotifications(n => n.map(x => ({ ...x, read: true })))}
-                      style={{ background: 'none', border: 'none', color: 'var(--primary)', fontSize: '11px', cursor: 'pointer', fontWeight: 700 }}
-                    >Mark all read</button>
-                  </div>
-                  <div className="notif-list">
-                    {notifications.length > 0 ? notifications.map(n => (
-                      <div key={n.id} className={`notif-item ${n.read ? 'read' : ''}`}>
-                        <div className="notif-icon" style={{ background: `${n.color}18`, color: n.color }}>
-                          <i className={`bx ${n.icon}`} />
-                        </div>
-                        <div className="notif-info">
-                          <div className="notif-title">{n.title}</div>
-                          <div className="notif-time">{n.time}</div>
-                        </div>
-                      </div>
-                    )) : (
-                      <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '13px' }}>
-                        <i className="bx bx-check-double" style={{ fontSize: '32px', marginBottom: '8px', display: 'block', color: 'var(--green-color)' }} />
-                        All clear! No alerts.
-                      </div>
-                    )}
-                  </div>
-                  <div className="notif-footer">
-                    <button className="notif-clear-btn" onClick={() => { setNotifications([]); setIsNotifOpen(false); }}>Clear All</button>
-                    <button className="notif-view-all" onClick={() => { navigate('/admin/logs'); setIsNotifOpen(false); }}>View All Logs</button>
-                  </div>
-                </div>
-              )}
+              {/* Dark / Light toggle */}
+              <button
+                onClick={toggleDarkMode}
+                title={darkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+                style={{
+                  background: 'var(--bg-light)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '10px',
+                  width: '36px', height: '36px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'pointer',
+                  color: darkMode ? '#fbbf24' : '#6366f1',
+                  transition: 'all 0.2s',
+                }}
+              >
+                <i className={`bx ${darkMode ? 'bx-sun' : 'bx-moon'}`} style={{ fontSize: '17px' }} />
+              </button>
+
+              {/* Context action (help / console) */}
+              <button
+                onClick={() => location.pathname === '/admin/logs' ? setIsConsoleOpen(true) : setIsHelpOpen(true)}
+                style={{
+                  background: 'var(--bg-light)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '10px',
+                  width: '36px', height: '36px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'pointer', color: 'var(--text-secondary)',
+                  transition: 'all 0.2s',
+                }}
+              >
+                <i className={`bx ${location.pathname === '/admin/logs' ? 'bx-laptop' : 'bx-help-circle'}`} style={{ fontSize: '17px' }} />
+              </button>
             </div>
+          </header>
 
-            {/* Dark / Light toggle */}
-            <button
-              onClick={toggleDarkMode}
-              title={darkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-              style={{
-                background: 'var(--bg-light)',
-                border: '1px solid var(--border-color)',
-                borderRadius: '10px',
-                width: '36px', height: '36px',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                cursor: 'pointer',
-                color: darkMode ? '#fbbf24' : '#6366f1',
-                transition: 'all 0.2s',
-              }}
-            >
-              <i className={`bx ${darkMode ? 'bx-sun' : 'bx-moon'}`} style={{ fontSize: '17px' }} />
-            </button>
-
-            {/* Context action (help / console) */}
-            <button
-              onClick={() => location.pathname === '/admin/logs' ? setIsConsoleOpen(true) : setIsHelpOpen(true)}
-              style={{
-                background: 'var(--bg-light)',
-                border: '1px solid var(--border-color)',
-                borderRadius: '10px',
-                width: '36px', height: '36px',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                cursor: 'pointer', color: 'var(--text-secondary)',
-                transition: 'all 0.2s',
-              }}
-            >
-              <i className={`bx ${location.pathname === '/admin/logs' ? 'bx-laptop' : 'bx-help-circle'}`} style={{ fontSize: '17px' }} />
-            </button>
-          </div>
-        </header>
-
-        {/* Page content */}
-        <main className="admin-main-content">
-          <Outlet />
-        </main>
-      </div>
+          {/* Page content */}
+          <main className="admin-main-content">
+            <Outlet />
+          </main>
+        </div>
+      </E2EESecurityGate>
     </div>
   );
 }

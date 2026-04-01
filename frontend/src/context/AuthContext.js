@@ -89,6 +89,7 @@ export function AuthProvider({ children }) {
     } finally {
       localStorage.removeItem('accessToken');
       localStorage.removeItem('user');
+      sessionStorage.removeItem('e2ee_session_pk');
       setToken(null);
       setUser(null);
     }

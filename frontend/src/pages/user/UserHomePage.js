@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Search, Plus, MessageSquare, MoreHorizontal, Phone, Video, Info, Lock, Send, Mic, Image, Paperclip, Smile, Settings, Bell, BellOff, Clock, Shield, LogOut, ChevronLeft, ChevronRight, User, File as FileIcon, Download, Trash2, ShieldCheck, CreditCard, HelpCircle, Key, Eye, EyeOff, Check, CheckCheck, Square, X, Forward, Reply, Edit2, Play, Pause, List, Pin, Star, Cloud, Heart, ChevronDown, Users, MoreVertical, FileText, Camera, MapPin, AlertTriangle, BarChart3, Folder, Maximize2, Minimize2, Briefcase, Layers, Building2, Bold, Italic, Link, Code, AtSign, Hash, Flag, RefreshCw } from 'lucide-react';
 import api from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
-import { encryptContent, decryptContent, encryptHybrid, decryptHybrid, setupE2EEWithPassword, unlockE2EEWithPassword, hasE2EEBundle } from "../../utils/crypto";
+import { useE2EE } from '../../context/E2EEContext';
+import { encryptContent, decryptContent, encryptHybrid, decryptHybrid } from "../../utils/crypto";
 import { SearchBar, PinnedMessagesBanner, ConversationSidebar, PollModal, StickerPicker } from '../../components/chat/ChatEnhancements';
 import { DiscoverContent, MiniAppsContent } from '../../components/chat/ZaloStyleComponents';
 import { EnhancedMessageBubble } from '../../components/chat/EnhancedMessage';
@@ -19,9 +20,7 @@ export default function UserHomePage() {
   const [activeTab, setActiveTab] = useState('messages');
   const [taskNotification, setTaskNotification] = useState({ show: false, task: null, project: null, message: '' });
   // E2EE Passphrase System
-  const [e2eeStatus, setE2eeStatus] = useState('checking'); // 'checking' | 'setup_needed' | 'locked' | 'unlocked'
-  const [showE2EEModal, setShowE2EEModal] = useState(false);
-  const [e2eePrivateKey, setE2eePrivateKey] = useState(() => sessionStorage.getItem('e2ee_session_pk') || null);
+  const { e2eePrivateKey } = useE2EE();
   const [selectedChat, setSelectedChat] = useState(null);
   const [conversations, setConversations] = useState([]);
   const [messages, setMessages] = useState([]);
@@ -267,48 +266,7 @@ export default function UserHomePage() {
     }
   }, [selectedChat]);
 
-  // ─── E2EE Passphrase Init ────────────────────────────────────────────────
-  useEffect(() => {
-    if (!user?.id) return;
-    const sessionPk = sessionStorage.getItem('e2ee_session_pk');
-    if (sessionPk) {
-      setE2eePrivateKey(sessionPk);
-      setE2eeStatus('unlocked');
-      return;
-    }
-
-    // Local bundle found → prompt to unlock
-    if (hasE2EEBundle(user.id)) {
-      setE2eeStatus('locked');
-      setShowE2EEModal(true);
-      return;
-    }
-
-    // No local bundle → check server (handles URL/domain change scenarios)
-    import('../../utils/api').then(({ default: api }) => {
-      api.getE2EEBundle().then(serverBundle => {
-        if (serverBundle && serverBundle.encryptedPrivateKey) {
-          // Server has a bundle → pre-populate localStorage and prompt to unlock
-          localStorage.setItem(`e2ee_bundle_${user.id}`, JSON.stringify({
-            encryptedPrivateKey: serverBundle.encryptedPrivateKey,
-            salt: serverBundle.salt,
-            iv: serverBundle.iv,
-            publicKey: serverBundle.publicKey,
-          }));
-          setE2eeStatus('locked');
-          setShowE2EEModal(true);
-        } else {
-          // No bundle anywhere → first-time setup
-          setE2eeStatus('setup_needed');
-          setShowE2EEModal(true);
-        }
-      }).catch(() => {
-        // Fallback: show setup modal if server check fails
-        setE2eeStatus('setup_needed');
-        setShowE2EEModal(true);
-      });
-    });
-  }, [user?.id]);
+  // E2EE initialization is now managed globally by E2EESecurityGate and E2EEContext
 
   useEffect(() => {
     const token = localStorage.getItem('accessToken');
@@ -654,7 +612,7 @@ export default function UserHomePage() {
 
   // Unread count handled via Effect 3 helper
 
-  const decryptMessage = async (msg) => {
+  const decryptMessage = useCallback(async (msg) => {
     if (!msg) return msg;
 
     // Decrypt main content
@@ -664,7 +622,7 @@ export default function UserHomePage() {
       const privateKey = e2eePrivateKey || sessionStorage.getItem('e2ee_session_pk');
 
       if (!privateKey) {
-        msg.content = "🔐 E2EE locked — click the 🔑 icon to enter your passphrase";
+        msg.content = "🔐 E2EE locked — enter passphrase to unlock";
       } else {
         try {
           const encryptedData = JSON.parse(rawContent);
@@ -698,7 +656,27 @@ export default function UserHomePage() {
     }
 
     return msg;
-  };
+  }, [e2eePrivateKey, user?.id]);
+
+  // Effect to re-decrypt messages if they were loaded while E2EE was locked
+  useEffect(() => {
+    const hasUnprocessedMessages = messages.some(m => 
+      m.content && (m.content.startsWith('[E2EE]:') || m.content.includes("🔐 E2EE locked") || m.content.includes("Unable to decrypt"))
+    );
+
+    if (e2eePrivateKey && hasUnprocessedMessages) {
+      const reDecryptAll = async () => {
+        const newMessages = await Promise.all(messages.map(m => decryptMessage({ ...m })));
+        
+        // Prevent infinite loop by checking if content actually changed
+        const anyChanged = newMessages.some((msg, i) => msg.content !== messages[i].content);
+        if (anyChanged) {
+          setMessages(newMessages);
+        }
+      };
+      reDecryptAll();
+    }
+  }, [e2eePrivateKey, messages, decryptMessage]);
 
   const loadMessages = async (conversationId, silent = false) => {
     try {
@@ -1584,7 +1562,7 @@ export default function UserHomePage() {
             minWidth: '280px', pointerEvents: 'auto',
             backdropFilter: 'blur(10px)', border: '1px solid var(--border-color)'
           }}>
-            <div 
+            <div
               style={{ display: 'flex', flex: 1, gap: '12px', cursor: 'pointer' }}
               onClick={() => {
                 if (n.type === 'message') {
@@ -1620,30 +1598,7 @@ export default function UserHomePage() {
         ))}
       </div>
 
-      {/* ════════════════════════════════════════════════════════
-          🔑 E2EE PASSPHRASE MODAL
-          ════════════════════════════════════════════════════════ */}
-      {showE2EEModal && (
-        <E2EEPassphraseModal
-          mode={e2eeStatus}
-          userId={user?.id}
-          onSuccess={({ privateKey, publicKey }) => {
-            // Store private key in this tab's sessionStorage (clears on tab close)
-            sessionStorage.setItem('e2ee_session_pk', privateKey);
-            setE2eePrivateKey(privateKey);
-            setE2eeStatus('unlocked');
-            setShowE2EEModal(false);
-            // Upload public key to backend so others can encrypt for us
-            api.updateProfile({ publicKey }).catch(err =>
-              console.warn('[E2EE] Failed to upload public key:', err)
-            );
-          }}
-          onSkip={() => {
-            setShowE2EEModal(false);
-            setE2eeStatus('skipped');
-          }}
-        />
-      )}
+      {/* E2EE Passphrase Modal is now handled by E2EEContext and SecurityGate */}
 
       {/* SIDEBAR */}
       <div style={{
@@ -1982,10 +1937,10 @@ export default function UserHomePage() {
         )}
         {activeTab === 'alerts' && <AlertsContent onUpdateCount={loadUnreadCount} />}
         {activeTab === 'notifications' && (
-          <NotificationsContent 
-            notifications={notifications} 
-            handleSelectUser={handleSelectUser} 
-            setActiveTab={setActiveTab} 
+          <NotificationsContent
+            notifications={notifications}
+            handleSelectUser={handleSelectUser}
+            setActiveTab={setActiveTab}
             setNotifications={setNotifications}
           />
         )}
@@ -5052,10 +5007,6 @@ function CallsContent() {
   );
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-// 🔑 E2EE PASSPHRASE MODAL COMPONENT
-// Uses PBKDF2 to derive AES key from passphrase → protects RSA private key
-// ════════════════════════════════════════════════════════════════════════════
 function E2EEPassphraseModal({ mode, userId, onSuccess, onSkip }) {
   const PIN_LENGTH = 6;
   const [pin, setPin] = useState(Array(PIN_LENGTH).fill(''));
@@ -5297,19 +5248,17 @@ function NotificationsContent({ notifications, handleSelectUser, setActiveTab, s
             <button
               key={tab.key}
               onClick={() => setFilter(tab.key)}
-              className={`relative px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-[0.15em] cursor-pointer transition-all duration-300 ${
-                filter === tab.key
+              className={`relative px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-[0.15em] cursor-pointer transition-all duration-300 ${filter === tab.key
                   ? 'bg-[rgba(99,102,241,0.15)] text-[var(--primary)] border border-[rgba(99,102,241,0.4)] shadow-[0_0_20px_rgba(99,102,241,0.2)]'
                   : 'text-[var(--text-muted)] hover:text-white border border-transparent hover:border-[rgba(255,255,255,0.05)] hover:bg-[rgba(255,255,255,0.03)]'
-              }`}
+                }`}
             >
               {tab.label}
               {tab.count > 0 && (
-                <span className={`ml-2 inline-flex items-center justify-center w-5 h-5 rounded-full text-[9px] font-black ${
-                  filter === tab.key
+                <span className={`ml-2 inline-flex items-center justify-center w-5 h-5 rounded-full text-[9px] font-black ${filter === tab.key
                     ? 'bg-[var(--primary)] text-white shadow-[0_0_10px_var(--primary)]'
                     : 'bg-[rgba(255,255,255,0.08)] text-[var(--text-muted)]'
-                }`}>
+                  }`}>
                   {tab.count}
                 </span>
               )}
@@ -5372,13 +5321,13 @@ function NotificationsContent({ notifications, handleSelectUser, setActiveTab, s
                 >
                   {/* Left accent line */}
                   <div className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-2xl opacity-70 group-hover:opacity-100 transition-opacity"
-                       style={{ background: `linear-gradient(to bottom, transparent, ${accentColor}, transparent)` }} />
+                    style={{ background: `linear-gradient(to bottom, transparent, ${accentColor}, transparent)` }} />
 
                   {/* Icon */}
                   <div className="relative shrink-0">
                     <div className="absolute inset-0 blur-[12px] opacity-30 rounded-xl" style={{ background: accentColor }} />
                     <div className="relative w-12 h-12 rounded-xl flex items-center justify-center border border-[rgba(255,255,255,0.05)]"
-                         style={{ background: `rgba(${accentRgb},0.08)` }}>
+                      style={{ background: `rgba(${accentRgb},0.08)` }}>
                       {isSecurity
                         ? <Shield size={22} style={{ color: accentColor }} />
                         : <MessageSquare size={22} style={{ color: accentColor }} />
@@ -5390,7 +5339,7 @@ function NotificationsContent({ notifications, handleSelectUser, setActiveTab, s
                   <div className="flex-1 min-w-0 z-10">
                     <div className="flex items-center gap-3 mb-1">
                       <span className="text-[10px] font-black uppercase tracking-[0.18em] px-2.5 py-0.5 rounded-full border"
-                            style={{ color: accentColor, borderColor: `rgba(${accentRgb},0.3)`, background: `rgba(${accentRgb},0.06)` }}>
+                        style={{ color: accentColor, borderColor: `rgba(${accentRgb},0.3)`, background: `rgba(${accentRgb},0.06)` }}>
                         {isSecurity ? '🔴 Security Threat' : '💬 Message'}
                       </span>
                       <span className="text-[10px] font-bold text-[var(--text-muted)] ml-auto shrink-0">
@@ -5896,7 +5845,7 @@ function ProjectsTasksContent() {
 
   useEffect(() => { loadProjects(); }, [loadProjects]);
   useEffect(() => {
-    api.getChatUsers().then(u => setAvailUsers(Array.isArray(u) ? u : [])).catch(() => {});
+    api.getChatUsers().then(u => setAvailUsers(Array.isArray(u) ? u : [])).catch(() => { });
   }, []);
 
   const loadTasks = async (projectId) => {

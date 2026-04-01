@@ -5,7 +5,9 @@ import {
 } from 'lucide-react';
 import api from '../../utils/api';
 import socketService from '../../utils/socket';
-import { encryptContent, decryptContent, unlockE2EEWithPassword, hasE2EEBundle } from '../../utils/crypto';
+import { useAuth } from '../../context/AuthContext';
+import { useE2EE } from '../../context/E2EEContext';
+import { encryptContent, decryptContent } from '../../utils/crypto';
 
 // ─── ConvItem: matches User chat ChatItem style ────────────────────────────────
 function ConvItem({ conv, isSelected, unread, online, onClick, getName, getInitial, formatTime }) {
@@ -95,8 +97,10 @@ function ConvItem({ conv, isSelected, unread, online, onClick, getName, getIniti
 }
 
 export default function ManageChat() {
-    const [user, setUser] = useState(null);
+    const { user } = useAuth();
+    const { e2eePrivateKey, e2eeStatus } = useE2EE();
     const [conversations, setConversations] = useState([]);
+
     const [selectedChat, setSelectedChat] = useState(null);
     const [selectedConv, setSelectedConv] = useState(null);
     const [messages, setMessages] = useState([]);
@@ -109,90 +113,8 @@ export default function ManageChat() {
     const [showInfo, setShowInfo] = useState(false);
     const [unreadCounts, setUnreadCounts] = useState({});
 
-    // ─── E2EE State ────────────────────────────────────────────────────────────
-    const [e2eeStatus, setE2eeStatus] = useState('checking'); // 'checking' | 'locked' | 'setup_needed' | 'unlocked'
-    const [e2eePrivateKey, setE2eePrivateKey] = useState(null);
-    const [showE2EEModal, setShowE2EEModal] = useState(false);
-    const [unlockPassword, setUnlockPassword] = useState('');
-    const [unlockLoading, setUnlockLoading] = useState(false);
-    const [unlockError, setUnlockError] = useState('');
-    const [showPassphrase, setShowPassphrase] = useState(false);
-
     const messagesEndRef = useRef(null);
     const typingTimerRef = useRef(null);
-
-    // Load profile
-    useEffect(() => {
-        const loadProfile = async () => {
-            try {
-                const { user: profile } = await api.getProfile();
-                setUser(profile);
-            } catch (err) {
-                console.error('Failed to load profile:', err);
-            }
-        };
-        loadProfile();
-    }, []);
-
-    // ─── E2EE Init ─────────────────────────────────────────────────────────────
-    useEffect(() => {
-        if (!user?.id) return;
-
-        // Check session cache first (already unlocked this session)
-        const sessionPk = sessionStorage.getItem('e2ee_session_pk');
-        if (sessionPk) {
-            setE2eePrivateKey(sessionPk);
-            setE2eeStatus('unlocked');
-            return;
-        }
-
-        // Local bundle found → prompt passphrase
-        if (hasE2EEBundle(user.id)) {
-            setE2eeStatus('locked');
-            setShowE2EEModal(true);
-            return;
-        }
-
-        // Check server for bundle (e.g. after domain change)
-        api.getE2EEBundle().then(serverBundle => {
-            if (serverBundle?.encryptedPrivateKey) {
-                localStorage.setItem(`e2ee_bundle_${user.id}`, JSON.stringify({
-                    encryptedPrivateKey: serverBundle.encryptedPrivateKey,
-                    salt: serverBundle.salt,
-                    iv: serverBundle.iv,
-                    publicKey: serverBundle.publicKey,
-                }));
-                setE2eeStatus('locked');
-                setShowE2EEModal(true);
-            } else {
-                setE2eeStatus('setup_needed');
-                setShowE2EEModal(true);
-            }
-        }).catch(() => {
-            setE2eeStatus('setup_needed');
-            setShowE2EEModal(true);
-        });
-    }, [user?.id]);
-
-    // ─── Unlock E2EE ───────────────────────────────────────────────────────────
-    const handleUnlockE2EE = async () => {
-        if (!unlockPassword.trim() || !user?.id) return;
-        setUnlockLoading(true);
-        setUnlockError('');
-        try {
-            const privateKey = await unlockE2EEWithPassword(user.id, unlockPassword);
-            if (!privateKey) throw new Error('Invalid passphrase');
-            setE2eePrivateKey(privateKey);
-            sessionStorage.setItem('e2ee_session_pk', privateKey);
-            setE2eeStatus('unlocked');
-            setShowE2EEModal(false);
-            setUnlockPassword('');
-        } catch (err) {
-            setUnlockError('Sai passphrase. Vui lòng thử lại.');
-        } finally {
-            setUnlockLoading(false);
-        }
-    };
 
     // ─── Socket Setup ──────────────────────────────────────────────────────────
     useEffect(() => {
@@ -249,8 +171,8 @@ export default function ManageChat() {
     const decryptMsg = useCallback(async (content) => {
         if (!content?.startsWith('[E2EE]:')) return content;
         const rawContent = content.substring(7);
-        const pk = sessionStorage.getItem('e2ee_session_pk') || e2eePrivateKey;
-        if (!pk) return '🔐 E2EE locked — click 🔑 to unlock';
+        const pk = e2eePrivateKey || sessionStorage.getItem('e2ee_session_pk');
+        if (!pk) return '🔐 E2EE locked';
         try {
             const encryptedData = JSON.parse(rawContent);
             if (user?.id && encryptedData[user.id]) return await decryptContent(encryptedData[user.id], pk);
@@ -258,6 +180,24 @@ export default function ManageChat() {
         try { return await decryptContent(rawContent, pk); } catch { }
         return '🔐 [Decryption failed]';
     }, [e2eePrivateKey, user?.id]);
+
+    // Effect to re-decrypt messages if they were loaded while E2EE was locked
+    useEffect(() => {
+        const hasUnprocessed = messages.some(m => 
+            m.content && (m.content.startsWith('[E2EE]:') || m.content.includes("🔐 E2EE locked") || m.content.includes("[Decryption failed]"))
+        );
+        if (e2eePrivateKey && hasUnprocessed) {
+            const reDecrypt = async () => {
+                const newMsgs = await Promise.all(messages.map(async m => ({
+                    ...m,
+                    content: await decryptMsg(m.content)
+                })));
+                const changed = newMsgs.some((m, i) => m.content !== messages[i].content);
+                if (changed) setMessages(newMsgs);
+            };
+            reDecrypt();
+        }
+    }, [e2eePrivateKey, messages, decryptMsg]);
 
     // ─── Load Conversations ─────────────────────────────────────────────────────
     const loadConversations = useCallback(async () => {
@@ -378,135 +318,12 @@ export default function ManageChat() {
         return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
     };
 
-    // ─── E2EE Passphrase Modal ─────────────────────────────────────────────────
-    const E2EEModal = () => (
-        <div style={{
-            position: 'fixed', inset: 0, zIndex: 9999,
-            background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center'
-        }}>
-            <div style={{
-                background: 'var(--bg-panel)', borderRadius: '24px',
-                border: '1px solid var(--border-color)', padding: '40px',
-                width: '420px', maxWidth: '90vw',
-                boxShadow: '0 20px 60px rgba(0,0,0,0.5)'
-            }}>
-                {/* Header */}
-                <div style={{ textAlign: 'center', marginBottom: '28px' }}>
-                    <div style={{
-                        width: '64px', height: '64px', background: 'var(--primary)',
-                        borderRadius: '20px', display: 'flex', alignItems: 'center',
-                        justifyContent: 'center', margin: '0 auto 16px',
-                        boxShadow: '0 0 30px rgba(102,126,234,0.4)'
-                    }}>
-                        <Key size={28} color="#fff" />
-                    </div>
-                    <h2 style={{ color: 'var(--text-main)', margin: '0 0 8px', fontSize: '20px', fontWeight: '900', textTransform: 'uppercase' }}>
-                        {e2eeStatus === 'setup_needed' ? 'E2EE Setup Required' : 'Unlock Secure Channel'}
-                    </h2>
-                    <p style={{ color: 'var(--text-secondary)', margin: 0, fontSize: '13px', fontWeight: '500' }}>
-                        {e2eeStatus === 'setup_needed'
-                            ? 'Thiết lập mã hoá đầu cuối từ tài khoản người dùng trước khi sử dụng chat.'
-                            : 'Nhập passphrase để giải mã tin nhắn E2EE trong phiên này.'}
-                    </p>
-                </div>
-
-                {e2eeStatus === 'setup_needed' ? (
-                    <div style={{
-                        background: 'rgba(102,126,234,0.08)', border: '1px solid rgba(102,126,234,0.2)',
-                        borderRadius: '16px', padding: '20px', marginBottom: '20px'
-                    }}>
-                        <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-                            <ShieldCheck size={20} color="var(--primary)" style={{ flexShrink: 0, marginTop: '2px' }} />
-                            <div>
-                                <div style={{ color: 'var(--text-main)', fontSize: '13px', fontWeight: '800', marginBottom: '6px' }}>
-                                    Chưa có E2EE Bundle
-                                </div>
-                                <div style={{ color: 'var(--text-secondary)', fontSize: '12px', lineHeight: '1.6' }}>
-                                    Vui lòng vào tài khoản người dùng → Settings → thiết lập E2EE passphrase trước. Sau đó quay lại đây để unlock.
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                ) : (
-                    <>
-                        {/* Passphrase Input */}
-                        <div style={{ marginBottom: '16px' }}>
-                            <label style={{
-                                fontSize: '11px', fontWeight: '900', textTransform: 'uppercase',
-                                color: 'var(--text-muted)', display: 'block', marginBottom: '8px', letterSpacing: '0.05em'
-                            }}>Passphrase</label>
-                            <div style={{
-                                display: 'flex', alignItems: 'center', gap: '10px',
-                                background: 'var(--bg-app)', borderRadius: '14px',
-                                border: `1px solid ${unlockError ? '#ef4444' : 'var(--border-color)'}`,
-                                padding: '0 14px', transition: 'border-color 0.2s'
-                            }}>
-                                <Key size={16} color="var(--text-muted)" />
-                                <input
-                                    type={showPassphrase ? 'text' : 'password'}
-                                    value={unlockPassword}
-                                    onChange={e => { setUnlockPassword(e.target.value); setUnlockError(''); }}
-                                    onKeyDown={e => e.key === 'Enter' && handleUnlockE2EE()}
-                                    placeholder="Nhập passphrase bảo mật..."
-                                    autoFocus
-                                    style={{
-                                        flex: 1, background: 'transparent', border: 'none',
-                                        padding: '14px 0', outline: 'none', color: 'var(--text-main)',
-                                        fontSize: '14px', fontFamily: 'monospace'
-                                    }}
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => setShowPassphrase(v => !v)}
-                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px' }}
-                                >
-                                    {showPassphrase ? <EyeOff size={16} /> : <Eye size={16} />}
-                                </button>
-                            </div>
-                            {unlockError && (
-                                <p style={{ color: '#ef4444', fontSize: '12px', fontWeight: '600', marginTop: '8px' }}>{unlockError}</p>
-                            )}
-                        </div>
-
-                        <button
-                            onClick={handleUnlockE2EE}
-                            disabled={!unlockPassword.trim() || unlockLoading}
-                            style={{
-                                width: '100%', padding: '14px', background: unlockPassword.trim() ? 'var(--primary)' : 'var(--bg-light)',
-                                color: unlockPassword.trim() ? '#fff' : 'var(--text-muted)',
-                                border: 'none', borderRadius: '14px', fontWeight: '900', fontSize: '14px',
-                                cursor: unlockPassword.trim() ? 'pointer' : 'default',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-                                textTransform: 'uppercase', letterSpacing: '0.05em',
-                                transition: 'all 0.2s', marginBottom: '12px'
-                            }}
-                        >
-                            {unlockLoading ? <Loader2 size={18} className="animate-spin" /> : <ShieldCheck size={18} />}
-                            {unlockLoading ? 'Đang xác thực...' : 'Xác thực & Mở khoá'}
-                        </button>
-                    </>
-                )}
-
-                <button
-                    onClick={() => setShowE2EEModal(false)}
-                    style={{
-                        width: '100%', padding: '12px', background: 'transparent',
-                        border: '1px solid var(--border-color)', borderRadius: '12px',
-                        color: 'var(--text-muted)', cursor: 'pointer', fontSize: '13px', fontWeight: '700'
-                    }}
-                >
-                    Bỏ qua (tin nhắn sẽ không được giải mã)
-                </button>
-            </div>
-        </div>
-    );
+    // E2EE Modal is handled by global E2EESecurityGate
 
     // ─── Render ────────────────────────────────────────────────────────────────
     return (
         <div style={{ display: 'flex', height: '100%', background: 'var(--bg-panel)', overflow: 'hidden', position: 'relative' }}>
-            {/* E2EE Modal */}
-            {showE2EEModal && <E2EEModal />}
+            {/* Global E2EESecurityGate handles PIN entry */}
 
             {/* Conversation list */}
             <div style={{
@@ -517,21 +334,19 @@ export default function ManageChat() {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                         <h3 style={{ margin: 0, color: 'var(--text-main)', fontSize: '15px', fontWeight: '900', textTransform: 'uppercase' }}>Secure Channels</h3>
                         {/* E2EE lock indicator */}
-                        <button
-                            onClick={() => setShowE2EEModal(true)}
-                            title={e2eeStatus === 'unlocked' ? 'E2EE Unlocked — click to re-enter passphrase' : 'E2EE Locked — click to unlock'}
+                        <div
                             style={{
-                                background: e2eeStatus === 'unlocked' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
-                                border: `1px solid ${e2eeStatus === 'unlocked' ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`,
-                                borderRadius: '10px', padding: '6px 10px', cursor: 'pointer',
+                                background: e2eePrivateKey ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
+                                border: `1px solid ${e2eePrivateKey ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`,
+                                borderRadius: '10px', padding: '6px 10px',
                                 display: 'flex', alignItems: 'center', gap: '6px',
-                                color: e2eeStatus === 'unlocked' ? '#10b981' : '#ef4444',
+                                color: e2eePrivateKey ? '#10b981' : '#ef4444',
                                 fontSize: '10px', fontWeight: '900', textTransform: 'uppercase',
                             }}
                         >
-                            {e2eeStatus === 'unlocked' ? <ShieldCheck size={13} /> : <Key size={13} />}
-                            {e2eeStatus === 'unlocked' ? 'E2EE On' : 'Unlock'}
-                        </button>
+                            {e2eePrivateKey ? <ShieldCheck size={13} /> : <Key size={13} />}
+                            {e2eePrivateKey ? 'E2EE Active' : 'Locked'}
+                        </div>
                     </div>
                     <div style={{
                         display: 'flex', alignItems: 'center', gap: '8px',
