@@ -351,6 +351,40 @@ class ApiClient {
     });
   }
 
+  // Security Policy Management
+  async getSecurityPolicies(type) {
+    let url = '/security/policies';
+    if (type) url += `?type=${type}`;
+    return this.request(url, { method: 'GET' });
+  }
+
+  async createSecurityPolicy(data) {
+    return this.request('/security/policies', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateSecurityPolicy(id, data) {
+    return this.request(`/security/policies/${id}`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async toggleSecurityPolicy(id, isActive) {
+    return this.request(`/security/policies/${id}/toggle`, {
+      method: 'POST',
+      body: JSON.stringify({ isActive }),
+    });
+  }
+
+  async deleteSecurityPolicy(id) {
+    return this.request(`/security/policies/${id}/delete`, {
+      method: 'POST',
+    });
+  }
+
   async getNetworkTraffic() {
     return this.request('/security/network/traffic', {
       method: 'GET',

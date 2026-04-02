@@ -1,0 +1,10 @@
+﻿Thành phần,Đường dẫn tệp,Dòng code,Tính năng / Ý nghĩa kỹ thuật
+Frontend,/frontend/src/context/E2EEContext.js,"62, 80","Giải mã (unlock) và thiết lập (setup) E2EE bằng mã PIN."
+Frontend,/frontend/src/pages/admin/SecurityRulesPage.js,"17, 29, 49","Quản trị quy tắc an nình: Truy xuất (fetch), Bật/Tắt (toggle) và Tạo mới (add)."
+Frontend,/frontend/src/pages/manage/ManageChat.js,"133, 176, 278","Xử lý tin nhắn E2EE: Giải mã qua Socket, Helper giải mã và Mã hóa Hybrid khi gửi."
+Frontend,/frontend/src/pages/admin/LogsPage.js,"15, 44","Truy xuất nhật ký hệ thống (Audit Logs) và tính năng xuất báo cáo CSV."
+Backend,/backend/src/modules/security/security.service.ts,"34, 77, 658, 698","Ghi nhận sự cố, tạo nhật ký kiểm tra, quản lý chính sách bảo mật và thực thi quy tắc."
+Backend,/backend/src/modules/security/security.controller.ts,"49, 264, 303","Các API endpoints cho Nhật ký kiểm tra, Chính sách bảo mật và tính năng Xóa quy tắc."
+Backend,/backend/src/database/entities/security/audit-log.entity.ts,"5-64","Cấu trúc bảng Nhật ký kiểm tra (Audit Log) đảm bảo tính toàn vẹn thông tin truy vết."
+Backend,/backend/src/modules/auth/guards/jwt-auth.guard.ts,12,"Cổng kiểm soát JWT (handleRequest) đảm bảo mọi yêu cầu đều được xác thực an toàn."
+Tài liệu,/docs/SECURITY_ARCHITECTURE.md,Toàn bộ,"Tài liệu chi tiết về kiến trúc bảo mật E2EE, MFA và bảo vệ dữ liệu."

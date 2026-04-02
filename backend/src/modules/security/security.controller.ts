@@ -300,6 +300,13 @@ export class SecurityController {
     return this.securityService.toggleSecurityPolicy(id, body.isActive);
   }
 
+  @Post('policies/:id/delete')
+  @HttpCode(HttpStatus.OK)
+  @Roles('Admin')
+  async deleteSecurityPolicy(@Param('id') id: string) {
+    return this.securityService.deleteSecurityPolicy(id);
+  }
+
   // ==================== REAL-TIME MONITORING ====================
 
   @Get('monitoring/active-sessions')

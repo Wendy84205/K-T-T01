@@ -36,7 +36,8 @@ export default function ManageLayout() {
                     api.getNotifications(1, 5),
                 ]);
                 setUser(profileRes.user || profileRes);
-                setNotifications(notifyRes.notifications || notifyRes || []);
+                const notificationData = notifyRes?.data || notifyRes?.notifications || (Array.isArray(notifyRes) ? notifyRes : []);
+                setNotifications(notificationData);
             } catch (err) {
                 console.error('Failed to load layout data:', err);
             } finally {
@@ -154,47 +155,7 @@ export default function ManageLayout() {
                     })}
                 </nav>
 
-                {/* User info + logout */}
-                <div style={{ padding: '14px', borderTop: '1px solid var(--border-color)', flexShrink: 0 }}>
-                    <div style={{
-                        display: 'flex', alignItems: 'center', gap: '10px',
-                        padding: '10px 12px', borderRadius: '10px',
-                        background: 'var(--bg-light)', border: '1px solid var(--border-color)',
-                        marginBottom: '8px',
-                    }}>
-                        <div style={{
-                            width: '36px', height: '36px', borderRadius: '10px',
-                            background: 'linear-gradient(135deg, var(--primary), #818cf8)',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            color: '#fff', fontWeight: 800, fontSize: '14px', flexShrink: 0,
-                        }}>
-                            {loading ? <Loader2 size={14} style={{ animation: 'spin 0.8s linear infinite' }} /> : (user?.firstName?.charAt(0) || 'M')}
-                        </div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                {user ? `${user.firstName} ${user.lastName}` : 'Manager Unit'}
-                            </div>
-                            <div style={{ fontSize: '10px', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                {user?.email || 'Secure Access'}
-                            </div>
-                        </div>
-                    </div>
-                    <button
-                        onClick={handleLogout}
-                        style={{
-                            width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-                            padding: '9px 14px', background: 'transparent',
-                            border: '1px solid var(--border-color)', borderRadius: '10px',
-                            color: 'var(--text-secondary)', fontSize: '12px', fontWeight: 700,
-                            cursor: 'pointer', transition: 'all 0.2s', fontFamily: 'inherit',
-                        }}
-                        onMouseEnter={e => { e.currentTarget.style.color = 'var(--red-color)'; e.currentTarget.style.background = 'var(--red-soft)'; e.currentTarget.style.borderColor = 'rgba(248,113,113,0.3)'; }}
-                        onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'var(--border-color)'; }}
-                    >
-                        <LogOut size={14} />
-                        Terminate Session
-                    </button>
-                </div>
+
             </aside>
 
             {/* ════════════════ MAIN BODY ════════════════ */}

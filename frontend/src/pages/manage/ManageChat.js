@@ -7,7 +7,7 @@ import api from '../../utils/api';
 import socketService from '../../utils/socket';
 import { useAuth } from '../../context/AuthContext';
 import { useE2EE } from '../../context/E2EEContext';
-import { encryptContent, decryptContent } from '../../utils/crypto';
+import { encryptContent, decryptContent, encryptHybrid, decryptHybrid } from '../../utils/crypto';
 
 // ─── ConvItem: matches User chat ChatItem style ────────────────────────────────
 function ConvItem({ conv, isSelected, unread, online, onClick, getName, getInitial, formatTime }) {
@@ -137,7 +137,12 @@ export default function ManageChat() {
                 if (pk) {
                     try {
                         const encryptedData = JSON.parse(rawContent);
-                        if (encryptedData[user.id]) data.content = await decryptContent(encryptedData[user.id], pk);
+                        const myId = String(user?.id);
+                        if (encryptedData.v === "2" || encryptedData.ciphertext) {
+                            data.content = await decryptHybrid(encryptedData, pk, myId);
+                        } else if (encryptedData[user?.id]) {
+                            data.content = await decryptContent(encryptedData[user.id], pk);
+                        }
                     } catch (e) {
                         try { data.content = await decryptContent(rawContent, pk); } catch { }
                     }
@@ -175,7 +180,16 @@ export default function ManageChat() {
         if (!pk) return '🔐 E2EE locked';
         try {
             const encryptedData = JSON.parse(rawContent);
-            if (user?.id && encryptedData[user.id]) return await decryptContent(encryptedData[user.id], pk);
+            const myId = String(user?.id);
+            if (encryptedData.v === "2" || encryptedData.ciphertext) {
+                return await decryptHybrid(encryptedData, pk, myId);
+            } else {
+                const myPayload = encryptedData[myId] || encryptedData[user?.id];
+                if (myPayload) {
+                    const decrypted = await decryptContent(myPayload, pk);
+                    return decrypted !== "[Unable to decrypt message]" ? decrypted : "[Decryption Error: Key mismatch]";
+                }
+            }
         } catch { }
         try { return await decryptContent(rawContent, pk); } catch { }
         return '🔐 [Decryption failed]';
@@ -228,7 +242,7 @@ export default function ManageChat() {
         try {
             setMsgLoading(true);
             const dataRes = await api.getConversationMessages(convId);
-            const rawMessages = dataRes?.messages || dataRes || [];
+            const rawMessages = dataRes?.data || dataRes?.messages || (Array.isArray(dataRes) ? dataRes : []);
             const newMessages = await Promise.all(rawMessages.map(async msg => ({
                 ...msg,
                 content: await decryptMsg(msg.content),
@@ -263,15 +277,27 @@ export default function ManageChat() {
         try {
             if (selectedConv?.conversationType === 'direct' && selectedConv.otherUser?.publicKey) {
                 try {
-                    const encryptedForRecipient = await encryptContent(finalContent, selectedConv.otherUser.publicKey);
-                    const myPublicKey = user.publicKey;
-                    if (myPublicKey) {
-                        const encryptedForMe = await encryptContent(finalContent, myPublicKey);
-                        finalContent = `[E2EE]:${JSON.stringify({ [selectedConv.otherUser.id]: encryptedForRecipient, [user.id]: encryptedForMe })}`;
-                    } else {
-                        finalContent = `[E2EE]:${JSON.stringify({ [selectedConv.otherUser.id]: encryptedForRecipient })}`;
-                    }
+                    const keysToEncryptFor = {};
+                    const myPublicKey = user?.publicKey;
+                    if (myPublicKey) keysToEncryptFor[String(user.id)] = myPublicKey;
+                    keysToEncryptFor[String(selectedConv.otherUser.id)] = selectedConv.otherUser.publicKey;
+                    
+                    const hybridPayload = await encryptHybrid(finalContent, keysToEncryptFor);
+                    finalContent = `[E2EE]:${JSON.stringify(hybridPayload)}`;
                 } catch (e) { }
+            } else if (selectedConv?.conversationType === 'group' && selectedConv.members) {
+                 try {
+                     const keysToEncryptFor = {};
+                     const myPublicKey = user?.publicKey;
+                     if (myPublicKey) keysToEncryptFor[String(user.id)] = myPublicKey;
+                     for (const member of selectedConv.members) {
+                         if (member.publicKey && String(member.id) !== String(user.id)) {
+                             keysToEncryptFor[String(member.id)] = member.publicKey;
+                         }
+                     }
+                     const hybridPayload = await encryptHybrid(finalContent, keysToEncryptFor);
+                     finalContent = `[E2EE]:${JSON.stringify(hybridPayload)}`;
+                 } catch (e) { }
             }
 
             const msg = await api.sendMessage(selectedChat, finalContent);
@@ -333,20 +359,6 @@ export default function ManageChat() {
                 <div style={{ padding: '24px 20px', borderBottom: '1px solid var(--border-color)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                         <h3 style={{ margin: 0, color: 'var(--text-main)', fontSize: '15px', fontWeight: '900', textTransform: 'uppercase' }}>Secure Channels</h3>
-                        {/* E2EE lock indicator */}
-                        <div
-                            style={{
-                                background: e2eePrivateKey ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
-                                border: `1px solid ${e2eePrivateKey ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`,
-                                borderRadius: '10px', padding: '6px 10px',
-                                display: 'flex', alignItems: 'center', gap: '6px',
-                                color: e2eePrivateKey ? '#10b981' : '#ef4444',
-                                fontSize: '10px', fontWeight: '900', textTransform: 'uppercase',
-                            }}
-                        >
-                            {e2eePrivateKey ? <ShieldCheck size={13} /> : <Key size={13} />}
-                            {e2eePrivateKey ? 'E2EE Active' : 'Locked'}
-                        </div>
                     </div>
                     <div style={{
                         display: 'flex', alignItems: 'center', gap: '8px',
@@ -418,20 +430,11 @@ export default function ManageChat() {
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
                                         <h2 style={{ color: 'var(--text-main)', fontWeight: '900', fontSize: '16px', margin: 0 }}>{getConvName(selectedConv)}</h2>
                                         <Lock size={12} color="var(--primary)" />
-                                        {/* E2EE status badge */}
-                                        <span style={{
-                                            fontSize: '9px', fontWeight: '900', textTransform: 'uppercase', padding: '2px 7px', borderRadius: '6px',
-                                            background: e2eeStatus === 'unlocked' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
-                                            color: e2eeStatus === 'unlocked' ? '#10b981' : '#ef4444',
-                                            border: `1px solid ${e2eeStatus === 'unlocked' ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`,
-                                        }}>
-                                            {e2eeStatus === 'unlocked' ? '🔓 E2EE Active' : '🔐 Locked'}
-                                        </span>
                                     </div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                         <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: isOnline(selectedConv) ? '#10b981' : 'var(--text-muted)' }} />
-                                        <span style={{ color: 'var(--text-secondary)', fontSize: '11px', fontWeight: '700', textTransform: 'uppercase' }}>
-                                            {isGroup ? `${selectedConv.members?.length || 0} protocol members` : (isOnline(selectedConv) ? 'Encrypted Connection Active' : 'Station Offline')}
+                                        <span style={{ color: isOnline(selectedConv) ? '#10b981' : 'var(--text-secondary)', fontSize: '11px', fontWeight: '700', textTransform: 'uppercase' }}>
+                                            {isGroup ? `${selectedConv.members?.length || 0} protocol members` : (isOnline(selectedConv) ? 'Online' : 'Offline')}
                                         </span>
                                     </div>
                                 </div>

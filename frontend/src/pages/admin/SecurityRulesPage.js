@@ -3,6 +3,7 @@ import {
     Shield, Plus, Search, Filter, Trash2, Edit3,
     Lock, AlertCircle
 } from 'lucide-react';
+import api from '../../utils/api';
 
 export default function SecurityRulesPage() {
     const [rules, setRules] = useState([]);
@@ -11,41 +12,56 @@ export default function SecurityRulesPage() {
     const [activeTab, setActiveTab] = useState('All');
 
     const [showModal, setShowModal] = useState(false);
-    const [newRule, setNewRule] = useState({ name: '', type: 'FIREWALL', value: 'BLOCK', severity: 'MEDIUM', description: '' });
+    const [newRule, setNewRule] = useState({ name: '', policyType: 'FIREWALL', value: 'BLOCK', severity: 'MEDIUM', description: '' });
 
     const fetchRules = async () => {
-        setTimeout(() => {
-            setRules([
-                { id: 'R-001', name: 'Global Rate Limiter', type: 'RATE_LIMIT', value: '100 req/min', status: 'ACTIVE', severity: 'MEDIUM', description: 'Prevents application-level DDoS by limiting requests per IP.' },
-                { id: 'R-002', name: 'SQL Injection Shield', type: 'WAF', value: 'BLOCK', status: 'ACTIVE', severity: 'HIGH', description: 'Inspects query parameters for malicious SQL patterns.' },
-                { id: 'R-003', name: 'SSH Brute Force Protection', type: 'FIREWALL', value: 'DROP', status: 'ACTIVE', severity: 'HIGH', description: 'Automatically bans IPs after 5 failed SSH authentication attempts.' },
-                { id: 'R-004', name: 'Geofencing: Low Trust Zones', type: 'ACCESS', value: 'MFA_REQUIRED', status: 'ACTIVE', severity: 'LOW', description: 'Forces MFA for all logins originating from non-domestic regions.' },
-                { id: 'R-005', name: 'Legacy API Access', type: 'WHITELIST', value: 'ALLOW', status: 'INACTIVE', severity: 'MEDIUM', description: 'Whitelist for legacy internal accounting services.' },
-                { id: 'R-006', name: 'Unauthorized File Uploads', type: 'DLP', value: 'QUARANTINE', status: 'ACTIVE', severity: 'CRITICAL', description: 'Intercepts uploads containing executable headers or scripts.' }
-            ]);
+        try {
+            setLoading(true);
+            const data = await api.getSecurityPolicies();
+            setRules(data || []);
+        } catch (err) {
+            console.error('Failed to fetch security rules:', err || 'Check logs');
+        } finally {
             setLoading(false);
-        }, 800);
-    };
-    const handleToggleRule = (id) => {
-        setRules(rules.map(r => r.id === id ? { ...r, status: r.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE' } : r));
-    };
-
-    const handleDeleteRule = (id) => {
-        if (window.confirm('Delete this security rule permanentely?')) {
-            setRules(rules.filter(r => r.id !== id));
         }
     };
 
-    const handleAddRule = (e) => {
+    const handleToggleRule = async (id, currentStatus) => {
+        try {
+            await api.toggleSecurityPolicy(id, !currentStatus);
+            setRules(rules.map(r => r.id === id ? { ...r, isActive: !currentStatus } : r));
+        } catch (err) {
+            alert('Failed to update status');
+        }
+    };
+
+    const handleDeleteRule = async (id) => {
+        if (window.confirm('Delete this security rule permanentely?')) {
+            try {
+                await api.deleteSecurityPolicy(id);
+                setRules(rules.filter(r => r.id !== id));
+            } catch (err) {
+                alert('Deletion failed');
+            }
+        }
+    };
+
+    const handleAddRule = async (e) => {
         e.preventDefault();
-        const rule = {
-            ...newRule,
-            id: `R-${Math.floor(Math.random() * 900) + 100}`,
-            status: 'ACTIVE'
-        };
-        setRules([rule, ...rules]);
-        setShowModal(false);
-        setNewRule({ name: '', type: 'FIREWALL', value: 'BLOCK', severity: 'MEDIUM', description: '' });
+        try {
+            // Mapping UI to backend entity
+            const ruleToSave = {
+                ...newRule,
+                isActive: true,
+                config: { value: newRule.value, severity: newRule.severity }
+            };
+            const saved = await api.createSecurityPolicy(ruleToSave);
+            setRules([saved, ...rules]);
+            setShowModal(false);
+            setNewRule({ name: '', policyType: 'FIREWALL', value: 'BLOCK', severity: 'MEDIUM', description: '' });
+        } catch (err) {
+            alert('Failed to deploy new rule');
+        }
     };
 
     useEffect(() => {
@@ -55,7 +71,9 @@ export default function SecurityRulesPage() {
     const filteredRules = rules.filter(rule => {
         const matchesSearch = rule.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
             rule.id.toLowerCase().includes(searchQuery.toLowerCase());
-        const matchesTab = activeTab === 'All' || rule.status === activeTab.toUpperCase();
+        const matchesTab = activeTab === 'All' || 
+            (activeTab === 'Active' && rule.isActive) || 
+            (activeTab === 'Inactive' && !rule.isActive);
         return matchesSearch && matchesTab;
     });
 
@@ -166,13 +184,13 @@ export default function SecurityRulesPage() {
                                         fontWeight: '900',
                                         padding: '2px 8px',
                                         borderRadius: '4px',
-                                        background: `${getSeverityColor(rule.severity)}20`,
-                                        color: getSeverityColor(rule.severity),
-                                        border: `1px solid ${getSeverityColor(rule.severity)}40`
+                                        background: `${getSeverityColor(rule.config?.severity || rule.severity)}20`,
+                                        color: getSeverityColor(rule.config?.severity || rule.severity),
+                                        border: `1px solid ${getSeverityColor(rule.config?.severity || rule.severity)}40`
                                     }}>
-                                        {rule.severity}
+                                        {rule.config?.severity || rule.severity}
                                     </span>
-                                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: rule.status === 'ACTIVE' ? 'var(--green-color)' : 'var(--text-muted)', alignSelf: 'center', boxShadow: rule.status === 'ACTIVE' ? '0 0 10px var(--green-color)' : 'none' }}></div>
+                                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: rule.isActive ? 'var(--green-color)' : 'var(--text-muted)', alignSelf: 'center', boxShadow: rule.isActive ? '0 0 10px var(--green-color)' : 'none' }}></div>
                                 </div>
                             </div>
 
@@ -183,7 +201,7 @@ export default function SecurityRulesPage() {
 
                             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', background: 'rgba(0,0,0,0.2)', padding: '12px', borderRadius: '10px', marginBottom: '20px' }}>
                                 <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '600' }}>ACTION:</div>
-                                <div style={{ fontSize: '12px', fontWeight: '800', color: rule.value === 'BLOCK' ? 'var(--red-color)' : '#fff', fontFamily: 'JetBrains Mono' }}>{rule.value}</div>
+                                <div style={{ fontSize: '12px', fontWeight: '800', color: (rule.config?.value === 'BLOCK' || rule.value === 'BLOCK') ? 'var(--red-color)' : '#fff', fontFamily: 'JetBrains Mono' }}>{rule.config?.value || rule.value}</div>
                                 <div style={{ marginLeft: 'auto', opacity: 0.3 }}><Lock size={14} /></div>
                             </div>
 
@@ -199,10 +217,10 @@ export default function SecurityRulesPage() {
                                     </button>
                                 </div>
                                 <button
-                                    onClick={() => handleToggleRule(rule.id)}
+                                    onClick={() => handleToggleRule(rule.id, rule.isActive)}
                                     style={{
-                                        background: rule.status === 'ACTIVE' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(16, 185, 129, 0.1)',
-                                        color: rule.status === 'ACTIVE' ? 'var(--red-color)' : 'var(--green-color)',
+                                        background: rule.isActive ? 'rgba(239, 68, 68, 0.1)' : 'rgba(16, 185, 129, 0.1)',
+                                        color: rule.isActive ? 'var(--red-color)' : 'var(--green-color)',
                                         border: 'none',
                                         padding: '6px 12px',
                                         borderRadius: '6px',
@@ -211,7 +229,7 @@ export default function SecurityRulesPage() {
                                         cursor: 'pointer'
                                     }}
                                 >
-                                    {rule.status === 'ACTIVE' ? 'DISABLE RULE' : 'ENABLE RULE'}
+                                    {rule.isActive ? 'DISABLE RULE' : 'ENABLE RULE'}
                                 </button>
                             </div>
                         </div>
@@ -269,6 +287,20 @@ export default function SecurityRulesPage() {
                                     value={newRule.name}
                                     onChange={e => setNewRule({ ...newRule, name: e.target.value })}
                                 />
+                            </div>
+                            <div style={{ marginBottom: '16px' }}>
+                                <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px' }}>RULE TYPE</label>
+                                <select
+                                    style={{ width: '100%', padding: '12px', background: 'var(--bg-app)', border: '1px solid var(--border-color)', color: '#fff', borderRadius: '8px' }}
+                                    value={newRule.policyType}
+                                    onChange={e => setNewRule({ ...newRule, policyType: e.target.value })}
+                                >
+                                    <option>FIREWALL</option>
+                                    <option>WAF</option>
+                                    <option>RATE_LIMIT</option>
+                                    <option>ACCESS</option>
+                                    <option>DLP</option>
+                                </select>
                             </div>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
                                 <div>
