@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import MfaSetupBanner from '../components/MfaSetupBanner';
+import E2EESecurityGate from '../components/Auth/E2EESecurityGate';
 
 export default function UserLayout() {
   const { user } = useAuth();
@@ -36,10 +37,12 @@ export default function UserLayout() {
 
       {/* Main App Container */}
       <div className="layout-content-wrapper">
-        <MfaSetupBanner user={user} />
-        <main className="layout-main-panel">
-           <Outlet />
-        </main>
+        <E2EESecurityGate>
+          <MfaSetupBanner user={user} />
+          <main className="layout-main-panel">
+             <Outlet />
+          </main>
+        </E2EESecurityGate>
       </div>
 
       <style>{`

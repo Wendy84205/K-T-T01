@@ -16,6 +16,9 @@ export default function SecurityPage() {
   const [error, setError] = useState('');
   const [timeRange, setTimeRange] = useState(7); // days
   const [activeTab, setActiveTab] = useState('overview'); // 'overview', 'alerts', 'logs'
+  const [integrityStatus, setIntegrityStatus] = useState(null); // null = not checked, true = intact, false = violated
+  const [lockdownLoading, setLockdownLoading] = useState(false);
+  const [lockdownMsg, setLockdownMsg] = useState('');
 
   const fetchData = useCallback(async () => {
     try {
@@ -36,6 +39,13 @@ export default function SecurityPage() {
     }
   }, [timeRange]);
 
+  // Run integrity check on mount (non-blocking)
+  useEffect(() => {
+    api.runDiagnostics()
+      .then(result => setIntegrityStatus(result?.tamperedFiles?.length === 0))
+      .catch(() => setIntegrityStatus(null));
+  }, []);
+
   useEffect(() => {
     fetchData();
   }, [fetchData]);
@@ -49,6 +59,24 @@ export default function SecurityPage() {
       setDashboard(dashData);
     } catch (err) {
       alert('Failed to acknowledge: ' + err.message);
+    }
+  };
+
+  const handleLockdown = async () => {
+    const confirmed = window.confirm(
+      '⚠️ CẢNH BÁO: Global Lockdown sẽ vô hiệu hóa TẤT CẢ session hiện tại và khóa toàn bộ người dùng.\nBạn có chắc chắn muốn tiếp tục?'
+    );
+    if (!confirmed) return;
+    try {
+      setLockdownLoading(true);
+      setLockdownMsg('');
+      await api.globalLockdown();
+      setLockdownMsg('✅ Global Lockdown đã kích hoạt thành công. Tất cả session đã bị thu hồi.');
+      fetchData();
+    } catch (err) {
+      setLockdownMsg('❌ Lockdown thất bại: ' + err.message);
+    } finally {
+      setLockdownLoading(false);
     }
   };
 
@@ -79,11 +107,11 @@ export default function SecurityPage() {
     },
     {
       label: 'System Integrity',
-      value: 0 === 0 ? 'INTACT' : 0, // Hardcoded for now until integrity check API is integrated
-      sub: 0 === 0 ? 'NO TAMPERING' : 'VIOLATIONS FOUND',
+      value: integrityStatus === null ? 'CHECKING...' : integrityStatus ? 'INTACT' : 'VIOLATION',
+      sub: integrityStatus === null ? 'SCANNING FILES' : integrityStatus ? 'NO TAMPERING' : 'ACTION REQUIRED',
       icon: Terminal,
-      color: 0 === 0 ? 'var(--primary)' : 'var(--red-color)',
-      bg: 'var(--primary-light)'
+      color: integrityStatus === false ? 'var(--red-color)' : 'var(--primary)',
+      bg: integrityStatus === false ? 'var(--bg-red-soft)' : 'var(--primary-light)'
     }
   ];
 
@@ -273,10 +301,38 @@ export default function SecurityPage() {
           )}
 
           {activeTab === 'alerts' && (
-            <div style={{ textAlign: 'center', padding: '60px', color: 'var(--text-muted)' }}>
-              <ShieldAlert size={48} style={{ marginBottom: '16px', opacity: 0.2 }} />
-              <div style={{ fontWeight: '800' }}>No Critical Alerts Found</div>
-            </div>
+            alerts.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {alerts.map((alert) => (
+                  <div key={alert.id} style={{ display: 'flex', gap: '20px', padding: '20px', background: 'var(--bg-light)', borderRadius: '20px', border: '1px solid var(--border-color)', position: 'relative' }}>
+                    <div style={{ width: '48px', height: '48px', background: alert.severity === 'CRITICAL' ? 'var(--bg-red-soft)' : 'rgba(245, 158, 11, 0.1)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <AlertTriangle color={alert.severity === 'CRITICAL' ? 'var(--red-color)' : 'var(--accent-amber)'} />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <div>
+                          <div style={{ fontSize: '15px', fontWeight: '900', color: 'var(--text-main)' }}>{alert.incidentType || alert.title}</div>
+                          <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '4px 0 0', fontWeight: '500' }}>{alert.description}</p>
+                        </div>
+                        <div style={{ fontSize: '11px', fontWeight: '900', color: 'var(--text-muted)' }}>{new Date(alert.createdAt).toLocaleString()}</div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleAcknowledge(alert.id)}
+                      style={{ height: 'fit-content', background: 'var(--primary)', border: 'none', borderRadius: '10px', color: '#fff', padding: '8px 16px', fontSize: '11px', fontWeight: '900', cursor: 'pointer' }}
+                    >
+                      ACKNOWLEDGE
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ textAlign: 'center', padding: '60px', color: 'var(--text-muted)' }}>
+                <ShieldCheck size={48} style={{ marginBottom: '16px', opacity: 0.2, color: 'var(--green-color)' }} />
+                <div style={{ fontWeight: '800', textTransform: 'uppercase' }}>All Threats Neutralized</div>
+                <div style={{ fontSize: '12px', marginTop: '8px', color: 'var(--text-secondary)' }}>No active security alerts require attention.</div>
+              </div>
+            )
           )}
         </div>
 
@@ -306,13 +362,38 @@ export default function SecurityPage() {
             <div style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-color)', borderRadius: '32px', padding: '24px' }}>
               <h3 style={{ fontSize: '16px', fontWeight: '900', margin: '0 0 20px 0' }}>Tactical Control</h3>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <button style={{ padding: '12px', background: 'var(--bg-light)', border: '1px solid var(--border-color)', borderRadius: '16px', color: 'var(--text-main)', fontSize: '11px', fontWeight: '900', textAlign: 'center', cursor: 'pointer' }}>
-                  <RefreshCcw size={16} style={{ display: 'block', margin: '0 auto 8px' }} /> ROTATE KEYS
+                <button
+                  onClick={fetchData}
+                  style={{ padding: '12px', background: 'var(--bg-light)', border: '1px solid var(--border-color)', borderRadius: '16px', color: 'var(--text-main)', fontSize: '11px', fontWeight: '900', textAlign: 'center', cursor: 'pointer' }}
+                >
+                  <RefreshCcw size={16} style={{ display: 'block', margin: '0 auto 8px' }} /> REFRESH DATA
                 </button>
-                <button style={{ padding: '12px', background: 'var(--bg-light)', border: '1px solid var(--border-color)', borderRadius: '16px', color: 'var(--text-main)', fontSize: '11px', fontWeight: '900', textAlign: 'center', cursor: 'pointer' }}>
-                  <Lock size={16} style={{ display: 'block', margin: '0 auto 8px' }} /> LOCK SYSTEM
+                <button
+                  onClick={handleLockdown}
+                  disabled={lockdownLoading}
+                  style={{
+                    padding: '12px',
+                    background: lockdownLoading ? 'var(--bg-light)' : 'var(--bg-red-soft)',
+                    border: '1px solid var(--red-color)',
+                    borderRadius: '16px',
+                    color: 'var(--red-color)',
+                    fontSize: '11px', fontWeight: '900', textAlign: 'center',
+                    cursor: lockdownLoading ? 'not-allowed' : 'pointer',
+                    opacity: lockdownLoading ? 0.6 : 1,
+                  }}
+                >
+                  <Lock size={16} style={{ display: 'block', margin: '0 auto 8px' }} />
+                  {lockdownLoading ? 'LOCKING...' : 'LOCK SYSTEM'}
                 </button>
               </div>
+              {lockdownMsg && (
+                <div style={{ marginTop: '16px', padding: '12px', borderRadius: '12px', fontSize: '12px', fontWeight: '700',
+                  background: lockdownMsg.startsWith('✅') ? 'var(--bg-green-soft)' : 'var(--bg-red-soft)',
+                  color: lockdownMsg.startsWith('✅') ? 'var(--green-color)' : 'var(--red-color)'
+                }}>
+                  {lockdownMsg}
+                </div>
+              )}
             </div>
           </div>
         )}

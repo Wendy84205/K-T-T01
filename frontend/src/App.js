@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { E2EEProvider } from './context/E2EEContext';
 import { CallProvider } from './context/CallContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import AdminRoute from './components/AdminRoute';
@@ -51,77 +52,79 @@ const DashboardRedirect = () => {
 function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
-        <CallProvider>
-          <CallIncomingBanner />
-          <Routes>
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-            <Route path="/reset-password" element={<ResetPasswordPage />} />
+      <E2EEProvider>
+        <BrowserRouter>
+          <CallProvider>
+            <CallIncomingBanner />
+            <Routes>
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+              <Route path="/reset-password" element={<ResetPasswordPage />} />
 
-            {/* USER Routes */}
-            <Route
-              path="/user"
-              element={
-                <ProtectedRoute>
-                  <UserLayout />
-                </ProtectedRoute>
-              }
-            >
-              <Route index element={<Navigate to="/user/home" replace />} />
-              <Route path="dashboard" element={<Navigate to="/user/home" replace />} />
-              <Route path="home" element={<UserHomePage />} />
-              <Route path="drive" element={<Navigate to="/user/home" state={{ initialTab: 'vault' }} replace />} />
-              <Route path="analytics" element={<Navigate to="/user/home" state={{ initialTab: 'analytics' }} replace />} />
-              <Route path="profile" element={<Navigate to="/user/home" state={{ initialTab: 'settings' }} replace />} />
-            </Route>
+              {/* USER Routes */}
+              <Route
+                path="/user"
+                element={
+                  <ProtectedRoute>
+                    <UserLayout />
+                  </ProtectedRoute>
+                }
+              >
+                <Route index element={<Navigate to="/user/home" replace />} />
+                <Route path="dashboard" element={<Navigate to="/user/home" replace />} />
+                <Route path="home" element={<UserHomePage />} />
+                <Route path="drive" element={<Navigate to="/user/home" state={{ initialTab: 'vault' }} replace />} />
+                <Route path="analytics" element={<Navigate to="/user/home" state={{ initialTab: 'analytics' }} replace />} />
+                <Route path="profile" element={<Navigate to="/user/home" state={{ initialTab: 'settings' }} replace />} />
+              </Route>
 
-            {/* MANAGER: /manage/dashboard */}
-            <Route
-              path="/manage"
-              element={
-                <ManagerRoute>
-                  <ManageLayout />
-                </ManagerRoute>
-              }
-            >
-              <Route index element={<Navigate to="/manage/dashboard" replace />} />
-              <Route path="dashboard" element={<ManageOverview />} />
-              <Route path="chat" element={<ManageChat />} />
-              <Route path="team" element={<ManageTeam />} />
-              <Route path="projects" element={<ManageProjects />} />
-              <Route path="documents" element={<ManageDocuments />} />
-              <Route path="reports" element={<ManageReports />} />
-              <Route path="settings" element={<ManageSettings />} />
-            </Route>
+              {/* MANAGER: /manage/dashboard */}
+              <Route
+                path="/manage"
+                element={
+                  <ManagerRoute>
+                    <ManageLayout />
+                  </ManagerRoute>
+                }
+              >
+                <Route index element={<Navigate to="/manage/dashboard" replace />} />
+                <Route path="dashboard" element={<ManageOverview />} />
+                <Route path="chat" element={<ManageChat />} />
+                <Route path="team" element={<ManageTeam />} />
+                <Route path="projects" element={<ManageProjects />} />
+                <Route path="documents" element={<ManageDocuments />} />
+                <Route path="reports" element={<ManageReports />} />
+                <Route path="settings" element={<ManageSettings />} />
+              </Route>
 
-            {/* ADMIN: /admin/dashboard */}
-            <Route
-              path="/admin"
-              element={
-                <AdminRoute>
-                  <AdminLayout />
-                </AdminRoute>
-              }
-            >
-              <Route index element={<Navigate to="/admin/dashboard" replace />} />
-              <Route path="dashboard" element={<AdminHomePage />} />
-              <Route path="users" element={<UsersPage />} />
-              <Route path="users/add" element={<AddUserPage />} />
-              <Route path="teams" element={<TeamsPage />} />
-              <Route path="security" element={<SecurityPage />} />
-              <Route path="logs" element={<LogsPage />} />
-              <Route path="network" element={<NetworkPage />} />
-              <Route path="rules" element={<SecurityRulesPage />} />
-              <Route path="settings" element={<SettingsPage />} />
-            </Route>
+              {/* ADMIN: /admin/dashboard */}
+              <Route
+                path="/admin"
+                element={
+                  <AdminRoute>
+                    <AdminLayout />
+                  </AdminRoute>
+                }
+              >
+                <Route index element={<Navigate to="/admin/dashboard" replace />} />
+                <Route path="dashboard" element={<AdminHomePage />} />
+                <Route path="users" element={<UsersPage />} />
+                <Route path="users/add" element={<AddUserPage />} />
+                <Route path="teams" element={<TeamsPage />} />
+                <Route path="security" element={<SecurityPage />} />
+                <Route path="logs" element={<LogsPage />} />
+                <Route path="network" element={<NetworkPage />} />
+                <Route path="rules" element={<SecurityRulesPage />} />
+                <Route path="settings" element={<SettingsPage />} />
+              </Route>
 
-            <Route path="/" element={<DashboardRedirect />} />
-            <Route path="/dashboard" element={<DashboardRedirect />} />
-            <Route path="*" element={<DashboardRedirect />} />
-          </Routes>
-        </CallProvider>
-      </BrowserRouter>
+              <Route path="/" element={<DashboardRedirect />} />
+              <Route path="/dashboard" element={<DashboardRedirect />} />
+              <Route path="*" element={<DashboardRedirect />} />
+            </Routes>
+          </CallProvider>
+        </BrowserRouter>
+      </E2EEProvider>
     </AuthProvider>
   );
 }

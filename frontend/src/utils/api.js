@@ -1,4 +1,6 @@
 import { API_BASE_URL } from '../config';
+// FIX LỖ HỔNG 7: Import getter lấy token từ bộ nhớ — không còn từ localStorage
+import { getInMemoryToken } from '../context/AuthContext';
 
 class ApiClient {
   constructor() {
@@ -7,10 +9,13 @@ class ApiClient {
 
   async request(endpoint, options = {}) {
     const url = `${this.baseURL}${endpoint}`;
-    const token = localStorage.getItem('accessToken');
+    // FIX LỖ HỔNG 7: Lấy token từ in-memory store, không từ localStorage
+    const token = getInMemoryToken();
 
     const config = {
       ...options,
+      // credentials: 'include' cho phép HttpOnly cookie (refresh_token) được gửi kèm
+      credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
         ...(token && { Authorization: `Bearer ${token}` }),
@@ -169,9 +174,11 @@ class ApiClient {
     const formData = new FormData();
     formData.append('file', file);
 
-    const token = localStorage.getItem('accessToken');
+    // FIX LỖ HỔNG 7: Dùng in-memory token thay vì localStorage
+    const token = getInMemoryToken();
     const response = await fetch(`${this.baseURL}/users/profile/avatar`, {
       method: 'POST',
+      credentials: 'include',
       headers: {
         'Authorization': `Bearer ${token}`
       },
@@ -351,6 +358,40 @@ class ApiClient {
     });
   }
 
+  // Security Policy Management
+  async getSecurityPolicies(type) {
+    let url = '/security/policies';
+    if (type) url += `?type=${type}`;
+    return this.request(url, { method: 'GET' });
+  }
+
+  async createSecurityPolicy(data) {
+    return this.request('/security/policies', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateSecurityPolicy(id, data) {
+    return this.request(`/security/policies/${id}`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async toggleSecurityPolicy(id, isActive) {
+    return this.request(`/security/policies/${id}/toggle`, {
+      method: 'POST',
+      body: JSON.stringify({ isActive }),
+    });
+  }
+
+  async deleteSecurityPolicy(id) {
+    return this.request(`/security/policies/${id}/delete`, {
+      method: 'POST',
+    });
+  }
+
   async getNetworkTraffic() {
     return this.request('/security/network/traffic', {
       method: 'GET',
@@ -477,9 +518,11 @@ class ApiClient {
       formData.append('file', file);
     }
 
-    const token = localStorage.getItem('accessToken');
+    // FIX LỖ HỔNG 7: Dùng in-memory token thay vì localStorage
+    const token = getInMemoryToken();
     const response = await fetch(`${this.baseURL}/files/upload`, {
       method: 'POST',
+      credentials: 'include',
       headers: {
         'Authorization': `Bearer ${token}`
       },
@@ -495,9 +538,11 @@ class ApiClient {
   }
 
   async downloadFile(id, filename) {
-    const token = localStorage.getItem('accessToken');
+    // FIX LỖ HỔNG 7: Dùng in-memory token thay vì localStorage
+    const token = getInMemoryToken();
     const response = await fetch(`${this.baseURL}/files/${id}/download`, {
       method: 'GET',
+      credentials: 'include',
       headers: {
         'Authorization': `Bearer ${token}`
       },
@@ -712,15 +757,25 @@ class ApiClient {
     });
   }
 
-  // Projects endpoints
+  // --- Team Collaboration: Projects ---
   async getProjects() {
     return this.request('/projects');
   }
 
-  async createProject(projectData) {
+  async getProject(projectId) {
+    return this.request(`/projects/${projectId}`);
+  }
+
+  async createProject(data) {
     return this.request('/projects', {
       method: 'POST',
-      body: JSON.stringify(projectData),
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteProject(projectId) {
+    return this.request(`/projects/${projectId}`, {
+      method: 'DELETE',
     });
   }
 
@@ -745,6 +800,12 @@ class ApiClient {
     return this.request(`/projects/tasks/${taskId}`, {
       method: 'POST',
       body: JSON.stringify(taskData),
+    });
+  }
+
+  async deleteTask(taskId) {
+    return this.request(`/projects/tasks/${taskId}`, {
+      method: 'DELETE',
     });
   }
 

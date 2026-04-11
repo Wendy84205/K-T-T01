@@ -1,5 +1,5 @@
 // src/modules/projects/projects.controller.ts
-import { Controller, Get, Post, Body, Param, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Body, Param, UseGuards, Request } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ProjectsService } from './projects.service';
 
@@ -28,6 +28,13 @@ export class ProjectsController {
     return this.projectsService.create(req.user.userId, data);
   }
 
+  @Delete(':id')
+  deleteProject(@Param('id') id: string, @Request() req) {
+    const roles = req.user.roles || [];
+    const isAdmin = roles.includes('Admin') || roles.includes('Manager');
+    return this.projectsService.deleteProject(id, req.user.userId, isAdmin);
+  }
+
   @Get(':id/tasks')
   findTasks(@Param('id') id: string) {
     return this.projectsService.findTasks(id);
@@ -42,5 +49,12 @@ export class ProjectsController {
   @Post('tasks/:id')
   updateTask(@Param('id') id: string, @Body() data: any) {
     return this.projectsService.updateTask(id, data);
+  }
+
+  @Delete('tasks/:id')
+  deleteTask(@Param('id') id: string, @Request() req) {
+    const roles = req.user.roles || [];
+    const isAdmin = roles.includes('Admin') || roles.includes('Manager');
+    return this.projectsService.deleteTask(id, req.user.userId, isAdmin);
   }
 }

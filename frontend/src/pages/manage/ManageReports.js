@@ -1,23 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { BarChart3, TrendingUp, PieChart, Activity, ShieldCheck, Zap, RefreshCw, ClipboardList, Clock, Flag, CheckCircle2, AlertCircle, MessageSquare } from 'lucide-react';
+import { BarChart3, TrendingUp, PieChart, Activity, ShieldCheck, Zap, RefreshCw, ClipboardList, Clock, Flag, CheckCircle2, AlertCircle, MessageSquare, FileText } from 'lucide-react';
 import api from '../../utils/api';
 
 export default function ManageReports() {
-    const [data, setData] = useState({ security: null, projects: [], allTasks: [], loading: true });
+    const [data, setData] = useState({ projects: [], allTasks: [], loading: true });
     const [activeTab, setActiveTab] = useState('analytics'); // 'analytics' | 'progress'
 
     const loadData = async () => {
         try {
             setData(prev => ({ ...prev, loading: true }));
-            const [security, projects] = await Promise.all([
-                api.getSecurityDashboard(30).catch(() => null),
-                api.getProjects().catch(() => [])
-            ]);
+            const projects = await api.getProjects().catch(() => []);
             // Flatten all tasks from projects, keeping project reference
             const allTasks = (projects || []).flatMap(p =>
                 (p.tasks || []).map(t => ({ ...t, project: { id: p.id, name: p.name } }))
             );
-            setData({ security, projects: projects || [], allTasks, loading: false });
+            setData({ projects: projects || [], allTasks, loading: false });
         } catch (err) {
             console.error('Analytics fetch failed:', err);
             setData(prev => ({ ...prev, loading: false }));
@@ -44,6 +41,8 @@ export default function ManageReports() {
     const total = data.projects.length || 1;
     const activePct = (distribution.active / total) * 100;
     const plannedPct = (distribution.planned / total) * 100;
+    const onHoldPct = (distribution.onHold / total) * 100;
+    const completedPct = (distribution.completed / total) * 100;
 
     // Task progress notes – tasks that have a progressNote from an assignee
     const tasksWithNotes = data.allTasks.filter(t => t.progressNote);
@@ -73,8 +72,8 @@ export default function ManageReports() {
             {/* Tabs */}
             <div style={{ display: 'flex', gap: '8px', marginBottom: '28px' }}>
                 {[
-                    { id: 'analytics', label: '📊 Analytics', icon: <BarChart3 size={14} /> },
-                    { id: 'progress', label: `📋 Progress Reports ${tasksWithNotes.length > 0 ? `(${tasksWithNotes.length})` : ''}`, icon: <ClipboardList size={14} /> },
+                    { id: 'analytics', label: 'Analytics', icon: <Activity size={15} /> },
+                    { id: 'progress', label: `Progress Reports ${tasksWithNotes.length > 0 ? `(${tasksWithNotes.length})` : ''}`, icon: <FileText size={15} /> },
                 ].map(tab => (
                     <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
                         padding: '10px 20px', background: activeTab === tab.id ? 'var(--primary)' : 'var(--bg-panel)',
@@ -84,6 +83,7 @@ export default function ManageReports() {
                         textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '8px',
                         transition: 'all 0.2s'
                     }}>
+                        {tab.icon}
                         {tab.label}
                     </button>
                 ))}
@@ -114,27 +114,42 @@ export default function ManageReports() {
                         <div style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-color)', borderRadius: '24px', padding: '32px', height: '380px', display: 'flex', flexDirection: 'column' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '24px' }}>
                                 <TrendingUp size={18} color="var(--primary)" />
-                                <h3 style={{ margin: 0, fontSize: '13px', fontWeight: '900', color: 'var(--text-main)', textTransform: 'uppercase' }}>Communication Density (30D)</h3>
-                            </div>
-                        <div style={{ flex: 1, display: 'flex', alignItems: 'flex-end', gap: '6px', paddingBottom: '16px', height: '250px' }}>
                                 {(() => {
-                                    const rawData = (data.security?.dailyStats?.length > 0)
-                                        ? data.security.dailyStats.map(h => typeof h === 'object' ? (h.count || 0) : h)
-                                        : [40, 70, 45, 90, 65, 80, 55];
-                                    const maxVal = Math.max(...rawData, 1);
-                                    return rawData.map((h, i) => {
-                                        const heightPct = Math.max(8, Math.round((h / maxVal) * 100));
+                                    const days = Array.from({length: 7}).map((_, i) => {
+                                        const d = new Date();
+                                        d.setDate(d.getDate() - (6 - i));
+                                        d.setHours(0,0,0,0);
+                                        return d;
+                                    });
+                                    const activityData = days.map(d => {
+                                        const nextD = new Date(d);
+                                        nextD.setDate(nextD.getDate() + 1);
+                                        const count = data.allTasks.filter(t => {
+                                            const updated = new Date(t.updatedAt || t.createdAt || new Date());
+                                            return updated >= d && updated < nextD;
+                                        }).length;
+                                        return { date: d, count };
+                                    });
+                                    
+                                    const maxVal = Math.max(...activityData.map(d => d.count), 5);
+                                    return activityData.map((item, i) => {
+                                        const heightPct = Math.max(8, Math.round((item.count / maxVal) * 100));
+                                        const isToday = i === 6;
                                         return (
-                                            <div key={i} style={{
-                                                flex: 1,
-                                                height: `${heightPct}%`,
-                                                background: `linear-gradient(to top, var(--primary), #6366f1)`,
-                                                borderRadius: '6px 6px 0 0',
-                                                opacity: 0.5 + (i / rawData.length) * 0.5,
-                                                minHeight: '8px',
-                                                transition: 'height 1s ease-out',
-                                                boxShadow: '0 0 8px rgba(99,102,241,0.3)'
-                                            }} />
+                                            <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', height: '100%', justifyContent: 'flex-end', position: 'relative' }}>
+                                                <div title={`${item.count} tasks updated`} style={{
+                                                    width: '100%',
+                                                    height: `${heightPct}%`,
+                                                    background: isToday ? `linear-gradient(to top, var(--primary), #818cf8)` : `linear-gradient(to top, rgba(99,102,241,0.1), rgba(99,102,241,0.5))`,
+                                                    borderRadius: '6px 6px 0 0',
+                                                    transition: 'all 0.3s ease',
+                                                    boxShadow: isToday ? '0 0 12px rgba(99,102,241,0.4)' : 'none',
+                                                    cursor: 'pointer'
+                                                }} />
+                                                <div style={{ fontSize: '9px', fontWeight: isToday ? '900' : '700', color: isToday ? 'var(--text-main)' : 'var(--text-muted)', textTransform: 'uppercase' }}>
+                                                    {item.date.toLocaleDateString('en-US', { weekday: 'short' })}
+                                                </div>
+                                            </div>
                                         );
                                     });
                                 })()}
@@ -147,11 +162,42 @@ export default function ManageReports() {
                                 <h3 style={{ margin: 0, fontSize: '13px', fontWeight: '900', color: 'var(--text-main)', textTransform: 'uppercase' }}>Project Distribution</h3>
                             </div>
                             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
-                                <div style={{
-                                    width: '160px', height: '160px', borderRadius: '50%',
-                                    background: `conic-gradient(#10b981 0% ${activePct}%, #6366f1 ${activePct}% ${activePct + plannedPct}%, #f59e0b ${activePct + plannedPct}% 100%)`,
-                                    boxShadow: '0 0 30px rgba(99,102,241,0.2)'
-                                }} />
+                                <style>
+                                    {`
+                                        @keyframes ringDrawScale {
+                                            from { transform: scale(0.85); opacity: 0; }
+                                            to { transform: scale(1); opacity: 1; }
+                                        }
+                                        .donut-segment {
+                                            animation: ringDrawScale 0.8s cubic-bezier(0.1, 0.8, 0.2, 1) forwards;
+                                        }
+                                    `}
+                                </style>
+                                <svg viewBox="0 0 36 36" style={{ width: '160px', height: '160px', transform: 'rotate(-90deg)', filter: 'drop-shadow(0 0 10px rgba(99,102,241,0.2))' }}>
+                                    {/* Background ring */}
+                                    <circle cx="18" cy="18" r="15.915" fill="none" stroke="rgba(139,152,165,0.15)" strokeWidth="3" />
+                                    {(() => {
+                                        if (data.projects.length === 0) return null;
+                                        let cum = 0;
+                                        return [
+                                            { val: activePct, color: '#10b981' },
+                                            { val: plannedPct, color: '#6366f1' },
+                                            { val: onHoldPct, color: '#f59e0b' },
+                                            { val: completedPct, color: 'rgba(139,152,165,0.4)' }
+                                        ].map((slice, i) => {
+                                            if (slice.val === 0) return null;
+                                            const offset = 100 - cum;
+                                            cum += slice.val;
+                                            return (
+                                                <circle key={i} cx="18" cy="18" r="15.915" fill="none" stroke={slice.color} strokeWidth="3.5"
+                                                    strokeDasharray={`${slice.val} ${100 - slice.val}`} strokeDashoffset={offset}
+                                                    className="donut-segment"
+                                                    style={{ animationDelay: `${i * 0.15}s`, opacity: 0, transformOrigin: 'center' }}
+                                                />
+                                            );
+                                        });
+                                    })()}
+                                </svg>
                                 <div style={{ position: 'absolute', width: '100px', height: '100px', borderRadius: '50%', background: 'var(--bg-panel)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column' }}>
                                     <span style={{ fontSize: '20px', fontWeight: '900', color: 'var(--text-main)' }}>{data.projects.length}</span>
                                     <span style={{ fontSize: '8px', color: 'var(--text-muted)', fontWeight: '900' }}>PROJECTS</span>

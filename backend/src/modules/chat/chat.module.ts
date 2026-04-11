@@ -9,7 +9,6 @@ import { MessageReaction } from '../../database/entities/chat/message-reaction.e
 import { PinnedMessage } from '../../database/entities/chat/pinned-message.entity';
 import { CallLog } from '../../database/entities/chat/call-log.entity';
 import { User } from '../../database/entities/core/user.entity';
-
 import { EncryptionService } from '../../common/service/encryption.service';
 import { ChatGateway } from './chat.gateway';
 import { AuthModule } from '../auth/auth.module';
@@ -19,7 +18,7 @@ import { AuthModule } from '../auth/auth.module';
         TypeOrmModule.forFeature([
             Conversation,
             Message,
-            ConversationMember,
+            ConversationMember, // ✅ ChatGateway dùng @InjectRepository(ConversationMember) để kiểm tra quyền
             MessageReaction,
             PinnedMessage,
             CallLog,

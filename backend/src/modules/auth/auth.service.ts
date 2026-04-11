@@ -1,7 +1,7 @@
 import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, IsNull } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 
 import { User } from '../../database/entities/core/user.entity';
@@ -128,7 +128,7 @@ export class AuthService {
   }
 
   // Login method - returns temporary token if MFA required and configured; otherwise full token
-  async login(user: User): Promise<LoginResponseDto | { requiresMfa: boolean; tempToken: string; mfaMethods: string[] }> {
+  async login(user: User): Promise<any> {
 
     // Fetch role IDs first
     const userRoles: any[] = await this.userRepository.query(
@@ -195,14 +195,18 @@ export class AuthService {
     const accessToken = this.jwtService.sign(payload, {
       expiresIn: '24h',
     });
+    
+    const refreshTokenPayload = { sub: user.id };
+    const refreshToken = this.jwtService.sign(refreshTokenPayload, { expiresIn: '7d' });
 
     // Create User Session (for active sessions tracking)
     try {
       await this.userSessionRepository.save({
         userId: user.id,
-        sessionToken: accessToken.substring(0, 500), // Truncate if necessary, better to use separate session ID
-        ipAddress: '0.0.0.0', // Capture actual IP in Controller if needed
-        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24h
+        sessionToken: accessToken.substring(0, 500),
+        refreshToken: refreshToken.substring(0, 500),
+        ipAddress: '0.0.0.0',
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7d — khớp với tuổi thọ refresh_token
         isTrusted: true,
         requiresMfa: user.mfaRequired
       });
@@ -214,6 +218,7 @@ export class AuthService {
 
     return {
       accessToken,
+      refreshToken,
       user: {
         id: user.id,
         email: user.email,
@@ -232,7 +237,7 @@ export class AuthService {
   }
 
   // Verify MFA and complete login
-  async verifyMfaAndLogin(userId: string, token: string): Promise<LoginResponseDto> {
+  async verifyMfaAndLogin(userId: string, token: string): Promise<any> {
     const user = await this.userRepository.findOne({
       where: { id: userId }
     });
@@ -265,15 +270,6 @@ export class AuthService {
       throw new UnauthorizedException('User not found');
     }
 
-    /* 
-    // BYPASS FOR TESTING
-    let isVerified = token === '123456';
-    if (!isVerified) {
-      const mfaResult = await this.mfaService.verifyTotpLogin(userId, token);
-      isVerified = mfaResult.verified;
-    }
-    */
-
     const mfaResult = await this.mfaService.verifyTotpLogin(userId, token);
     const isVerified = mfaResult.verified;
 
@@ -296,14 +292,17 @@ export class AuthService {
     };
 
     const accessToken = this.jwtService.sign(payload, { expiresIn: '24h' });
+    const refreshTokenPayload = { sub: user.id };
+    const refreshToken = this.jwtService.sign(refreshTokenPayload, { expiresIn: '7d' });
 
     // Create User Session (for active sessions tracking)
     try {
       await this.userSessionRepository.save({
         userId: user.id,
         sessionToken: accessToken.substring(0, 500),
-        ipAddress: '0.0.0.0', // Capture actual IP in Controller if needed
-        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24h
+        refreshToken: refreshToken.substring(0, 500),
+        ipAddress: '0.0.0.0',
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7d — khớp với tuổi thọ refresh_token
         isTrusted: true,
         requiresMfa: true
       });
@@ -313,6 +312,7 @@ export class AuthService {
 
     return {
       accessToken,
+      refreshToken,
       user: {
         id: user.id,
         email: user.email,
@@ -385,8 +385,50 @@ export class AuthService {
     return user;
   }
 
-  // Refresh token
-  async refreshToken(userId: string) {
+  async refreshToken(token: string): Promise<{ accessToken: string; newRefreshToken?: string }> {
+    let payload;
+    try {
+      payload = this.jwtService.verify(token);
+    } catch (err) {
+      throw new UnauthorizedException('Invalid or expired refresh token');
+    }
+
+    const userId = payload.sub;
+
+    // ═══════════════════════════════════════════════════════════════════
+    // [SECURITY FIX] Query DB xác minh session còn hợp lệ, CHƯA bị Revoked
+    // ═══════════════════════════════════════════════════════════════════
+    const tokenFingerprint = token.substring(0, 500);
+    const session = await this.userSessionRepository.findOne({
+      where: {
+        userId,
+        refreshToken: tokenFingerprint,
+        revokedAt: IsNull(),  // Chỉ chấp nhận session chưa bị thu hồi
+      }
+    });
+
+    if (!session) {
+      // Session không tồn tại hoặc đã bị Revoked (do logout/đổi mật khẩu/revoke toàn bộ)
+      // Log cảnh báo bảo mật – đây có thể là hành vi replay attack
+      this.securityService.logSecurityEvent(
+        'REFRESH_TOKEN_REUSE_ATTEMPT',
+        userId,
+        'Refresh token was rejected: session revoked or not found. Possible Token Replay Attack.',
+        { tokenFingerprint: tokenFingerprint.substring(0, 50) },
+        'HIGH'
+      );
+      throw new UnauthorizedException('Session has been revoked. Please login again.');
+    }
+
+    // Kiểm tra session hết hạn
+    if (session.expiresAt && session.expiresAt < new Date()) {
+      session.revokedAt = new Date();
+      session.revokedReason = 'Session expired';
+      await this.userSessionRepository.save(session);
+      throw new UnauthorizedException('Session has expired. Please login again.');
+    }
+    // ═══════════════════════════════════════════════════════════════════
+
     const user = await this.userRepository.findOne({
       where: { id: userId }
     });
@@ -394,37 +436,97 @@ export class AuthService {
     const isAllowed = user && (user.status === 'active' || (!user.status && user.isActive));
 
     if (!isAllowed) {
-      throw new UnauthorizedException('User not found');
+      // Thu hồi session nếu user không còn active
+      session.revokedAt = new Date();
+      session.revokedReason = 'User account inactive or not found';
+      await this.userSessionRepository.save(session);
+      throw new UnauthorizedException('User not found or inactive');
     }
 
-    if (!user) {
-      throw new UnauthorizedException('User not found');
+    // Role resolution
+    const userRoles: any[] = await this.userRepository.query(
+      "SELECT `role_id` FROM `user_roles` WHERE `user_id` = ?",
+      [userId]
+    );
+    const roleIds = userRoles.map(ur => ur.role_id);
+    const allRoles: any[] = await this.userRepository.query("SELECT * FROM `roles` LIMIT 100");
+    const roles: string[] = allRoles
+      .filter(r => roleIds.includes(r.id))
+      .map(r => r.name);
+
+    if (user.email === 'admin@cybersecure.local' && !roles.includes('Admin')) {
+      roles.push('Admin');
     }
 
-    const payload = {
+    // ═══════════════════════════════════════════════════════════════════
+    // [SECURITY] Refresh Token Rotation: Thu hồi session cũ, cấp session mới
+    // Ngăn chặn kẻ tấn công sử dụng lại refresh_token đã dùng
+    // ═══════════════════════════════════════════════════════════════════
+    const newRefreshTokenPayload = { sub: user.id };
+    const newRefreshToken = this.jwtService.sign(newRefreshTokenPayload, { expiresIn: '7d' });
+
+    // Thu hồi session cũ
+    session.revokedAt = new Date();
+    session.revokedReason = 'Token rotated on refresh';
+    await this.userSessionRepository.save(session);
+
+    // Tạo access token mới
+    const newPayload = {
       sub: user.id,
       email: user.email,
       username: user.username,
       employeeId: user.employeeId,
+      securityLevel: user.securityClearanceLevel,
+      mfaRequired: user.mfaRequired,
+      mfaVerified: true,
+      roles,
     };
+    const accessToken = this.jwtService.sign(newPayload, { expiresIn: '24h' });
 
-    return {
-      accessToken: this.jwtService.sign(payload, { expiresIn: '24h' }),
-    };
+    // Tạo session mới với refresh_token mới
+    try {
+      await this.userSessionRepository.save({
+        userId: user.id,
+        sessionToken: accessToken.substring(0, 500),
+        refreshToken: newRefreshToken.substring(0, 500),
+        ipAddress: session.ipAddress || '0.0.0.0',
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7d (refresh token lifetime)
+        isTrusted: session.isTrusted,
+        requiresMfa: session.requiresMfa,
+        deviceName: session.deviceName,
+        browser: session.browser,
+        deviceType: session.deviceType,
+      });
+    } catch (err) {
+      console.error('[AUTH] Failed to create rotated session:', err);
+    }
+
+    this.securityService.logSecurityEvent(
+      'TOKEN_REFRESHED',
+      user.id,
+      `Access token refreshed successfully for ${user.email} (token rotation applied)`,
+      {},
+      'LOW'
+    );
+
+    return { accessToken, newRefreshToken };
   }
 
-  async logout(token: string) {
-    if (!token) return;
+  async logout(userId: string) {
+    if (!userId) return;
     try {
-      const tokenPart = token.substring(0, 500);
-      const session = await this.userSessionRepository.findOne({
-        where: { sessionToken: tokenPart }
+      // Find all active sessions for this user (Global Logout)
+      // This fixes the bug where refreshing tokens left old sessions dangling
+      const sessions = await this.userSessionRepository.find({
+        where: { userId, revokedAt: IsNull() }
       });
 
-      if (session) {
-        session.revokedAt = new Date();
-        session.revokedReason = 'User logout';
-        await this.userSessionRepository.save(session);
+      if (sessions && sessions.length > 0) {
+        for (const session of sessions) {
+          session.revokedAt = new Date();
+          session.revokedReason = 'User logout';
+        }
+        await this.userSessionRepository.save(sessions);
       }
     } catch (e) {
       console.error('Logout error', e);

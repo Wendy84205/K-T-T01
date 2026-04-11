@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, IsNull, Not, Like, LessThan } from 'typeorm';
+import { ConfigService } from '@nestjs/config';
 import { Conversation } from '../../database/entities/chat/conversation.entity';
 import { Message } from '../../database/entities/chat/message.entity';
 import { ConversationMember } from '../../database/entities/chat/conversation-member.entity';
@@ -36,6 +37,8 @@ export class ChatService implements OnModuleInit {
         private userRepository: Repository<User>,
 
         private encryptionService: EncryptionService,
+        // FIX LỖ HỔNG 5: Inject ConfigService để đọc CHAT_MASTER_KEY từ .env
+        private configService: ConfigService,
     ) { }
 
     onModuleInit() {
@@ -66,7 +69,15 @@ export class ChatService implements OnModuleInit {
         }
     }
 
-    private readonly chatMasterKey = Buffer.from('8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92', 'hex');
+    // FIX LỖ HỔNG 5: Đọc key từ biến môi trường thay vì hardcode
+    // Key cũ là SHA-256 của '123456' — bất kỳ ai cũng có thể khai thác
+    private get chatMasterKey(): Buffer {
+        const hexKey = this.configService.get<string>('CHAT_MASTER_KEY');
+        if (!hexKey) {
+            throw new Error('[ChatService] CRITICAL: CHAT_MASTER_KEY is not set in environment variables. Cannot encrypt/decrypt messages.');
+        }
+        return Buffer.from(hexKey, 'hex');
+    }
 
     // Typing indicators (in-memory, use Redis in production)
     private typingUsers = new Map<string, Set<string>>();
@@ -179,6 +190,7 @@ export class ChatService implements OnModuleInit {
     private decryptIfNeeded(message: any): string {
         if (message.isEncrypted && message.encryptedContent && message.initializationVector && message.authTag) {
             try {
+                // Try with current securely injected CHAT_MASTER_KEY
                 return this.encryptionService.decryptText(
                     message.encryptedContent,
                     this.chatMasterKey,
@@ -186,8 +198,20 @@ export class ChatService implements OnModuleInit {
                     message.authTag
                 );
             } catch (e) {
-                console.error(`[Chat] Decryption failed for message ${message.id}:`, e.message);
-                return '[Encrypted Message]';
+                // FALLBACK: Legacy hardcoded key (SHA-256 of '123456') used before LỖ HỔNG 5 was fixed
+                // This allows old database messages to remain readable after the key rotation
+                try {
+                    const legacyKey = Buffer.from('8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92', 'hex');
+                    return this.encryptionService.decryptText(
+                        message.encryptedContent,
+                        legacyKey,
+                        message.initializationVector,
+                        message.authTag
+                    );
+                } catch (legacyError) {
+                    console.error(`[Chat] Decryption failed for message ${message.id} with both new & legacy keys:`, legacyError.message);
+                    return '[Encrypted Message]';
+                }
             }
         }
         return message.content;
@@ -421,9 +445,12 @@ export class ChatService implements OnModuleInit {
             relations: ['sender'],
         });
 
+        // FIX LỖ HỔNG 2: Không trả về 'content' plaintext từ client.
+        // Thay vào đó decrypt từ bản đã lưu để đảm bảo tính nhất quán và an toàn.
+        // emitNewMessage sẽ nhận được dữ liệu này và phát sóng qua WebSocket.
         return {
             id: completeMessage.id,
-            content: content,
+            content: this.decryptIfNeeded(completeMessage),
             messageType: completeMessage.messageType,
             isEncrypted: completeMessage.isEncrypted,
             createdAt: completeMessage.createdAt,

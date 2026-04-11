@@ -708,6 +708,16 @@ export class SecurityService {
     return await this.securityPolicyRepository.save(policy);
   }
 
+  async deleteSecurityPolicy(id: string) {
+    const policy = await this.securityPolicyRepository.findOne({ where: { id } });
+
+    if (!policy) {
+      throw new NotFoundException('Security policy not found');
+    }
+
+    return await this.securityPolicyRepository.remove(policy);
+  }
+
   async getActiveSessions(limit: number = 100) {
     // TODO: Implement with actual user sessions
     return {

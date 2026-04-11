@@ -1,7 +1,16 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import api from '../utils/api';
 
 const AuthContext = createContext(null);
+
+// FIX LỖ HỔNG 7: accessToken chỉ lưu trong bộ nhớ (module-level ref)
+// Không dùng localStorage → XSS không thể đánh cắp token qua localStorage.getItem()
+// Thay thế: Refresh Token (HttpOnly cookie) sẽ phục hồi access token sau khi reload trang
+let _inMemoryToken = null;
+
+export function getInMemoryToken() {
+  return _inMemoryToken;
+}
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
@@ -12,7 +21,8 @@ export function AuthProvider({ children }) {
       return null;
     }
   });
-  const [token, setToken] = useState(() => localStorage.getItem('accessToken'));
+  // FIX LỖ HỔNG 7: token chỉ sống trong React state (không ghi ra localStorage)
+  const [token, setToken] = useState(null);
   const [loading, setLoading] = useState(true);
   const [darkMode, setDarkMode] = useState(() => {
     const saved = localStorage.getItem('theme');
@@ -87,31 +97,40 @@ export function AuthProvider({ children }) {
     } catch (err) {
       console.error('Logout failed on server:', err);
     } finally {
-      localStorage.removeItem('accessToken');
+      // FIX LỖ HỔNG 7: Xóa token trong memory, KHÔNG còn trong localStorage
+      _inMemoryToken = null;
       localStorage.removeItem('user');
+      sessionStorage.removeItem('e2ee_session_pk');
       setToken(null);
       setUser(null);
     }
   }, []);
 
   const loadUser = useCallback(async () => {
-    const t = localStorage.getItem('accessToken');
-    if (!t) {
-      logout();
-      setLoading(false);
-      return;
-    }
     try {
+      // FIX LỖ HỔNG 7: Thay vì đọc từ localStorage, gọi /auth/refresh để lấy token mới
+      // Backend dùng HttpOnly cookie (refresh_token) để cấp lại access token
+      const refreshData = await api.refreshToken();
+      const newToken = refreshData?.accessToken;
+      if (!newToken) {
+        setLoading(false);
+        return;
+      }
+      _inMemoryToken = newToken;
+      setToken(newToken);
+
       const { user: profile } = await api.getProfile();
       localStorage.setItem('user', JSON.stringify(profile));
       setUser(profile);
-      setToken(t);
     } catch (e) {
-      logout();
+      // Refresh thất bại = chưa đăng nhập hoặc phiên hết hạn
+      _inMemoryToken = null;
+      setToken(null);
+      setUser(null);
     } finally {
       setLoading(false);
     }
-  }, [logout]);
+  }, []);
 
   useEffect(() => {
     const u = localStorage.getItem('user');
@@ -122,39 +141,38 @@ export function AuthProvider({ children }) {
     }
     loadUser();
 
-    // Sync across tabs
-    const handleStorageChange = (e) => {
-      if (e.key === 'accessToken') {
-        if (!e.newValue) {
-          // Logout in another tab
-          setUser(null);
+    // FIX LỖ HỔNG 7: Không còn lắng nghe sự kiện 'accessToken' từ localStorage
+    // Tab sync không cần thiết vì token không còn trong localStorage
+    // Nếu cần đồng bộ logout nhiều tab, dùng BroadcastChannel
+    const bc = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('auth_sync') : null;
+    if (bc) {
+      bc.onmessage = (e) => {
+        if (e.data === 'logout') {
+          _inMemoryToken = null;
           setToken(null);
+          setUser(null);
           window.location.href = '/login';
-        } else {
-          // Token changed (login in another tab)
-          // We reload to ensure a completely clean state for the new user
-          window.location.reload();
         }
-      }
-    };
-    window.addEventListener('storage', handleStorageChange);
+      };
+    }
 
-    // Heartbeat for Active Status
+    // Heartbeat for Active Status — dùng in-memory token thay vì localStorage
     const interval = setInterval(() => {
-      if (localStorage.getItem('accessToken')) {
+      if (_inMemoryToken) {
         api.heartbeat();
       }
     }, 3 * 60 * 1000); // 3 minutes
 
     return () => {
       clearInterval(interval);
-      window.removeEventListener('storage', handleStorageChange);
+      if (bc) bc.close();
     };
   }, [loadUser]);
 
   const login = useCallback((data) => {
     const { accessToken, user: u } = data;
-    localStorage.setItem('accessToken', accessToken);
+    // FIX LỖ HỔNG 7: Token chỉ lưu trong memory, KHÔNG ghi ra localStorage
+    _inMemoryToken = accessToken;
     localStorage.setItem('user', JSON.stringify(u));
     setToken(accessToken);
     setUser(u);

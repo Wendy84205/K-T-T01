@@ -197,7 +197,7 @@ export default function LogsPage() {
 
                 <div className="terminal-footer" style={{ padding: '16px 20px' }}>
                     <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-                        Showing {logs.length > 0 ? ((page - 1) * 10) + 1 : 0}-{Math.min(page * 10, totalPages * 10)} of ~1,245 events
+                        Showing {logs.length > 0 ? ((page - 1) * 10) + 1 : 0}–{(page - 1) * 10 + logs.length} of {totalPages > 1 ? `~${totalPages * 10}` : logs.length} events
                     </div>
                     <div className="pagination-controls" style={{ gap: '8px' }}>
                         <button className="pg-btn" disabled={page === 1} onClick={() => setPage(page - 1)} style={{ padding: '6px 16px' }}>Previous</button>
