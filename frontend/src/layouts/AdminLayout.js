@@ -1,6 +1,7 @@
 // src/layouts/AdminLayout.js
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
+import api from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import E2EESecurityGate from '../components/Auth/E2EESecurityGate';
 import '../styles/admin.css';
@@ -42,13 +43,57 @@ export default function AdminLayout() {
     { type: 'output', content: 'Type "help" to see available commands.' },
   ]);
 
-  const [notifications, setNotifications] = useState([
-    { id: 1, type: 'CRITICAL', title: 'Brute Force Detected',   time: '2 mins ago',   icon: 'bx-error-alt',       color: '#f87171',  read: false },
-    { id: 2, type: 'HIGH',     title: 'MFA Bypass Attempt',     time: '15 mins ago',  icon: 'bx-shield-quarter',  color: '#fbbf24',  read: false },
-    { id: 3, type: 'INFO',     title: 'System Backup Complete', time: '1 hour ago',   icon: 'bx-check-circle',    color: '#10b981',  read: false },
-  ]);
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount,   setUnreadCount]   = useState(0);
+  const [notifLoading,  setNotifLoading]  = useState(false);
 
-  const unreadCount = notifications.filter(n => !n.read).length;
+  const fetchNotifications = useCallback(async () => {
+    try {
+      setNotifLoading(true);
+      const res = await api.getNotifications(1, 10);
+      // Backend ResponseInterceptor unwraps: shape is { items, total, unreadCount }
+      const items = res?.items || res?.data || (Array.isArray(res) ? res : []);
+      const count = res?.unreadCount ?? items.filter(n => !n.isRead).length;
+      setNotifications(items);
+      setUnreadCount(count);
+    } catch (err) {
+      // Reset to 0 on error — avoid ghost badge from stale socket events
+      setUnreadCount(0);
+      setNotifications([]);
+      console.error('Failed to fetch admin notifications:', err);
+    } finally {
+      setNotifLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchNotifications();
+    // Poll every 30 seconds for new alerts
+    const pollInterval = setInterval(fetchNotifications, 30000);
+    return () => clearInterval(pollInterval);
+  }, [fetchNotifications]);
+
+  const handleMarkAllRead = async () => {
+    try {
+      await api.markAllNotificationsRead();
+      setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+      setUnreadCount(0);
+    } catch (err) {
+      console.error('Mark all read failed:', err);
+    }
+  };
+
+  const handleClearAll = async () => {
+    try {
+      await api.deleteAllNotifications();
+      setNotifications([]);
+      setUnreadCount(0);
+      setIsNotifOpen(false);
+    } catch (err) {
+      console.error('Clear all notifications failed:', err);
+    }
+  };
+
   const breadcrumb   = breadcrumbMap[location.pathname] || ['Admin', 'Dashboard'];
 
   // Apply dark/light mode class on body
@@ -306,24 +351,41 @@ export default function AdminLayout() {
                 {isNotifOpen && (
                   <div className="notif-dropdown" onClick={e => e.stopPropagation()}>
                     <div className="notif-header">
-                      <span>Notifications</span>
+                      <span>Security Alerts</span>
                       <button
-                        onClick={() => setNotifications(n => n.map(x => ({ ...x, read: true })))}
+                        onClick={handleMarkAllRead}
                         style={{ background: 'none', border: 'none', color: 'var(--primary)', fontSize: '11px', cursor: 'pointer', fontWeight: 700 }}
                       >Mark all read</button>
                     </div>
                     <div className="notif-list">
-                      {notifications.length > 0 ? notifications.map(n => (
-                        <div key={n.id} className={`notif-item ${n.read ? 'read' : ''}`}>
-                          <div className="notif-icon" style={{ background: `${n.color}18`, color: n.color }}>
-                            <i className={`bx ${n.icon}`} />
-                          </div>
-                          <div className="notif-info">
-                            <div className="notif-title">{n.title}</div>
-                            <div className="notif-time">{n.time}</div>
-                          </div>
+                      {notifLoading ? (
+                        <div style={{ padding: '32px 20px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '12px' }}>
+                          <i className="bx bx-loader-alt" style={{ fontSize: '24px', marginBottom: '8px', display: 'block', animation: 'spin 1s linear infinite' }} />
+                          Loading...
                         </div>
-                      )) : (
+                      ) : notifications.length > 0 ? notifications.map(n => {
+                        const severityColor = n.type === 'CRITICAL' || n.priority === 'critical' ? '#f87171'
+                          : n.type === 'HIGH' || n.priority === 'high' ? '#fbbf24'
+                          : n.type === 'error' ? '#f87171'
+                          : '#10b981';
+                        const severityIcon = n.type === 'CRITICAL' || n.priority === 'critical' ? 'bx-error-alt'
+                          : n.type === 'HIGH' || n.priority === 'high' ? 'bx-shield-quarter'
+                          : n.type === 'error' ? 'bx-error-circle'
+                          : 'bx-check-circle';
+                        const timeAgo = n.createdAt ? new Date(n.createdAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : '';
+                        return (
+                          <div key={n.id} className={`notif-item ${n.isRead ? 'read' : ''}`}>
+                            <div className="notif-icon" style={{ background: `${severityColor}18`, color: severityColor }}>
+                              <i className={`bx ${n.icon || severityIcon}`} />
+                            </div>
+                            <div className="notif-info">
+                              <div className="notif-title">{n.title}</div>
+                              <div className="notif-time" style={{ fontSize: '10px', color: 'var(--text-muted)' }}>{n.message || n.content || ''}</div>
+                              <div className="notif-time">{timeAgo}</div>
+                            </div>
+                          </div>
+                        );
+                      }) : (
                         <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '13px' }}>
                           <i className="bx bx-check-double" style={{ fontSize: '32px', marginBottom: '8px', display: 'block', color: 'var(--green-color)' }} />
                           All clear! No alerts.
@@ -331,7 +393,7 @@ export default function AdminLayout() {
                       )}
                     </div>
                     <div className="notif-footer">
-                      <button className="notif-clear-btn" onClick={() => { setNotifications([]); setIsNotifOpen(false); }}>Clear All</button>
+                      <button className="notif-clear-btn" onClick={handleClearAll}>Clear All</button>
                       <button className="notif-view-all" onClick={() => { navigate('/admin/logs'); setIsNotifOpen(false); }}>View All Logs</button>
                     </div>
                   </div>

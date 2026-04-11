@@ -89,6 +89,31 @@ export class UsersController {
     res.sendFile(filename, { root: './uploads/avatars' });
   }
 
+  // ── Static routes FIRST (before any :id wildcards) ──────────────
+
+  @Post('bulk-status')
+  @UseGuards(RolesGuard)
+  @Roles('Admin')
+  bulkUpdateStatus(@Body() body: { ids: string[], status: string }) {
+    return this.usersService.bulkUpdateStatus(body.ids, body.status);
+  }
+
+  @Post('global-lockdown')
+  @UseGuards(RolesGuard)
+  @Roles('Admin')
+  globalLockdown() {
+    return this.usersService.globalLockdown();
+  }
+
+  @Delete('sessions/:sessionId/admin')
+  @UseGuards(RolesGuard)
+  @Roles('Admin', 'Manager')
+  async adminRevokeSession(@Param('sessionId') sessionId: string) {
+    return this.usersService.revokeSessionById(sessionId);
+  }
+
+  // ── Wildcard :id routes AFTER static routes ───────────────────
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.usersService.findOne(id);
@@ -137,31 +162,10 @@ export class UsersController {
     return this.usersService.resetPassword(id);
   }
 
-  @Post('bulk-status')
-  @UseGuards(RolesGuard)
-  @Roles('Admin')
-  bulkUpdateStatus(@Body() body: { ids: string[], status: string }) {
-    return this.usersService.bulkUpdateStatus(body.ids, body.status);
-  }
-
-  @Post('global-lockdown')
-  @UseGuards(RolesGuard)
-  @Roles('Admin')
-  globalLockdown() {
-    return this.usersService.globalLockdown();
-  }
-
   @Get(':id/sessions')
   @UseGuards(RolesGuard)
   @Roles('Admin', 'Manager')
   async getUserSessions(@Param('id') userId: string) {
     return this.usersService.getUserSessions(userId);
-  }
-
-  @Delete('sessions/:sessionId/admin')
-  @UseGuards(RolesGuard)
-  @Roles('Admin', 'Manager')
-  async adminRevokeSession(@Param('sessionId') sessionId: string) {
-    return this.usersService.revokeSessionById(sessionId);
   }
 }

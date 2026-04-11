@@ -51,12 +51,29 @@ export class ProjectsService {
   }
 
   async create(userId: string, data: any): Promise<Project> {
-    const project = this.projectRepository.create({
+    const saved = await this.projectRepository.create({
       ...data,
       creatorId: userId,
     });
-    const saved = await this.projectRepository.save(project);
-    return saved as unknown as Project;
+    const result = await this.projectRepository.save(saved);
+    return result as unknown as Project;
+  }
+
+  async deleteProject(id: string, userId: string, isAdmin: boolean = false): Promise<void> {
+    const project = await this.projectRepository.findOne({ where: { id } });
+    if (!project) throw new NotFoundException('Project not found');
+
+    if (project.creatorId !== userId && !isAdmin) {
+      throw new Error('Unauthorized to delete this project');
+    }
+
+    // Since we mapped project_tasks to Cascade remove/delete or TypeORM remove on Project Entity handles it, 
+    // it's safer to just do remove(project) which removes the project.
+    // If cascade is not set, we might need to physically delete tasks first:
+    await this.taskRepository.delete({ projectId: id });
+    await this.projectRepository.remove(project);
+    
+    // Notify members?
   }
 
   async findTasks(projectId: string): Promise<ProjectTask[]> {
@@ -164,5 +181,33 @@ export class ProjectsService {
 
     const saved = await this.taskRepository.save(task);
     return saved as unknown as ProjectTask;
+  }
+
+  async deleteTask(taskId: string, userId: string, isAdmin: boolean = false): Promise<void> {
+    const task = await this.taskRepository.findOne({
+      where: { id: taskId },
+      relations: ['project'],
+    });
+    if (!task) throw new NotFoundException('Task not found');
+
+    const isCreator = task.project?.creatorId === userId;
+    const isAssignee = task.assigneeId === userId;
+
+    if (!isCreator && !isAdmin && !isAssignee) {
+      throw new Error('Unauthorized to delete this task');
+    }
+
+    // 🔔 Notify assignee if someone else deletes it
+    if (task.assigneeId && task.assigneeId !== userId) {
+      this.chatGateway.server.to(`user_${task.assigneeId}`).emit('notification', {
+        type: 'TASK_DELETED',
+        title: '🗑️ Task Deleted',
+        message: `The task "${task.title}" was deleted.`,
+        taskId: task.id,
+        createdAt: new Date().toISOString(),
+      });
+    }
+
+    await this.taskRepository.remove(task);
   }
 }

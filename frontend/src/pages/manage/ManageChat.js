@@ -6,6 +6,8 @@ import {
 import api from '../../utils/api';
 import socketService from '../../utils/socket';
 import { useAuth } from '../../context/AuthContext';
+// FIX LỖ HỔNG 7: Import getInMemoryToken — không dùng localStorage
+import { getInMemoryToken } from '../../context/AuthContext';
 import { useE2EE } from '../../context/E2EEContext';
 import { encryptContent, decryptContent, encryptHybrid, decryptHybrid } from '../../utils/crypto';
 
@@ -119,7 +121,8 @@ export default function ManageChat() {
     // ─── Socket Setup ──────────────────────────────────────────────────────────
     useEffect(() => {
         if (!user?.id) return;
-        const token = localStorage.getItem('accessToken');
+        // FIX LỖ HỔNG 7: Lấy token từ in-memory thay vì localStorage
+        const token = getInMemoryToken();
         socketService.connect(token, user.id);
 
         socketService.onUserStatus(({ userId, status }) => {
@@ -147,7 +150,7 @@ export default function ManageChat() {
                         try { data.content = await decryptContent(rawContent, pk); } catch { }
                     }
                 } else {
-                    data.content = '🔐 E2EE locked — unlock to read';
+                    data.content = '[E2EE locked — unlock to read]';
                 }
             }
 
@@ -177,7 +180,7 @@ export default function ManageChat() {
         if (!content?.startsWith('[E2EE]:')) return content;
         const rawContent = content.substring(7);
         const pk = e2eePrivateKey || sessionStorage.getItem('e2ee_session_pk');
-        if (!pk) return '🔐 E2EE locked';
+        if (!pk) return '[E2EE locked]';
         try {
             const encryptedData = JSON.parse(rawContent);
             const myId = String(user?.id);
@@ -192,26 +195,22 @@ export default function ManageChat() {
             }
         } catch { }
         try { return await decryptContent(rawContent, pk); } catch { }
-        return '🔐 [Decryption failed]';
+        return '[Decryption failed]';
     }, [e2eePrivateKey, user?.id]);
 
-    // Effect to re-decrypt messages if they were loaded while E2EE was locked
+    // Effect to re-decrypt messages when E2EE is unlocked after messages were already loaded.
+    // Fix: reload messages fresh from API when private key becomes available.
+    const prevE2eeKeyRef = useRef(null);
     useEffect(() => {
-        const hasUnprocessed = messages.some(m => 
-            m.content && (m.content.startsWith('[E2EE]:') || m.content.includes("🔐 E2EE locked") || m.content.includes("[Decryption failed]"))
-        );
-        if (e2eePrivateKey && hasUnprocessed) {
-            const reDecrypt = async () => {
-                const newMsgs = await Promise.all(messages.map(async m => ({
-                    ...m,
-                    content: await decryptMsg(m.content)
-                })));
-                const changed = newMsgs.some((m, i) => m.content !== messages[i].content);
-                if (changed) setMessages(newMsgs);
-            };
-            reDecrypt();
+        if (e2eePrivateKey && !prevE2eeKeyRef.current) {
+            // Key just became available (was null/undefined before) → reload everything
+            if (selectedChat) {
+                loadMessages(selectedChat);
+            }
+            loadConversations();
         }
-    }, [e2eePrivateKey, messages, decryptMsg]);
+        prevE2eeKeyRef.current = e2eePrivateKey;
+    }, [e2eePrivateKey, selectedChat]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // ─── Load Conversations ─────────────────────────────────────────────────────
     const loadConversations = useCallback(async () => {
@@ -530,11 +529,11 @@ export default function ManageChat() {
                                         <div style={{
                                             display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 16px', marginBottom: '12px',
                                             background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)',
-                                            borderRadius: '12px', cursor: 'pointer'
-                                        }} onClick={() => setShowE2EEModal(true)}>
+                                            borderRadius: '12px'
+                                        }}>
                                             <Key size={14} color="#ef4444" />
                                             <span style={{ color: '#ef4444', fontSize: '12px', fontWeight: '700' }}>
-                                                E2EE chưa được mở khoá — tin nhắn gửi đi sẽ không được mã hoá. <u>Nhấn để unlock</u>
+                                                E2EE chưa được mở khoá — tin nhắn gửi đi sẽ không được mã hoá.
                                             </span>
                                         </div>
                                     )}

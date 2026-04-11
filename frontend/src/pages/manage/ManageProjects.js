@@ -2,11 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { 
     Layers, Plus, Search, Calendar, Users, 
     RefreshCw, CheckCircle2, Circle,
-    Shield, ChevronRight, X, User, Flag, Clock
+    Shield, ChevronRight, X, User, Flag, Clock, Trash2
 } from 'lucide-react';
 import api from '../../utils/api';
+import { useAuth } from '../../context/AuthContext';
 
 export default function ManageProjects() {
+    const { user, isAdmin } = useAuth();
     const [projects, setProjects] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showCreateModal, setShowCreateModal] = useState(false);
@@ -87,6 +89,28 @@ export default function ManageProjects() {
             loadData();
         } catch (err) {
             alert('Update failed: ' + err.message);
+        }
+    };
+
+    const handleDeleteTask = async (task) => {
+        if (!window.confirm(`Xác nhận xóa task "${task.title}"?`)) return;
+        try {
+            await api.deleteTask(task.id);
+            fetchTasks(selectedProject.id);
+            loadData();
+        } catch (err) {
+            alert('Delete failed: ' + err.message);
+        }
+    };
+
+    const handleDeleteProject = async (project) => {
+        if (!window.confirm(`Xác nhận xóa dự án "${project.name}" và toàn bộ task bên trong?\nHành động này không thể hoàn tác.`)) return;
+        try {
+            await api.deleteProject(project.id);
+            setSelectedProject(null);
+            loadData();
+        } catch (err) {
+            alert('Delete project failed: ' + err.message);
         }
     };
 
@@ -228,9 +252,16 @@ export default function ManageProjects() {
                             <span style={{ color: 'var(--primary)', fontSize: '10px', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '6px', display: 'block' }}>Project Detail</span>
                             <h2 style={{ color: 'var(--text-main)', margin: 0, fontSize: '20px', fontWeight: '900' }}>{selectedProject.name}</h2>
                         </div>
-                        <button onClick={() => setSelectedProject(null)} style={{ background: 'var(--bg-light)', border: 'none', borderRadius: '12px', padding: '8px', cursor: 'pointer', color: 'var(--text-secondary)' }}>
-                            <X size={20} />
-                        </button>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                            {user?.id === selectedProject.creatorId || isAdmin ? (
+                                <button onClick={() => handleDeleteProject(selectedProject)} style={{ background: '#ef444415', border: '1px solid #ef444430', borderRadius: '12px', padding: '8px', cursor: 'pointer', color: 'var(--red-color)' }} title="Delete Project">
+                                    <Trash2 size={20} />
+                                </button>
+                            ) : null}
+                            <button onClick={() => setSelectedProject(null)} style={{ background: 'var(--bg-light)', border: 'none', borderRadius: '12px', padding: '8px', cursor: 'pointer', color: 'var(--text-secondary)' }}>
+                                <X size={20} />
+                            </button>
+                        </div>
                     </header>
 
                     <div style={{ flex: 1, padding: '28px 32px', overflowY: 'auto' }}>
@@ -304,41 +335,81 @@ export default function ManageProjects() {
                             {loadingTasks ? (
                                 <div style={{ textAlign: 'center', padding: '20px' }}><RefreshCw size={24} className="animate-spin" style={{ opacity: 0.2 }} /></div>
                             ) : (
-                                <div style={{ display: 'grid', gap: '10px' }}>
-                                    {tasks.map(task => {
-                                        const isDone = task.status === 'done';
-                                        const assigneeName = getAssigneeName(task);
-                                        return (
-                                            <div key={task.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '14px 16px', background: isDone ? 'rgba(16, 185, 129, 0.05)' : 'var(--bg-app)', border: `1px solid ${isDone ? 'rgba(16, 185, 129, 0.2)' : 'var(--border-color)'}`, borderRadius: '14px', transition: 'all 0.2s' }}>
-                                                <button onClick={() => toggleTaskStatus(task)} style={{ background: 'transparent', border: 'none', padding: '2px 0 0 0', cursor: 'pointer', flexShrink: 0 }}>
-                                                    {getTaskStatusIcon(task.status)}
-                                                </button>
-                                                <div style={{ flex: 1, minWidth: 0 }}>
-                                                    <span style={{ display: 'block', color: isDone ? '#10b981' : 'var(--text-main)', fontSize: '13px', fontWeight: '700', textDecoration: isDone ? 'line-through' : 'none', opacity: isDone ? 0.7 : 1 }}>
-                                                        {task.title}
-                                                    </span>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '6px', flexWrap: 'wrap' }}>
-                                                        {assigneeName && (
-                                                            <span style={{ fontSize: '10px', fontWeight: '800', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                                <User size={10} /> {assigneeName}
-                                                            </span>
-                                                        )}
-                                                        {task.priority && (
-                                                            <span style={{ fontSize: '9px', fontWeight: '900', textTransform: 'uppercase', color: getPriorityColor(task.priority), background: `${getPriorityColor(task.priority)}15`, padding: '2px 8px', borderRadius: '6px' }}>
-                                                                {task.priority}
-                                                            </span>
-                                                        )}
-                                                        {task.dueDate && (
-                                                            <span style={{ fontSize: '10px', fontWeight: '700', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                                <Clock size={10} /> {new Date(task.dueDate).toLocaleDateString()}
-                                                            </span>
-                                                        )}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                                    {/* Active Tasks */}
+                                    <div style={{ display: 'grid', gap: '10px' }}>
+                                        {tasks.filter(t => t.status !== 'done').map(task => {
+                                            const assigneeName = getAssigneeName(task);
+                                            return (
+                                                <div key={task.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '14px 16px', background: 'var(--bg-app)', border: '1px solid var(--border-color)', borderRadius: '14px', transition: 'all 0.2s', position: 'relative' }}>
+                                                    <button onClick={() => toggleTaskStatus(task)} style={{ background: 'transparent', border: 'none', padding: '2px 0 0 0', cursor: 'pointer', flexShrink: 0 }}>
+                                                        {getTaskStatusIcon(task.status)}
+                                                    </button>
+                                                    <div style={{ flex: 1, minWidth: 0, paddingRight: '24px' }}>
+                                                        <span style={{ display: 'block', color: 'var(--text-main)', fontSize: '13px', fontWeight: '700' }}>
+                                                            {task.title}
+                                                        </span>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '6px', flexWrap: 'wrap' }}>
+                                                            {assigneeName && (
+                                                                <span style={{ fontSize: '10px', fontWeight: '800', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                    <User size={10} /> {assigneeName}
+                                                                </span>
+                                                            )}
+                                                            {task.priority && (
+                                                                <span style={{ fontSize: '9px', fontWeight: '900', textTransform: 'uppercase', color: getPriorityColor(task.priority), background: `${getPriorityColor(task.priority)}15`, padding: '2px 8px', borderRadius: '6px' }}>
+                                                                    {task.priority}
+                                                                </span>
+                                                            )}
+                                                            {task.dueDate && (
+                                                                <span style={{ fontSize: '10px', fontWeight: '700', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                    <Clock size={10} /> {new Date(task.dueDate).toLocaleDateString()}
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                     </div>
+                                                    <button onClick={() => handleDeleteTask(task)} style={{ position: 'absolute', right: '12px', top: '14px', background: 'transparent', border: 'none', color: 'var(--red-color)', opacity: 0.5, cursor: 'pointer', padding: '4px' }} onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = 0.5}>
+                                                        <Trash2 size={14} />
+                                                    </button>
                                                 </div>
+                                            );
+                                        })}
+                                        {tasks.filter(t => t.status !== 'done').length === 0 && <p style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px', padding: '10px' }}>No active tasks.</p>}
+                                    </div>
+
+                                    {/* Completed Tasks */}
+                                    {tasks.some(t => t.status === 'done') && (
+                                        <div>
+                                            <div style={{ borderTop: '1px dashed var(--border-color)', margin: '10px 0 20px' }}></div>
+                                            <label style={{ color: 'var(--text-muted)', fontSize: '10px', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '0.1em', display: 'block', marginBottom: '14px' }}>Completed Tasks</label>
+                                            <div style={{ display: 'grid', gap: '10px' }}>
+                                                {tasks.filter(t => t.status === 'done').map(task => {
+                                                    const assigneeName = getAssigneeName(task);
+                                                    return (
+                                                        <div key={task.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '14px 16px', background: 'rgba(16, 185, 129, 0.05)', border: '1px solid rgba(16, 185, 129, 0.2)', borderRadius: '14px', transition: 'all 0.2s', position: 'relative' }}>
+                                                            <button onClick={() => toggleTaskStatus(task)} style={{ background: 'transparent', border: 'none', padding: '2px 0 0 0', cursor: 'pointer', flexShrink: 0 }}>
+                                                                {getTaskStatusIcon(task.status)}
+                                                            </button>
+                                                            <div style={{ flex: 1, minWidth: 0, paddingRight: '24px' }}>
+                                                                <span style={{ display: 'block', color: '#10b981', fontSize: '13px', fontWeight: '700', textDecoration: 'line-through', opacity: 0.7 }}>
+                                                                    {task.title}
+                                                                </span>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '6px', flexWrap: 'wrap', opacity: 0.7 }}>
+                                                                    {assigneeName && (
+                                                                        <span style={{ fontSize: '10px', fontWeight: '800', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                            <User size={10} /> {assigneeName}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                            <button onClick={() => handleDeleteTask(task)} style={{ position: 'absolute', right: '12px', top: '14px', background: 'transparent', border: 'none', color: 'var(--red-color)', opacity: 0.5, cursor: 'pointer', padding: '4px' }} onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = 0.5}>
+                                                                <Trash2 size={14} />
+                                                            </button>
+                                                        </div>
+                                                    );
+                                                })}
                                             </div>
-                                        );
-                                    })}
-                                    {tasks.length === 0 && <p style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px', padding: '20px' }}>No tasks yet. Assign the first one above.</p>}
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>

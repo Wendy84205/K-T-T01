@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Search, Plus, MessageSquare, MoreHorizontal, Phone, Video, Info, Lock, Send, Mic, Image, Paperclip, Smile, Settings, Bell, BellOff, Clock, Shield, LogOut, ChevronLeft, ChevronRight, User, File as FileIcon, Download, Trash2, ShieldCheck, CreditCard, HelpCircle, Key, Eye, EyeOff, Check, CheckCheck, Square, X, Forward, Reply, Edit2, Play, Pause, List, Pin, Star, Cloud, Heart, ChevronDown, Users, MoreVertical, FileText, Camera, MapPin, AlertTriangle, BarChart3, Folder, Maximize2, Minimize2, Briefcase, Layers, Building2, Bold, Italic, Link, Code, AtSign, Hash, Flag, RefreshCw } from 'lucide-react';
 import api from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
+// FIX LỖ HỔNG 7: Import getInMemoryToken — không dùng localStorage cho socket auth
+import { getInMemoryToken } from '../../context/AuthContext';
 import { useE2EE } from '../../context/E2EEContext';
 import { encryptContent, decryptContent, encryptHybrid, decryptHybrid } from "../../utils/crypto";
 import { SearchBar, PinnedMessagesBanner, ConversationSidebar, PollModal, StickerPicker } from '../../components/chat/ChatEnhancements';
@@ -155,9 +157,29 @@ export default function UserHomePage() {
 
   const loadUnreadCount = async () => {
     try {
-      const data = await api.getNotifications(1, 1);
-      setUnreadNotificationsCount(data.unreadCount || 0); // fallback if backend has unread counts
+      // Tải tối đa 20 thông báo mới nhất thay vì 1
+      const data = await api.getNotifications(1, 20);
+      // Backend ResponseInterceptor unwraps data.data, so shape can be:
+      // { items, total, unreadCount } OR already unwrapped array
+      const items = data?.items || data?.data || (Array.isArray(data) ? data : []);
+      const count = data?.unreadCount ?? items.filter(n => !n.isRead).length;
+
+      // Map to UI expectation format (n.type, n.message, n.timestamp)
+      const mappedItems = items.map(n => ({
+        id: n.id,
+        type: (n.type === 'HIGH' || n.type === 'CRITICAL' || n.type === 'error') ? 'security' : (n.type || 'message'),
+        message: n.message || n.content || n.title,
+        data: n.data || null,
+        read: n.isRead,
+        timestamp: n.createdAt
+      }));
+
+      setNotifications(mappedItems);
+      setUnreadNotificationsCount(count);
     } catch (err) {
+      // If API fails, reset badge to 0 so it doesn't show stale/ghost count
+      setUnreadNotificationsCount(0);
+      setNotifications([]);
       console.error('Failed to load unread count', err);
     }
   };
@@ -269,7 +291,8 @@ export default function UserHomePage() {
   // E2EE initialization is now managed globally by E2EESecurityGate and E2EEContext
 
   useEffect(() => {
-    const token = localStorage.getItem('accessToken');
+    // FIX LỖ HỔNG 7: Dùng in-memory token thay vì localStorage
+    const token = getInMemoryToken();
     if (token && user?.id) {
       const initSocket = async () => {
         await socketService.connect(token, user.id);
@@ -622,7 +645,7 @@ export default function UserHomePage() {
       const privateKey = e2eePrivateKey || sessionStorage.getItem('e2ee_session_pk');
 
       if (!privateKey) {
-        msg.content = "🔐 E2EE locked — enter passphrase to unlock";
+        msg.content = "[E2EE locked — enter passphrase to unlock]";
       } else {
         try {
           const encryptedData = JSON.parse(rawContent);
@@ -658,25 +681,22 @@ export default function UserHomePage() {
     return msg;
   }, [e2eePrivateKey, user?.id]);
 
-  // Effect to re-decrypt messages if they were loaded while E2EE was locked
+  // Effect to re-decrypt messages when E2EE is unlocked after messages were already loaded.
+  // The old approach tried to re-decrypt from state, but state content was already
+  // overwritten with "[E2EE locked...]" placeholder — so [E2EE]: prefix was gone.
+  // Fix: reload messages fresh from API when private key becomes available.
+  const prevE2eeKeyRef = useRef(null);
   useEffect(() => {
-    const hasUnprocessedMessages = messages.some(m => 
-      m.content && (m.content.startsWith('[E2EE]:') || m.content.includes("🔐 E2EE locked") || m.content.includes("Unable to decrypt"))
-    );
-
-    if (e2eePrivateKey && hasUnprocessedMessages) {
-      const reDecryptAll = async () => {
-        const newMessages = await Promise.all(messages.map(m => decryptMessage({ ...m })));
-        
-        // Prevent infinite loop by checking if content actually changed
-        const anyChanged = newMessages.some((msg, i) => msg.content !== messages[i].content);
-        if (anyChanged) {
-          setMessages(newMessages);
-        }
-      };
-      reDecryptAll();
+    if (e2eePrivateKey && !prevE2eeKeyRef.current) {
+      // Key just became available (was null/undefined before) → reload everything
+      if (selectedChat) {
+        loadMessages(selectedChat, true);
+      }
+      loadConversations(true); // Also reload sidebar to decrypt lastMessage previews
     }
-  }, [e2eePrivateKey, messages, decryptMessage]);
+    prevE2eeKeyRef.current = e2eePrivateKey;
+  }, [e2eePrivateKey, selectedChat]); // eslint-disable-line react-hooks/exhaustive-deps
+
 
   const loadMessages = async (conversationId, silent = false) => {
     try {
@@ -943,8 +963,8 @@ export default function UserHomePage() {
         try {
           setUploading(true);
           const uploadedFile = await api.uploadFile(selectedFile);
-          const fileContent = `Shared a file: ${selectedFile.name} `;
-          await api.sendMessage(selectedChat, fileContent, 'file', uploadedFile.id, null, null);
+          // FIX LỖ HỔNG 2: Không đưa tên file thật vào content để tránh rò rỉ qua WebSocket notification
+          await api.sendMessage(selectedChat, '[File]', 'file', uploadedFile.id, null, null);
           setSelectedFile(null);
         } catch (fileErr) {
           console.error('File upload failed:', fileErr);
@@ -1146,8 +1166,8 @@ export default function UserHomePage() {
       setShowAttachmentMenu(false);
       const uploadedFile = await api.uploadFile(file);
 
-      const messageContent = `Shared a file: ${file.name} `;
-      await api.sendMessage(selectedChat, messageContent, 'file', uploadedFile.id);
+      // FIX LỖ HỔNG 2: Không đưa tên file thật vào content để tránh rò rỉ qua WebSocket notification
+      await api.sendMessage(selectedChat, '[File]', 'file', uploadedFile.id);
 
       // Refresh
       loadMessages(selectedChat);
@@ -1173,8 +1193,8 @@ export default function UserHomePage() {
       setUploading(true);
       setShowVaultModal(false);
 
-      const messageContent = `Shared a file: ${file.name} `;
-      await api.sendMessage(selectedChat, messageContent, 'file', file.id);
+      // FIX LỖ HỔNG 2: Không đưa tên file thật vào content để tránh rò rỉ qua WebSocket notification
+      await api.sendMessage(selectedChat, '[File]', 'file', file.id);
 
       loadMessages(selectedChat);
       loadConversations(true);
@@ -1941,7 +1961,15 @@ export default function UserHomePage() {
             notifications={notifications}
             handleSelectUser={handleSelectUser}
             setActiveTab={setActiveTab}
-            setNotifications={setNotifications}
+            handleClearAll={async () => {
+              try {
+                await api.deleteAllNotifications();
+                setNotifications([]);
+                setUnreadNotificationsCount(0);
+              } catch (err) {
+                console.error('Clear all failed:', err);
+              }
+            }}
           />
         )}
         {activeTab === 'calls' && <CallsContent />}
@@ -5199,7 +5227,7 @@ function E2EEPassphraseModal({ mode, userId, onSuccess, onSkip }) {
   );
 }
 
-function NotificationsContent({ notifications, handleSelectUser, setActiveTab, setNotifications }) {
+function NotificationsContent({ notifications, handleSelectUser, setActiveTab, handleClearAll }) {
   const [filter, setFilter] = React.useState('all');
 
   const filtered = notifications.filter(n => {
@@ -5212,53 +5240,91 @@ function NotificationsContent({ notifications, handleSelectUser, setActiveTab, s
   const secCount = notifications.filter(n => n.type === 'security').length;
 
   const filterTabs = [
-    { key: 'all', label: 'All', count: notifications.length },
-    { key: 'messages', label: 'Messages', count: msgCount },
-    { key: 'security', label: 'Security', count: secCount },
+    { key: 'all', label: 'All', count: notifications.length, color: '#6366f1' },
+    { key: 'messages', label: 'Messages', count: msgCount, color: '#6366f1' },
+    { key: 'security', label: 'Security', count: secCount, color: '#ef4444' },
   ];
 
   return (
     <div className="flex flex-col h-full w-full overflow-hidden" style={{ background: 'transparent' }}>
       {/* ─── HEADER ─────────────────────────────────────── */}
-      <div className="shrink-0 px-10 pt-10 pb-6 border-b border-[rgba(255,255,255,0.05)]" style={{ background: 'rgba(13,17,26,0.7)', backdropFilter: 'blur(24px)' }}>
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-5">
-            <div className="relative">
-              <div className="absolute inset-0 bg-[var(--primary)] blur-[20px] opacity-40 rounded-2xl" />
-              <div className="relative p-3 bg-[rgba(99,102,241,0.15)] rounded-2xl border border-[rgba(99,102,241,0.4)] shadow-[0_0_25px_rgba(99,102,241,0.3)]">
-                <Bell size={30} className="text-[var(--primary)]" />
+      <div style={{
+        padding: '32px 40px 24px',
+        background: 'linear-gradient(180deg, rgba(13,17,26,0.95) 0%, rgba(13,17,26,0.75) 100%)',
+        backdropFilter: 'blur(28px)',
+        borderBottom: '1px solid rgba(255,255,255,0.06)',
+        flexShrink: 0,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '24px', gap: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '18px' }}>
+            <div style={{ position: 'relative' }}>
+              <div style={{ position: 'absolute', inset: 0, background: 'var(--primary)', filter: 'blur(24px)', opacity: 0.35, borderRadius: '16px' }} />
+              <div style={{
+                position: 'relative', padding: '14px', background: 'rgba(99,102,241,0.12)',
+                borderRadius: '18px', border: '1px solid rgba(99,102,241,0.35)',
+                boxShadow: '0 0 30px rgba(99,102,241,0.25)',
+              }}>
+                <Bell size={28} color="var(--primary)" />
               </div>
             </div>
             <div>
-              <h2 className="text-3xl font-black text-white tracking-tight" style={{ textShadow: '0 0 30px rgba(99,102,241,0.5)' }}>Notification Center</h2>
-              <p className="text-[var(--text-muted)] text-xs font-bold uppercase tracking-[0.15em] mt-0.5">Secure transmission signals & system events</p>
+              <h2 style={{
+                fontSize: '28px', fontWeight: 900, color: '#fff', margin: 0,
+                letterSpacing: '-0.03em', lineHeight: 1,
+                textShadow: '0 0 40px rgba(99,102,241,0.5)',
+              }}>Notification Center</h2>
+              <p style={{ color: 'var(--text-muted)', fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.16em', marginTop: '6px' }}>
+                Live system events &amp; signals
+              </p>
             </div>
           </div>
-          <button
-            onClick={() => setNotifications([])}
-            className="px-5 py-2.5 rounded-xl border border-[rgba(255,255,255,0.05)] bg-[rgba(255,255,255,0.02)] text-[var(--text-muted)] hover:text-red-400 hover:border-[rgba(239,68,68,0.3)] cursor-pointer hover:bg-[rgba(239,68,68,0.05)] transition-all font-bold text-[10px] uppercase tracking-[0.15em]"
-          >
-            Clear All
-          </button>
+          {notifications.length > 0 && (
+            <button
+              onClick={handleClearAll}
+              style={{
+                padding: '8px 16px', borderRadius: '12px',
+                border: '1px solid rgba(239,68,68,0.25)',
+                background: 'rgba(239,68,68,0.06)', color: '#ef4444',
+                cursor: 'pointer', fontWeight: 700, fontSize: '11px',
+                textTransform: 'uppercase', letterSpacing: '0.14em',
+                transition: 'all 0.2s', fontFamily: 'inherit',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.14)'; e.currentTarget.style.borderColor = 'rgba(239,68,68,0.4)'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.06)'; e.currentTarget.style.borderColor = 'rgba(239,68,68,0.25)'; }}
+            >
+              Clear All
+            </button>
+          )}
         </div>
 
         {/* Filter Tabs */}
-        <div className="flex gap-2">
+        <div style={{ display: 'flex', gap: '8px' }}>
           {filterTabs.map(tab => (
             <button
               key={tab.key}
               onClick={() => setFilter(tab.key)}
-              className={`relative px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-[0.15em] cursor-pointer transition-all duration-300 ${filter === tab.key
-                  ? 'bg-[rgba(99,102,241,0.15)] text-[var(--primary)] border border-[rgba(99,102,241,0.4)] shadow-[0_0_20px_rgba(99,102,241,0.2)]'
-                  : 'text-[var(--text-muted)] hover:text-white border border-transparent hover:border-[rgba(255,255,255,0.05)] hover:bg-[rgba(255,255,255,0.03)]'
-                }`}
+              style={{
+                position: 'relative', padding: '8px 18px', borderRadius: '12px',
+                fontSize: '11px', fontWeight: 800, textTransform: 'uppercase',
+                letterSpacing: '0.14em', cursor: 'pointer', transition: 'all 0.25s',
+                fontFamily: 'inherit',
+                background: filter === tab.key ? 'rgba(99,102,241,0.15)' : 'rgba(255,255,255,0.03)',
+                color: filter === tab.key ? 'var(--primary)' : 'var(--text-muted)',
+                border: filter === tab.key ? '1px solid rgba(99,102,241,0.4)' : '1px solid rgba(255,255,255,0.05)',
+                boxShadow: filter === tab.key ? '0 0 20px rgba(99,102,241,0.18)' : 'none',
+              }}
             >
               {tab.label}
               {tab.count > 0 && (
-                <span className={`ml-2 inline-flex items-center justify-center w-5 h-5 rounded-full text-[9px] font-black ${filter === tab.key
-                    ? 'bg-[var(--primary)] text-white shadow-[0_0_10px_var(--primary)]'
-                    : 'bg-[rgba(255,255,255,0.08)] text-[var(--text-muted)]'
-                  }`}>
+                <span style={{
+                  marginLeft: '8px',
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  width: '20px', height: '20px', borderRadius: '50%',
+                  fontSize: '9px', fontWeight: 900,
+                  background: filter === tab.key ? 'var(--primary)' : 'rgba(255,255,255,0.08)',
+                  color: filter === tab.key ? '#fff' : 'var(--text-muted)',
+                  boxShadow: filter === tab.key ? '0 0 8px var(--primary)' : 'none',
+                }}>
                   {tab.count}
                 </span>
               )}
@@ -5268,29 +5334,33 @@ function NotificationsContent({ notifications, handleSelectUser, setActiveTab, s
       </div>
 
       {/* ─── LIST ───────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+      <div style={{ flex: 1, overflowY: 'auto', padding: '28px 40px' }}>
         {filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center py-24">
-            <div className="relative mb-8">
-              <div className="absolute inset-0 bg-indigo-700 blur-[60px] opacity-10 rounded-full scale-150" />
-              <div className="relative p-10 rounded-[2.5rem] bg-[rgba(255,255,255,0.02)] border border-[rgba(255,255,255,0.04)] shadow-inner">
-                <BellOff size={52} className="text-[var(--text-muted)] opacity-30" />
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', textAlign: 'center', padding: '60px 20px' }}>
+            <div style={{ position: 'relative', marginBottom: '28px' }}>
+              <div style={{ position: 'absolute', inset: 0, background: '#6366f1', filter: 'blur(80px)', opacity: 0.08, borderRadius: '50%', transform: 'scale(1.5)' }} />
+              <div style={{
+                position: 'relative', padding: '40px', borderRadius: '40px',
+                background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05)',
+              }}>
+                <BellOff size={48} color="var(--text-muted)" style={{ opacity: 0.3 }} />
               </div>
             </div>
-            <h3 className="text-2xl font-black text-white uppercase tracking-[0.2em] mb-3">All Clear</h3>
-            <p className="text-[var(--text-secondary)] font-semibold text-sm max-w-xs">
+            <h3 style={{ fontSize: '22px', fontWeight: 900, color: '#fff', textTransform: 'uppercase', letterSpacing: '0.18em', margin: '0 0 10px 0' }}>All Clear</h3>
+            <p style={{ color: 'var(--text-secondary)', fontWeight: 500, fontSize: '14px', maxWidth: '280px', lineHeight: 1.6 }}>
               {filter === 'all' ? 'No notifications in the queue.' : `No ${filter} notifications found.`}
             </p>
           </div>
         ) : (
-          <div className="space-y-3 max-w-4xl mx-auto">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxWidth: '860px', margin: '0 auto' }}>
             {filtered.map((n, i) => {
               const isSecurity = n.type === 'security';
-              const accentColor = isSecurity ? 'var(--red-color)' : 'var(--primary)';
+              const accentColor = isSecurity ? '#ef4444' : 'var(--primary)';
               const accentRgb = isSecurity ? '239,68,68' : '99,102,241';
               return (
                 <div
-                  key={n.id}
+                  key={n.id || i}
                   onClick={() => {
                     if (n.type === 'message') {
                       setActiveTab('messages');
@@ -5299,35 +5369,45 @@ function NotificationsContent({ notifications, handleSelectUser, setActiveTab, s
                       setActiveTab('alerts');
                     }
                   }}
-                  className="group relative flex items-center gap-5 p-5 rounded-2xl cursor-pointer overflow-hidden transition-all duration-300"
                   style={{
-                    background: 'rgba(13,17,26,0.5)',
+                    display: 'flex', alignItems: 'center', gap: '16px', padding: '16px 20px',
+                    borderRadius: '18px', cursor: 'pointer',
+                    background: 'rgba(13,17,26,0.55)',
                     backdropFilter: 'blur(20px)',
-                    border: '1px solid rgba(255,255,255,0.04)',
-                    boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
+                    border: '1px solid rgba(255,255,255,0.045)',
+                    boxShadow: '0 4px 20px rgba(0,0,0,0.35)',
+                    transition: 'all 0.25s cubic-bezier(0.4,0,0.2,1)',
+                    position: 'relative', overflow: 'hidden',
                   }}
                   onMouseEnter={e => {
                     e.currentTarget.style.borderColor = `rgba(${accentRgb},0.4)`;
-                    e.currentTarget.style.boxShadow = `0 8px 30px rgba(${accentRgb},0.15), inset 0 1px 0 rgba(255,255,255,0.07)`;
+                    e.currentTarget.style.boxShadow = `0 10px 32px rgba(${accentRgb},0.12), inset 0 1px 0 rgba(255,255,255,0.07)`;
                     e.currentTarget.style.transform = 'translateY(-2px)';
-                    e.currentTarget.style.background = `rgba(${accentRgb},0.04)`;
+                    e.currentTarget.style.background = `rgba(${accentRgb},0.05)`;
                   }}
                   onMouseLeave={e => {
-                    e.currentTarget.style.borderColor = 'rgba(255,255,255,0.04)';
-                    e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.4)';
+                    e.currentTarget.style.borderColor = 'rgba(255,255,255,0.045)';
+                    e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.35)';
                     e.currentTarget.style.transform = 'translateY(0)';
-                    e.currentTarget.style.background = 'rgba(13,17,26,0.5)';
+                    e.currentTarget.style.background = 'rgba(13,17,26,0.55)';
                   }}
                 >
-                  {/* Left accent line */}
-                  <div className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-2xl opacity-70 group-hover:opacity-100 transition-opacity"
-                    style={{ background: `linear-gradient(to bottom, transparent, ${accentColor}, transparent)` }} />
+                  {/* Left accent bar */}
+                  <div style={{
+                    position: 'absolute', left: 0, top: 0, bottom: 0, width: '3px',
+                    background: `linear-gradient(to bottom, transparent, ${accentColor}, transparent)`,
+                    opacity: 0.7, borderRadius: '0 3px 3px 0',
+                  }} />
 
                   {/* Icon */}
-                  <div className="relative shrink-0">
-                    <div className="absolute inset-0 blur-[12px] opacity-30 rounded-xl" style={{ background: accentColor }} />
-                    <div className="relative w-12 h-12 rounded-xl flex items-center justify-center border border-[rgba(255,255,255,0.05)]"
-                      style={{ background: `rgba(${accentRgb},0.08)` }}>
+                  <div style={{ position: 'relative', flexShrink: 0 }}>
+                    <div style={{ position: 'absolute', inset: 0, filter: 'blur(10px)', opacity: 0.28, borderRadius: '12px', background: accentColor }} />
+                    <div style={{
+                      position: 'relative', width: '46px', height: '46px', borderRadius: '14px',
+                      background: `rgba(${accentRgb},0.1)`,
+                      border: '1px solid rgba(255,255,255,0.06)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>
                       {isSecurity
                         ? <Shield size={22} style={{ color: accentColor }} />
                         : <MessageSquare size={22} style={{ color: accentColor }} />
@@ -5336,21 +5416,28 @@ function NotificationsContent({ notifications, handleSelectUser, setActiveTab, s
                   </div>
 
                   {/* Body */}
-                  <div className="flex-1 min-w-0 z-10">
-                    <div className="flex items-center gap-3 mb-1">
-                      <span className="text-[10px] font-black uppercase tracking-[0.18em] px-2.5 py-0.5 rounded-full border"
-                        style={{ color: accentColor, borderColor: `rgba(${accentRgb},0.3)`, background: `rgba(${accentRgb},0.06)` }}>
-                        {isSecurity ? '🔴 Security Threat' : '💬 Message'}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '5px', flexWrap: 'wrap' }}>
+                      <span style={{
+                        fontSize: '9px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.18em',
+                        padding: '3px 10px', borderRadius: '20px',
+                        color: accentColor,
+                        border: `1px solid rgba(${accentRgb},0.3)`,
+                        background: `rgba(${accentRgb},0.07)`,
+                      }}>
+                        {isSecurity ? 'Security Alert' : 'Message'}
                       </span>
-                      <span className="text-[10px] font-bold text-[var(--text-muted)] ml-auto shrink-0">
+                      <span style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 600, marginLeft: 'auto', flexShrink: 0 }}>
                         {new Date(n.timestamp).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
                       </span>
                     </div>
-                    <p className="text-white font-semibold leading-snug truncate">{n.message}</p>
+                    <p style={{ color: '#fff', fontWeight: 600, fontSize: '14px', margin: 0, lineHeight: '1.45', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {n.message}
+                    </p>
                   </div>
 
                   {/* Arrow */}
-                  <ChevronRight size={18} className="shrink-0 text-[var(--text-muted)] group-hover:text-white group-hover:translate-x-1 transition-all duration-300 z-10" />
+                  <ChevronRight size={16} style={{ flexShrink: 0, color: 'var(--text-muted)', transition: 'all 0.2s' }} />
                 </div>
               );
             })}
@@ -5361,11 +5448,13 @@ function NotificationsContent({ notifications, handleSelectUser, setActiveTab, s
   );
 }
 
+
+
 function AlertsContent({ onUpdateCount }) {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('all'); // all, unread, security
+  const [filter, setFilter] = useState('all');
 
   const loadNotifications = async () => {
     try {
@@ -5418,147 +5507,265 @@ function AlertsContent({ onUpdateCount }) {
     return true;
   });
 
-  const getIcon = (item) => {
-    if (item.type?.includes('SECURITY') || item.priority === 'high' || item.priority === 'critical')
-      return <AlertTriangle size={20} color="#ef4444" />;
-    if (item.type === 'MESSAGE') return <MessageSquare size={20} color="#667eea" />;
-    if (item.type?.includes('FILE')) return <FileText size={20} color="#22c55e" />;
-    return <Bell size={20} color="#8b98a5" />;
+  const getAccentColor = (item) => {
+    if (item.priority === 'critical' || item.type?.includes('SECURITY')) return '#ef4444';
+    if (item.priority === 'high') return '#f59e0b';
+    if (item.type === 'MESSAGE') return '#6366f1';
+    if (item.type?.includes('FILE')) return '#22c55e';
+    return '#8b98a5';
   };
 
+  const getIcon = (item) => {
+    const color = getAccentColor(item);
+    if (item.type?.includes('SECURITY') || item.priority === 'critical') return <AlertTriangle size={20} color={color} />;
+    if (item.type === 'MESSAGE') return <MessageSquare size={20} color={color} />;
+    if (item.type?.includes('FILE')) return <FileText size={20} color={color} />;
+    return <Bell size={20} color={color} />;
+  };
+
+  const getPriorityLabel = (item) => {
+    if (item.priority === 'critical') return { label: 'Critical', color: '#ef4444' };
+    if (item.priority === 'high') return { label: 'High', color: '#f59e0b' };
+    if (item.priority === 'medium') return { label: 'Medium', color: '#6366f1' };
+    if (item.priority === 'low') return { label: 'Low', color: '#8b98a5' };
+    return null;
+  };
+
+  const filterConfig = [
+    { key: 'all', label: 'All', count: notifications.length },
+    { key: 'unread', label: 'Unread', count: unreadCount },
+    { key: 'security', label: 'Security', count: notifications.filter(n => n.type?.includes('SECURITY') || n.priority === 'critical' || n.priority === 'high').length },
+  ];
+
   return (
-    <div style={{ padding: '40px', color: 'var(--text-main)', maxWidth: '900px', margin: '0 auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', flexWrap: 'wrap', gap: '20px' }}>
-        <div>
-          <h2 style={{ fontSize: '32px', margin: 0, fontWeight: '700', color: 'var(--text-main)' }}>Notification Center</h2>
-          <p style={{ color: 'var(--text-muted)', marginTop: '8px' }}>Stay updated with your account activity</p>
-        </div>
-        <div style={{ display: 'flex', gap: '10px' }}>
-          <button
-            onClick={handleMarkAllRead}
-            style={{
-              background: 'var(--bg-panel)', color: 'var(--text-main)', border: '1px solid var(--border-color)',
-              padding: '10px 18px', borderRadius: '12px', cursor: 'pointer', fontSize: '14px',
-              display: 'flex', alignItems: 'center', gap: '8px',
-              transition: 'all 0.2s'
-            }}
-            onMouseEnter={e => e.currentTarget.style.background = 'var(--active-bg)'}
-            onMouseLeave={e => e.currentTarget.style.background = 'var(--bg-panel)'}
-          >
-            <CheckCheck size={16} /> Mark all read
-          </button>
-        </div>
-      </div>
-
-      <div style={{ display: 'flex', gap: '12px', marginBottom: '30px', flexWrap: 'wrap' }}>
-        {['all', 'unread', 'security'].map(f => (
-          <button
-            key={f}
-            onClick={() => setFilter(f)}
-            style={{
-              padding: '10px 24px',
-              background: filter === f ? '#667eea' : 'var(--bg-panel)',
-              color: filter === f ? '#fff' : 'var(--text-main)',
-              border: filter === f ? 'none' : '1px solid var(--border-color)',
-              borderRadius: '12px',
-              cursor: 'pointer',
-              textTransform: 'capitalize',
-              fontSize: '14px',
-              fontWeight: '600',
-              transition: 'all 0.2s',
-              boxShadow: filter === f ? '0 4px 12px rgba(102, 126, 234, 0.4)' : 'none'
-            }}
-          >
-            {f} {f === 'unread' && unreadCount > 0 && `(${unreadCount})`}
-          </button>
-        ))}
-      </div>
-
-      <div style={{ display: 'grid', gap: '15px' }}>
-        {loading ? (
-          <div style={{ textAlign: 'center', padding: '100px', color: '#8b98a5' }}>
-            <div className="shimmer" style={{ width: '100%', height: '100px', borderRadius: '20px', background: '#151f2e' }} />
-          </div>
-        ) : filtered.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '80px 20px', background: 'var(--bg-panel)', borderRadius: '24px', border: '2px dashed var(--border-color)' }}>
-            <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: 'rgba(102, 126, 234, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
-              <Bell size={40} color="#667eea" style={{ opacity: 0.5 }} />
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      {/* ─── HEADER ─────────────────────────────────────── */}
+      <div style={{
+        padding: '32px 40px 24px',
+        background: 'linear-gradient(180deg, rgba(13,17,26,0.95) 0%, rgba(13,17,26,0.75) 100%)',
+        backdropFilter: 'blur(28px)',
+        borderBottom: '1px solid rgba(255,255,255,0.06)',
+        flexShrink: 0,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '24px', gap: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '18px' }}>
+            <div style={{ position: 'relative' }}>
+              <div style={{ position: 'absolute', inset: 0, background: '#ef4444', filter: 'blur(24px)', opacity: 0.3, borderRadius: '16px' }} />
+              <div style={{
+                position: 'relative', padding: '14px',
+                background: 'rgba(239,68,68,0.1)', borderRadius: '18px',
+                border: '1px solid rgba(239,68,68,0.3)',
+                boxShadow: '0 0 30px rgba(239,68,68,0.2)',
+              }}>
+                <AlertTriangle size={28} color="#ef4444" />
+              </div>
             </div>
-            <h3 style={{ margin: '0 0 10px 0', fontSize: '20px', color: 'var(--text-main)' }}>No News is Good News</h3>
-            <p style={{ color: 'var(--text-muted)', fontSize: '16px', maxWidth: '300px', margin: '0 auto' }}>You are all caught up! There are no {filter !== 'all' ? filter : ''} notifications at the moment.</p>
+            <div>
+              <h2 style={{
+                fontSize: '28px', fontWeight: 900, color: '#fff', margin: 0,
+                letterSpacing: '-0.03em', lineHeight: 1,
+                textShadow: '0 0 40px rgba(239,68,68,0.4)',
+              }}>Alert Center</h2>
+              <p style={{ color: 'var(--text-muted)', fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.16em', marginTop: '6px' }}>
+                System notifications & security alerts
+              </p>
+            </div>
           </div>
-        ) : (
-          filtered.map(n => (
-            <div
-              key={n.id}
+          {unreadCount > 0 && (
+            <button
+              onClick={handleMarkAllRead}
               style={{
-                background: n.isRead ? 'var(--bg-panel)' : 'rgba(102, 126, 234, 0.05)',
-                padding: '24px',
-                borderRadius: '24px',
-                border: n.isRead ? '1px solid var(--border-color)' : '1px solid #667eea',
-                display: 'flex',
-                gap: '20px',
-                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                position: 'relative',
-                cursor: 'default'
+                padding: '8px 18px', borderRadius: '12px',
+                border: '1px solid rgba(99,102,241,0.3)',
+                background: 'rgba(99,102,241,0.08)', color: '#6366f1',
+                cursor: 'pointer', fontWeight: 700, fontSize: '11px',
+                textTransform: 'uppercase', letterSpacing: '0.12em',
+                transition: 'all 0.2s', fontFamily: 'inherit',
+                display: 'flex', alignItems: 'center', gap: '6px',
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = 'rgba(99,102,241,0.16)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'rgba(99,102,241,0.08)'}
+            >
+              <CheckCheck size={14} /> Mark all read
+            </button>
+          )}
+        </div>
+
+        {/* Filter Pills */}
+        <div style={{ display: 'flex', gap: '8px' }}>
+          {filterConfig.map(f => (
+            <button
+              key={f.key}
+              onClick={() => setFilter(f.key)}
+              style={{
+                padding: '8px 18px', borderRadius: '12px',
+                fontSize: '11px', fontWeight: 800, textTransform: 'uppercase',
+                letterSpacing: '0.14em', cursor: 'pointer', transition: 'all 0.25s',
+                fontFamily: 'inherit',
+                background: filter === f.key ? 'rgba(99,102,241,0.15)' : 'rgba(255,255,255,0.03)',
+                color: filter === f.key ? '#6366f1' : 'var(--text-muted)',
+                border: filter === f.key ? '1px solid rgba(99,102,241,0.4)' : '1px solid rgba(255,255,255,0.05)',
+                boxShadow: filter === f.key ? '0 0 20px rgba(99,102,241,0.18)' : 'none',
               }}
             >
+              {f.label}
+              {f.count > 0 && (
+                <span style={{
+                  marginLeft: '8px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  width: '20px', height: '20px', borderRadius: '50%', fontSize: '9px', fontWeight: 900,
+                  background: filter === f.key ? '#6366f1' : 'rgba(255,255,255,0.08)',
+                  color: filter === f.key ? '#fff' : 'var(--text-muted)',
+                  boxShadow: filter === f.key ? '0 0 8px #6366f1' : 'none',
+                }}>
+                  {f.count}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ─── LIST ───────────────────────────────────────── */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '28px 40px' }}>
+        {loading ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxWidth: '860px', margin: '0 auto' }}>
+            {[1, 2, 3].map(i => (
+              <div key={i} style={{
+                height: '96px', borderRadius: '18px',
+                background: 'rgba(255,255,255,0.03)',
+                border: '1px solid rgba(255,255,255,0.05)',
+                animation: 'pulse 1.5s ease-in-out infinite',
+              }} />
+            ))}
+          </div>
+        ) : filtered.length === 0 ? (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', textAlign: 'center', padding: '60px 20px' }}>
+            <div style={{ position: 'relative', marginBottom: '28px' }}>
+              <div style={{ position: 'absolute', inset: 0, background: '#6366f1', filter: 'blur(80px)', opacity: 0.07, borderRadius: '50%', transform: 'scale(1.5)' }} />
               <div style={{
-                width: '56px', height: '56px', borderRadius: '18px', background: 'var(--bg-main)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                boxShadow: '0 4px 12px rgba(0,0,0,0.2)'
+                position: 'relative', padding: '40px', borderRadius: '40px',
+                background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)',
               }}>
-                {getIcon(n)}
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', alignItems: 'flex-start' }}>
-                  <div style={{ fontWeight: '700', fontSize: '18px', display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--text-main)' }}>
-                    {n.title}
-                    {!n.isRead && <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#667eea' }} />}
-                  </div>
-                  <div style={{ fontSize: '13px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{new Date(n.createdAt).toLocaleDateString()} {new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
-                </div>
-                <div style={{ color: 'var(--text-muted)', fontSize: '15px', lineHeight: '1.6', marginBottom: '20px' }}>{n.message}</div>
-                <div style={{ display: 'flex', gap: '12px', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <div style={{ display: 'flex', gap: '12px' }}>
-                    {!n.isRead && (
-                      <button
-                        onClick={() => handleMarkAsRead(n.id)}
-                        style={{ background: '#667eea', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '12px', cursor: 'pointer', fontSize: '13px', fontWeight: '600', transition: 'all 0.2s' }}
-                        onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
-                        onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
-                      >
-                        Mark as Read
-                      </button>
-                    )}
-                    {n.actionUrl && (
-                      <button
-                        onClick={() => window.open(n.actionUrl, '_blank')}
-                        style={{ background: 'transparent', color: 'var(--text-main)', border: '1px solid var(--border-color)', padding: '10px 20px', borderRadius: '12px', cursor: 'pointer', fontSize: '13px', fontWeight: '600', transition: 'all 0.2s' }}
-                        onMouseEnter={e => e.currentTarget.style.background = 'var(--active-bg)'}
-                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                      >
-                        {n.actionLabel || 'View Detail'}
-                      </button>
-                    )}
-                  </div>
-                  <button
-                    onClick={() => handleDelete(n.id)}
-                    style={{
-                      background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: 'none', width: '36px', height: '36px',
-                      borderRadius: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      transition: 'all 0.2s'
-                    }}
-                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)'}
-                    onMouseLeave={e => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)'}
-                    title="Delete permanently"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
+                <Bell size={48} color="var(--text-muted)" style={{ opacity: 0.25 }} />
               </div>
             </div>
-          ))
+            <h3 style={{ fontSize: '22px', fontWeight: 900, color: '#fff', textTransform: 'uppercase', letterSpacing: '0.18em', margin: '0 0 10px 0' }}>No News is Good News</h3>
+            <p style={{ color: 'var(--text-secondary)', fontWeight: 500, fontSize: '14px', maxWidth: '280px', lineHeight: 1.6 }}>
+              You are all caught up! No {filter !== 'all' ? filter : ''} notifications at the moment.
+            </p>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxWidth: '860px', margin: '0 auto' }}>
+            {filtered.map(n => {
+              const accentColor = getAccentColor(n);
+              const priority = getPriorityLabel(n);
+              const timeStr = n.createdAt
+                ? new Date(n.createdAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })
+                : '';
+              return (
+                <div
+                  key={n.id}
+                  style={{
+                    display: 'flex', gap: '16px', padding: '20px 22px',
+                    borderRadius: '18px',
+                    background: n.isRead ? 'rgba(13,17,26,0.45)' : 'rgba(13,17,26,0.7)',
+                    backdropFilter: 'blur(20px)',
+                    border: `1px solid ${n.isRead ? 'rgba(255,255,255,0.04)' : `${accentColor}28`}`,
+                    boxShadow: n.isRead ? '0 4px 16px rgba(0,0,0,0.3)' : `0 4px 24px rgba(0,0,0,0.4), 0 0 0 1px ${accentColor}15`,
+                    transition: 'all 0.2s',
+                    position: 'relative', overflow: 'hidden',
+                  }}
+                >
+                  {/* Unread accent bar */}
+                  {!n.isRead && (
+                    <div style={{
+                      position: 'absolute', left: 0, top: 0, bottom: 0, width: '4px',
+                      background: `linear-gradient(to bottom, transparent, ${accentColor}, transparent)`,
+                      borderRadius: '0 4px 4px 0',
+                    }} />
+                  )}
+                  {/* Icon */}
+                  <div style={{
+                    width: '52px', height: '52px', borderRadius: '16px', flexShrink: 0,
+                    background: `${accentColor}12`,
+                    border: `1px solid ${accentColor}25`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    boxShadow: `0 0 20px ${accentColor}14`,
+                  }}>
+                    {getIcon(n)}
+                  </div>
+                  {/* Content */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', marginBottom: '6px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '15px', fontWeight: n.isRead ? 600 : 800, color: '#fff', lineHeight: '1.3' }}>{n.title}</span>
+                        {!n.isRead && <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: accentColor, boxShadow: `0 0 8px ${accentColor}`, flexShrink: 0 }} />}
+                        {priority && (
+                          <span style={{
+                            fontSize: '9px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em',
+                            color: priority.color, background: `${priority.color}14`,
+                            padding: '2px 9px', borderRadius: '6px', border: `1px solid ${priority.color}30`,
+                          }}>{priority.label}</span>
+                        )}
+                      </div>
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0 }}>{timeStr}</span>
+                    </div>
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '13px', lineHeight: '1.6', margin: '0 0 14px 0', fontWeight: 500 }}>{n.message}</p>
+                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        {!n.isRead && (
+                          <button
+                            onClick={() => handleMarkAsRead(n.id)}
+                            style={{
+                              background: 'rgba(99,102,241,0.1)', color: '#6366f1',
+                              border: '1px solid rgba(99,102,241,0.25)', padding: '7px 16px',
+                              borderRadius: '10px', cursor: 'pointer', fontSize: '11px',
+                              fontWeight: 700, fontFamily: 'inherit', transition: 'all 0.2s',
+                              display: 'flex', alignItems: 'center', gap: '6px',
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.background = 'rgba(99,102,241,0.2)'}
+                            onMouseLeave={e => e.currentTarget.style.background = 'rgba(99,102,241,0.1)'}
+                          >
+                            <CheckCheck size={13} /> Mark read
+                          </button>
+                        )}
+                        {n.actionUrl && (
+                          <button
+                            onClick={() => window.open(n.actionUrl, '_blank')}
+                            style={{
+                              background: 'rgba(255,255,255,0.04)', color: 'var(--text-secondary)',
+                              border: '1px solid rgba(255,255,255,0.08)', padding: '7px 16px',
+                              borderRadius: '10px', cursor: 'pointer', fontSize: '11px',
+                              fontWeight: 700, fontFamily: 'inherit', transition: 'all 0.2s',
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
+                            onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.04)'}
+                          >
+                            {n.actionLabel || 'View Detail'}
+                          </button>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => handleDelete(n.id)}
+                        style={{
+                          background: 'rgba(239,68,68,0.08)', color: '#ef4444',
+                          border: '1px solid rgba(239,68,68,0.2)', width: '34px', height: '34px',
+                          borderRadius: '10px', cursor: 'pointer',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          transition: 'all 0.2s', flexShrink: 0,
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.18)'; e.currentTarget.style.transform = 'scale(1.06)'; }}
+                        onMouseLeave={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.08)'; e.currentTarget.style.transform = 'scale(1)'; }}
+                        title="Delete permanently"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
     </div>
@@ -5892,12 +6099,31 @@ function ProjectsTasksContent() {
       await api.updateTask(task.id, { status: newStatus });
       setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: newStatus } : t));
       if (newStatus === 'done') {
-        setCompletionToast({ title: task.title });
-        setTimeout(() => setCompletionToast(null), 3500);
+        // Assume setCompletionToast is still available
+        if (typeof setCompletionToast !== 'undefined') {
+          setCompletionToast({ title: task.title });
+          setTimeout(() => setCompletionToast(null), 3500);
+        }
       }
     } catch (err) { alert('Failed to update'); }
   };
 
+  const handleDeleteTask = async (task) => {
+    if (!window.confirm(`Xác nhận xóa task "${task.title}"?`)) return;
+    try {
+      await api.deleteTask(task.id);
+      setTasks(prev => prev.filter(t => t.id !== task.id));
+    } catch (err) { alert('Delete failed: ' + err.message); }
+  };
+
+  const handleDeleteProject = async (project) => {
+    if (!window.confirm(`Xác nhận xóa dự án "${project.name}" và toàn bộ task bên trong?\nHành động này không thể hoàn tác.`)) return;
+    try {
+      await api.deleteProject(project.id);
+      setSelectedProject(null);
+      loadProjects();
+    } catch (err) { alert('Delete project failed: ' + err.message); }
+  };
   const getProjectProgress = (p) => {
     const projectTasks = p.tasks || tasks.filter(t => t.projectId === p.id);
     if (!projectTasks.length) return 0;
@@ -5957,6 +6183,9 @@ function ProjectsTasksContent() {
             opacity: task.status === 'done' ? 0.55 : 1,
           }}>{task.title}</span>
           {overdue && <span style={{ fontSize: '8px', fontWeight: '900', color: '#ef4444', background: '#ef444415', padding: '2px 6px', borderRadius: '6px', flexShrink: 0 }}>OVERDUE</span>}
+          <button onClick={(e) => { e.stopPropagation(); handleDeleteTask(task); }} style={{ marginLeft: 'auto', background: 'transparent', border: 'none', color: 'var(--red-color)', opacity: 0.5, cursor: 'pointer', padding: '4px' }} onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = 0.5}>
+            <Trash2 size={14} />
+          </button>
         </div>
 
         {/* Description */}
@@ -6103,6 +6332,11 @@ function ProjectsTasksContent() {
                     <Plus size={15} /> Add Task
                   </button>
                 )}
+                {user?.id === selectedProject.creatorId || isAdmin ? (
+                  <button onClick={() => handleDeleteProject(selectedProject)} style={{ background: '#ef444415', border: '1px solid #ef444430', color: 'var(--red-color)', width: '36px', height: '36px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} title="Delete Project">
+                    <Trash2 size={16} />
+                  </button>
+                ) : null}
                 <button onClick={() => setSelectedProject(null)} style={{ background: 'var(--bg-light)', border: 'none', color: 'var(--text-muted)', width: '36px', height: '36px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><X size={16} /></button>
               </div>
             </div>

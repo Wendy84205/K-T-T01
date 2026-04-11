@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Lock, Pin, MoreVertical, FileText, Download, Trash2, Reply, Forward, Edit2, Play, Pause, Mic, Check, CheckCheck, Clock } from 'lucide-react';
 import api from '../../utils/api';
 import socketService from '../../utils/socket';
+import { getInMemoryToken } from '../../context/AuthContext';
 
 const VoiceMessage = ({ fileId, isOwn }) => {
     const [audioUrl, setAudioUrl] = useState(null);
@@ -18,8 +19,10 @@ const VoiceMessage = ({ fileId, isOwn }) => {
         const loadAudio = async () => {
             try {
                 setLoading(true);
-                const token = localStorage.getItem('accessToken');
+                // FIX LỖ HỔNG 7: Dùng in-memory token thay vì localStorage
+                const token = getInMemoryToken();
                 const response = await fetch(`/api/v1/files/${fileId}/download`, {
+                    credentials: 'include',
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 const blob = await response.blob();

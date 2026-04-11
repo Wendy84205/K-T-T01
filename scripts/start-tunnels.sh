@@ -5,6 +5,9 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PROJECT_ROOT="$( cd "$SCRIPT_DIR/.." && pwd )"
 cd "$PROJECT_ROOT"
 
+# Ensure docker is found regardless of shell PATH
+export PATH="/usr/local/bin:/opt/homebrew/bin:$PATH"
+
 echo " Starting Cloudflare Tunnels for CyberSecure App..."
 echo ""
 
@@ -120,6 +123,32 @@ export const BACKEND_URL = '${BACKEND_URL}';
 export const API_BASE_URL = \`\${BACKEND_URL}/api/v1\`;
 EOF
     echo " Config updated at: frontend/src/config.js"
+fi
+
+# Inject FRONTEND_URL into docker-compose.yml + backend/.env for CORS and restart backend
+if [ -n "$FRONTEND_URL" ]; then
+    echo "  Updating Backend CORS settings..."
+    # macOS sed requires empty string for -i and -E is for extended regex
+
+    # 1. Update docker-compose.yml CORS_ORIGIN
+    sed -i '' -E "s|CORS_ORIGIN: \".*\"|CORS_ORIGIN: \"http://localhost:3000,$FRONTEND_URL\"|g" "$PROJECT_ROOT/docker-compose.yml"
+    echo " CORS settings updated in: docker-compose.yml"
+
+    # 2. Update backend/.env CORS_ORIGIN
+    sed -i '' -E "s|^CORS_ORIGIN=.*|CORS_ORIGIN=http://localhost:3000,$FRONTEND_URL|g" "$PROJECT_ROOT/backend/.env"
+    echo " CORS settings updated in: backend/.env"
+
+    # 3. Ensure SameSite=none + Secure=true (required for cross-domain Cloudflare tunnels)
+    #    SameSite=strict blocks cookies entirely when frontend/backend are on different domains
+    sed -i '' -E "s|^JWT_COOKIE_SECURE=.*|JWT_COOKIE_SECURE=true|g" "$PROJECT_ROOT/backend/.env"
+    sed -i '' -E "s|^JWT_COOKIE_SAME_SITE=.*|JWT_COOKIE_SAME_SITE=none|g" "$PROJECT_ROOT/backend/.env"
+    sed -i '' -E "s|JWT_COOKIE_SECURE: \".*\"|JWT_COOKIE_SECURE: \"true\"|g" "$PROJECT_ROOT/docker-compose.yml"
+    sed -i '' -E "s|JWT_COOKIE_SAME_SITE: .*|JWT_COOKIE_SAME_SITE: none|g" "$PROJECT_ROOT/docker-compose.yml"
+    echo " Cookie SameSite=none + Secure=true ensured (cross-domain fix)"
+
+    # 4. Restart backend to apply all changes
+    echo "  Restarting Backend to apply new CORS + Cookie settings..."
+    docker-compose -f "$PROJECT_ROOT/docker-compose.yml" up -d --force-recreate backend
 fi
 
 echo " URLs saved to: logs/tunnel-urls.txt"
