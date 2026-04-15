@@ -1,155 +1,187 @@
 #!/bin/bash
+# =============================================================
+# CyberSecure Enterprise - Start Script (Web + API Only)
+# =============================================================
+# Chạy: ./scripts/start-tunnels.sh
+# Dừng tunnels: pkill cloudflared
+# =============================================================
 
-# Determine the script directory and change to project root
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PROJECT_ROOT="$( cd "$SCRIPT_DIR/.." && pwd )"
 cd "$PROJECT_ROOT"
 
-# Ensure docker is found regardless of shell PATH
-export PATH="/usr/local/bin:/opt/homebrew/bin:$PATH"
+export PATH="/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
 
-echo " Starting Cloudflare Tunnels for CyberSecure App..."
-echo ""
+echo "======================================================"
+echo " 🛡️  CyberSecure - Web & API Startup"
+echo "======================================================"
 
-# Create logs directory if it doesn't exist
 mkdir -p "$PROJECT_ROOT/logs"
 
-# Function to extract tunnel URL with timeout
-get_tunnel_url() {
-    local log_file=$1
-    local name=$2
-    local timeout=30
-    local elapsed=0
-    
-    echo "    Waiting for $name tunnel to establish (timeout ${timeout}s)..." >&2
-    while [ $elapsed -lt $timeout ]; do
-        local url=$(grep -o 'https://[^[:space:]]*trycloudflare.com' "$log_file" | head -1)
-        if [ -n "$url" ]; then
-            echo "$url"
-            return 0
+# ─────────────────────────────────────────────────────────────
+# BƯỚC 1: ĐẢM BẢO DOCKER ĐANG CHẠY
+# ─────────────────────────────────────────────────────────────
+echo ""
+echo " 🐳 Kiểm tra Docker..."
+if ! docker ps >/dev/null 2>&1; then
+    echo "    Docker chưa chạy. Đang khởi động..."
+    open -a Docker
+    for i in {1..20}; do
+        if docker ps >/dev/null 2>&1; then
+            echo "    ✅ Docker đã sẵn sàng!"
+            break
         fi
-        sleep 2
-        elapsed=$((elapsed + 2))
+        printf "    Đang chờ ($i/20)...\r"
+        sleep 6
     done
-    return 1
-}
+    if ! docker ps >/dev/null 2>&1; then
+        echo "    ❌ Docker không phản hồi sau 2 phút. Vui lòng mở Docker Desktop thủ công."
+        exit 1
+    fi
+else
+    echo "    ✅ Docker đang chạy."
+fi
 
-# Kill existing cloudflared processes
-echo " Cleaning up existing tunnels..."
-pkill cloudflared
-sleep 2
+# ─────────────────────────────────────────────────────────────
+# BƯỚC 2: KHỞI ĐỘNG MYSQL TRƯỚC
+# ─────────────────────────────────────────────────────────────
+echo ""
+echo " 🗄️  Khởi động MySQL..."
+MYSQL_STATUS=$(docker inspect --format='{{.State.Health.Status}}' cybersecure-mysql 2>/dev/null)
 
-# Start Frontend Tunnel (Port 3000)
-echo " Starting Frontend Tunnel (Port 3000)..."
-nohup cloudflared tunnel --url http://localhost:3000 > "$PROJECT_ROOT/logs/cloudflare-frontend.log" 2>&1 &
+if [ "$MYSQL_STATUS" != "healthy" ]; then
+    docker-compose -f "$PROJECT_ROOT/docker-compose.yml" up -d mysql >/dev/null 2>&1
+    echo "    Đang chờ MySQL healthy..."
+    for i in {1..20}; do
+        MYSQL_STATUS=$(docker inspect --format='{{.State.Health.Status}}' cybersecure-mysql 2>/dev/null)
+        if [ "$MYSQL_STATUS" = "healthy" ]; then
+            echo "    ✅ MySQL healthy!"
+            break
+        fi
+        printf "    MySQL: $MYSQL_STATUS ($i/20)...\r"
+        sleep 5
+    done
+else
+    echo "    ✅ MySQL đã healthy."
+fi
+
+# ─────────────────────────────────────────────────────────────
+# BƯỚC 3: KHỞI ĐỘNG BACKEND + FRONTEND
+# ─────────────────────────────────────────────────────────────
+echo ""
+echo " ⚙️  Khởi động Backend & Frontend..."
+docker-compose -f "$PROJECT_ROOT/docker-compose.yml" up -d backend frontend 2>/dev/null
+sleep 5
+
+# Confirm they're up
+BACKEND_RUNNING=$(docker inspect --format='{{.State.Status}}' cybersecure-backend 2>/dev/null)
+FRONTEND_RUNNING=$(docker inspect --format='{{.State.Status}}' cybersecure-frontend 2>/dev/null)
+echo "    Backend: $BACKEND_RUNNING | Frontend: $FRONTEND_RUNNING"
+
+# ─────────────────────────────────────────────────────────────
+# BƯỚC 4: KHỞI ĐỘNG CLOUDFLARE TUNNELS
+# ─────────────────────────────────────────────────────────────
+echo ""
+echo " 🌐 Dọn dẹp tunnels cũ..."
+pkill -f cloudflared 2>/dev/null || true
+sleep 3
+truncate -s 0 "$PROJECT_ROOT/logs/cloudflare-frontend.log"
+truncate -s 0 "$PROJECT_ROOT/logs/cloudflare-backend.log"
+
+echo " 🌐 Khởi động Frontend Tunnel (Port 3000)..."
+nohup cloudflared tunnel --url http://127.0.0.1:3000 > "$PROJECT_ROOT/logs/cloudflare-frontend.log" 2>&1 &
 FRONTEND_PID=$!
-echo "   Frontend PID: $FRONTEND_PID"
 
-FRONTEND_URL=$(get_tunnel_url "$PROJECT_ROOT/logs/cloudflare-frontend.log" "Frontend")
-
-if [ $? -ne 0 ] || [ -z "$FRONTEND_URL" ]; then
-    echo "    Failed to extract Frontend URL. Check logs/cloudflare-frontend.log"
-    # Show last few lines of log to help debug
-    tail -n 5 "$PROJECT_ROOT/logs/cloudflare-frontend.log"
-else
-    echo "    Frontend URL: $FRONTEND_URL"
-fi
-
-echo ""
-
-# Start Backend Tunnel (Port 3001)
-echo " Starting Backend Tunnel (Port 3001)..."
-nohup cloudflared tunnel --url http://localhost:3001 > "$PROJECT_ROOT/logs/cloudflare-backend.log" 2>&1 &
+echo " ⚙️  Khởi động Backend Tunnel (Port 3001)..."
+nohup cloudflared tunnel --url http://127.0.0.1:3001 > "$PROJECT_ROOT/logs/cloudflare-backend.log" 2>&1 &
 BACKEND_PID=$!
-echo "   Backend PID: $BACKEND_PID"
 
-BACKEND_URL=$(get_tunnel_url "$PROJECT_ROOT/logs/cloudflare-backend.log" "Backend")
+# ─────────────────────────────────────────────────────────────
+# BƯỚC 5: CHỜ URLS CLOUDFLARE
+# ─────────────────────────────────────────────────────────────
+echo ""
+echo " ⏳ Đang chờ URLs từ Cloudflare (tối đa 45s)..."
+TIMEOUT=45; ELAPSED=0
+while [ $ELAPSED -lt $TIMEOUT ]; do
+    FRONTEND_URL=$(grep -o 'https://[^[:space:]]*trycloudflare.com' "$PROJECT_ROOT/logs/cloudflare-frontend.log" 2>/dev/null | grep -v "api.trycloudflare.com" | tail -1)
+    BACKEND_URL=$(grep -o 'https://[^[:space:]]*trycloudflare.com' "$PROJECT_ROOT/logs/cloudflare-backend.log" 2>/dev/null | grep -v "api.trycloudflare.com" | tail -1)
+    if [ -n "$FRONTEND_URL" ] && [ -n "$BACKEND_URL" ]; then
+        break
+    fi
+    printf "    Đang kết nối Cloudflare... (${ELAPSED}s)\r"
+    sleep 3
+    ELAPSED=$((ELAPSED + 3))
+done
 
-if [ $? -ne 0 ] || [ -z "$BACKEND_URL" ]; then
-    echo "    Failed to extract Backend URL. Check logs/cloudflare-backend.log"
-    tail -n 5 "$PROJECT_ROOT/logs/cloudflare-backend.log"
-else
-    echo "    Backend URL: $BACKEND_URL"
+if [ -z "$FRONTEND_URL" ] || [ -z "$BACKEND_URL" ]; then
+    echo ""
+    echo " ⚠️  Không lấy được URL từ Cloudflare!"
+    echo "    Có thể bị Rate Limit (429). Đợi 10-15 phút rồi chạy lại script."
+    echo ""
+    echo " 🔍 Kiểm tra log:"
+    tail -n 3 "$PROJECT_ROOT/logs/cloudflare-frontend.log"
+    echo ""
+    echo " 📌 Bạn vẫn có thể truy cập local:"
+    echo "    Frontend: http://127.0.0.1:3000"
+    echo "    Backend:  http://127.0.0.1:3001"
+    echo "======================================================"
+    exit 1
 fi
 
+# ─────────────────────────────────────────────────────────────
+# BƯỚC 6: CẬP NHẬT CẤU HÌNH TỰ ĐỘNG
+# ─────────────────────────────────────────────────────────────
 echo ""
-echo ""
-echo " TUNNEL INFORMATION"
-echo ""
-echo ""
-echo " Access URLs:"
-echo "   Frontend: $FRONTEND_URL"
-echo "   Backend:  $BACKEND_URL"
-echo ""
-echo " Process IDs:"
-echo "   Frontend PID: $FRONTEND_PID"
-echo "   Backend PID:  $BACKEND_PID"
-echo ""
-echo " Log Files:"
-echo "   Frontend: logs/cloudflare-frontend.log"
-echo "   Backend:  logs/cloudflare-backend.log"
-echo ""
-echo "  Useful Commands:"
-echo "   View Frontend logs: tail -f logs/cloudflare-frontend.log"
-echo "   View Backend logs:  tail -f logs/cloudflare-backend.log"
-echo "   Stop tunnels:       pkill cloudflared"
-echo "   Check status:       ps aux | grep cloudflared"
-echo ""
-echo ""
-echo ""
-echo " Tunnels are now running in the background!"
-echo " Tip: URLs will change each time you restart the tunnels."
-echo ""
+echo " 🛠️  Cập nhật cấu hình với URLs mới..."
 
-# Save URLs to file for easy access
+# Cập nhật frontend/src/config.js
+cat > "$PROJECT_ROOT/frontend/src/config.js" << EOF
+// AUTO-GENERATED - DO NOT EDIT MANUALLY
+export const BACKEND_URL = '${BACKEND_URL}';
+export const API_BASE_URL = \`\${BACKEND_URL}/api/v1\`;
+EOF
+
+# Cập nhật CORS trong backend/.env
+sed -i '' -E "s|^CORS_ORIGIN=.*|CORS_ORIGIN=http://127.0.0.1:3000,$FRONTEND_URL|g" "$PROJECT_ROOT/backend/.env" 2>/dev/null || true
+sed -i '' -E "s|^JWT_COOKIE_SECURE=.*|JWT_COOKIE_SECURE=true|g" "$PROJECT_ROOT/backend/.env" 2>/dev/null || true
+sed -i '' -E "s|^JWT_COOKIE_SAME_SITE=.*|JWT_COOKIE_SAME_SITE=none|g" "$PROJECT_ROOT/backend/.env" 2>/dev/null || true
+
+# Cập nhật CORS trong docker-compose.yml
+sed -i '' -E "s|CORS_ORIGIN: \".*\"|CORS_ORIGIN: \"http://127.0.0.1:3000,$FRONTEND_URL\"|g" "$PROJECT_ROOT/docker-compose.yml" 2>/dev/null || true
+
+# Khởi động lại backend để áp dụng CORS mới
+echo "    Đang restart backend để áp dụng CORS..."
+docker-compose -f "$PROJECT_ROOT/docker-compose.yml" up -d --force-recreate backend >/dev/null 2>&1
+
+# Lưu URLs ra file
 cat > "$PROJECT_ROOT/logs/tunnel-urls.txt" << EOF
-CyberSecure App - Cloudflare Tunnel URLs
+CyberSecure - Tunnel URLs
 Generated: $(date)
 
-Frontend URL: $FRONTEND_URL
-Backend URL:  $BACKEND_URL
+Frontend: $FRONTEND_URL
+Backend:  $BACKEND_URL
 
 Frontend PID: $FRONTEND_PID
 Backend PID:  $BACKEND_PID
 EOF
 
-# Inject BACKEND_URL directly into Frontend Config automatically
-if [ -n "$BACKEND_URL" ]; then
-    echo "  Injecting Backend URL into Frontend config..."
-    cat > "$PROJECT_ROOT/frontend/src/config.js" << EOF
-// AUTO-GENERATED BY scripts/start-tunnels.sh
-// Do not edit manually if you are using Cloudflare Tunnels
-export const BACKEND_URL = '${BACKEND_URL}';
-export const API_BASE_URL = \`\${BACKEND_URL}/api/v1\`;
-EOF
-    echo " Config updated at: frontend/src/config.js"
-fi
-
-# Inject FRONTEND_URL into docker-compose.yml + backend/.env for CORS and restart backend
-if [ -n "$FRONTEND_URL" ]; then
-    echo "  Updating Backend CORS settings..."
-    # macOS sed requires empty string for -i and -E is for extended regex
-
-    # 1. Update docker-compose.yml CORS_ORIGIN
-    sed -i '' -E "s|CORS_ORIGIN: \".*\"|CORS_ORIGIN: \"http://localhost:3000,$FRONTEND_URL\"|g" "$PROJECT_ROOT/docker-compose.yml"
-    echo " CORS settings updated in: docker-compose.yml"
-
-    # 2. Update backend/.env CORS_ORIGIN
-    sed -i '' -E "s|^CORS_ORIGIN=.*|CORS_ORIGIN=http://localhost:3000,$FRONTEND_URL|g" "$PROJECT_ROOT/backend/.env"
-    echo " CORS settings updated in: backend/.env"
-
-    # 3. Ensure SameSite=none + Secure=true (required for cross-domain Cloudflare tunnels)
-    #    SameSite=strict blocks cookies entirely when frontend/backend are on different domains
-    sed -i '' -E "s|^JWT_COOKIE_SECURE=.*|JWT_COOKIE_SECURE=true|g" "$PROJECT_ROOT/backend/.env"
-    sed -i '' -E "s|^JWT_COOKIE_SAME_SITE=.*|JWT_COOKIE_SAME_SITE=none|g" "$PROJECT_ROOT/backend/.env"
-    sed -i '' -E "s|JWT_COOKIE_SECURE: \".*\"|JWT_COOKIE_SECURE: \"true\"|g" "$PROJECT_ROOT/docker-compose.yml"
-    sed -i '' -E "s|JWT_COOKIE_SAME_SITE: .*|JWT_COOKIE_SAME_SITE: none|g" "$PROJECT_ROOT/docker-compose.yml"
-    echo " Cookie SameSite=none + Secure=true ensured (cross-domain fix)"
-
-    # 4. Restart backend to apply all changes
-    echo "  Restarting Backend to apply new CORS + Cookie settings..."
-    docker-compose -f "$PROJECT_ROOT/docker-compose.yml" up -d --force-recreate backend
-fi
-
-echo " URLs saved to: logs/tunnel-urls.txt"
+# ─────────────────────────────────────────────────────────────
+# HOÀN TẤT
+# ─────────────────────────────────────────────────────────────
 echo ""
+echo "======================================================"
+echo " ✅ HỆ THỐNG ĐÃ SẴN SÀNG"
+echo "======================================================"
+echo ""
+echo "  🌐 Frontend : $FRONTEND_URL"
+echo "  ⚙️  Backend  : $BACKEND_URL"
+echo ""
+echo "  📁 Local:"
+echo "     Frontend: http://127.0.0.1:3000"
+echo "     Backend:  http://127.0.0.1:3001"
+echo ""
+echo "  📋 Lệnh hữu ích:"
+echo "     Dừng tunnels:  pkill cloudflared"
+echo "     Xem logs:      tail -f logs/cloudflare-frontend.log"
+echo "     Docker status: docker ps"
+echo "======================================================"
