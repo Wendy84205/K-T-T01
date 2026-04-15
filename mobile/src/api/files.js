@@ -11,7 +11,7 @@ export const verifyFileIntegrity = async (fileId) => {
   return response.data.data;
 };
 
-// URL tải về dùng để mở trong WebView hoặc tải về trực tiếp
+// Download URL used to open in WebView or download directly
 export const getFileDownloadUrl = (fileId) => {
   return `${API_BASE_URL}/files/${fileId}/download`;
 };

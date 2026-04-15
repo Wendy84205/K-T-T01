@@ -33,7 +33,7 @@ export const E2EEProvider = ({ children }) => {
     
     try {
       const stored = await SecureStore.getItemAsync(`e2ee_pin_bundle_${user.id}`);
-      if (!stored) throw new Error('Không tìm thấy khóa bảo mật trên thiết bị.');
+      if (!stored) throw new Error('No security key found on this device.');
 
       const bundle = JSON.parse(stored);
       const decryptedKey = await decryptPrivateKeyWithPin(bundle, pin);
@@ -78,7 +78,7 @@ export const E2EEProvider = ({ children }) => {
   const decrypt = async (message) => {
     if (isLocked || !privateKey || !message.content) return message.content;
     
-    // Nếu tin nhắn có dạng JSON (Hybrid), tiến hành giải mã
+    // If the message is JSON-formatted (Hybrid encryption), attempt decryption
     if (message.content.startsWith('{') && message.content.includes('"v":"2"')) {
       try {
         const hybridData = JSON.parse(message.content);
@@ -93,7 +93,7 @@ export const E2EEProvider = ({ children }) => {
 
   const wipeLocalKeys = async () => {
     if (user) {
-      // Quét sạch rác của DB cũ để không bị mắc kẹt nữa
+      // Wipe legacy key data to prevent stuck state
       await SecureStore.deleteItemAsync(`e2ee_pin_bundle_${user.id}`);
       setPrivateKey(null);
       setIsLocked(true);

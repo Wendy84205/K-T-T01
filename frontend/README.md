@@ -1,70 +1,41 @@
-# Getting Started with Create React App
+# CyberSecure Platform — UI / Frontend
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+<div align="center">
+
+![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)
+![Vanilla CSS](https://img.shields.io/badge/Vanilla_CSS-1572B6?style=for-the-badge&logo=css3&logoColor=white)
+
+**The administrative web interface and user portal for CyberSecure.**
+</div>
+
+## Overview
+This is the Web Frontend of the CyberSecure project, bootstrapped with `Create React App`. It serves as the primary gateway for System Administrators, Project Managers, and General Users. 
+
+## Core Capabilities
+- **End-to-End Encrypted Messaging Environment**: Supports native client-side encryption/decryption of chat threads and metadata utilizing `Crypto.Subtle` Web APIs.
+- **Zero-Trust Dashboard**: Full multi-factor authentication setup UI.
+- **Admin Security Console**: Visualize global server health, trigger manual **Lockdowns**, and review real-time WebSocket connection traffic and Audit Logs.
+- **Custom Design System**: Pure CSS-driven theming without bloated frameworks (Tailwind/Bootstrap are excluded here to ensure lightning-fast CSS parse times and absolute structural control).
 
 ## Available Scripts
 
-In the project directory, you can run:
+In the project directory, run:
 
 ### `npm start`
-
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
-
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
-
-### `npm test`
-
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+Runs the application in development mode on port `3000`.
+Open [http://localhost:3000](http://localhost:3000) to view it in your browser. Automatic hot-reloading is enabled.
 
 ### `npm run build`
+Builds the app for production to the `build` folder.
+It correctly bundles React in production mode and optimizes the build for maximal performance. The build is minified and the filenames include the hashes.
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+## Integration with Backend & Tuners
+In development environments utilizing Cloudflare Tunnels (via `start-tunnels.sh`), the script automatically modifies `src/config.js` to ensure the frontend properly directs its Axios and Socket.IO requests to the ephemeral public URL rather than `localhost:3001`.
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+**Note:** Be sure to revert `src/config.js` or avoid committing it if you manually override endpoints.
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
-
-### `npm run eject`
-
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
-
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
-
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
-
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
-
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
-
-### Code Splitting
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
-
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+## State Management
+The application avoids heavy state solutions like Redux, instead utilizing standard React Context API for global, lightly changing elements:
+- `AuthContext`: Session lifecycle.
+- `E2EEContext`: Cryptographic keychain.
+- `SocketContext`: Stateful WebSocket pipelines.

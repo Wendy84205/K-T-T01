@@ -11,18 +11,14 @@ export const BACKEND_URL = 'https://necklace-insight-starring-machinery.trycloud
 // SOCKET_URL_END
 
 export const SocketProvider = ({ children }) => {
-  const { user } = useAuth(); // Theo dõi trạng thái đăng nhập
+  const { user } = useAuth(); // Track login state
   const [socket, setSocket] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
   const socketRef = useRef(null);
 
   useEffect(() => {
-    // Chỉ kết nối Socket nếu user đã đăng nhập & lấy mượn accessToken (từ in-memory Auth)
-    // Tạm thời giả định token được API ngầm truyền đi (hoặc truyền qua AuthContext)
-    
-    // Vì useAuth trong app này hiện chưa expose accessToken thô, 
-    // Nếu backend yêu cầu Auth token khi connect socket, bạn sẽ phải móc nối từ SecureStore.
-    // Tạm thời ta connect ẩn danh hoặc lấy token nếu có.
+    // Only connect Socket if user is logged in
+    // Retrieve access token from SecureStore for Socket authentication
     if (!user) {
        if (socketRef.current) {
          socketRef.current.disconnect();
@@ -34,12 +30,12 @@ export const SocketProvider = ({ children }) => {
     }
 
     const connectSocket = async () => {
-      // Lấy token từ bộ nhớ bảo mật để xác thực Socket
+      // Retrieve token from SecureStore for Socket authentication
       const token = await SecureStore.getItemAsync('accessToken');
       
       const ioInstance = io(BACKEND_URL, {
         transports: ['polling'],
-        auth: { token }, // Gửi token cho Backend ChatGateway
+        auth: { token }, // Send token to Backend ChatGateway
         upgrade: false,
         reconnectionAttempts: 10,
         reconnectionDelay: 2000,
@@ -49,18 +45,18 @@ export const SocketProvider = ({ children }) => {
       socketRef.current = ioInstance;
 
       ioInstance.on('connect', () => {
-        console.log('[Socket] Đã kết nối thành công:', ioInstance.id);
+        console.log('[Socket] Connected successfully:', ioInstance.id);
         setIsConnected(true);
         setSocket(ioInstance);
       });
 
       ioInstance.on('connect_error', (err) => {
-        console.error('[Socket] Lỗi kết nối:', err.message);
+        console.error('[Socket] Connection error:', err.message);
         setIsConnected(false);
       });
 
       ioInstance.on('disconnect', (reason) => {
-        console.warn('[Socket] Ngắt kết nối do:', reason);
+        console.warn('[Socket] Disconnected due to:', reason);
         setIsConnected(false);
       });
     };
@@ -75,7 +71,7 @@ export const SocketProvider = ({ children }) => {
     };
   }, [user]);
 
-  // Các hàm chức năng phụ trợ chuẩn
+  // Standard helper functions
   const joinConversation = (conversationId) => {
     if (socketRef.current && isConnected) {
       socketRef.current.emit('joinConversation', { conversationId });

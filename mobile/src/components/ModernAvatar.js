@@ -68,6 +68,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     backgroundColor: '#4CD964',
     borderWidth: 2,
-    borderColor: '#0F172A', // tl-bg — nền dark
+    borderColor: '#0F172A', // tl-bg — nen dark
   }
 });

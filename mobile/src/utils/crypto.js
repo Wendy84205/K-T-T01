@@ -7,7 +7,7 @@ import 'react-native-get-random-values';
  */
 
 const PIN_ITERATIONS = 100_000; 
-const MASTER_PASSWORD_ITERATIONS = 310_000; // Khớp với bản Web
+const MASTER_PASSWORD_ITERATIONS = 310_000; // Matches Web version
 
 /**
  * Derive an AES-256 key from a 6-digit PIN + Salt using PBKDF2
@@ -46,7 +46,7 @@ export async function decryptPrivateKeyWithPassword(encryptedData, password) {
   decipher.update(forge.util.createBuffer(data));
   
   const pass = decipher.finish();
-  if (!pass) throw new Error('Master Password không chính xác.');
+  if (!pass) throw new Error('Incorrect Master Password.');
   
   return decipher.output.toString(); 
 }
@@ -111,7 +111,7 @@ export async function decryptHybridMessage(hybridData, privateKeyBase64, myUserI
     return decipher.output.toString('utf8');
   } catch (err) {
     console.error('[E2EE] Decryption error:', err);
-    return "[Mã hóa: Lỗi giải mã]";
+    return "[Encrypted: Decryption error]";
   }
 }
 

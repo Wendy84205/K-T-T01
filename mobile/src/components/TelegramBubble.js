@@ -28,7 +28,7 @@ export default function TelegramBubble({
   isConsecutive, 
   status 
 }) {
-  // Dark Theme: indigo tint cho tin nhắn mình, surface cho người khác
+  // Dark Theme: indigo tint for my messages, surface for others
   const bubbleColor = isMine ? '#2D2B55' : '#1E293B';
 
   return (

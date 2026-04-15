@@ -13,7 +13,7 @@ import { getTotalUnreadCount } from '../api/chat';
 
 const { width } = Dimensions.get('window');
 
-// Cấu hình tab — Dark Theme CyberSecure
+// Tab config — CyberSecure Dark Theme
 const TAB_CONFIG = {
   // Manager
   Dashboard: { icon: LayoutDashboard, label: 'Overview' },
@@ -39,7 +39,7 @@ export default function FloatingTabBar({ state, descriptors, navigation }) {
   const [chatUnreadCount, setChatUnreadCount] = useState(0);
   const scaleRefs = useRef(state.routes.map(() => new Animated.Value(1))).current;
 
-  // Poll unread counts mỗi 10s
+  // Poll unread counts every 10s
   useEffect(() => {
     let mounted = true;
     const fetchData = async () => {
@@ -88,7 +88,7 @@ export default function FloatingTabBar({ state, descriptors, navigation }) {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-around',
-        // Shadow phía trên
+        // Top shadow
         shadowColor: '#000',
         shadowOffset: { width: 0, height: -4 },
         shadowOpacity: 0.3,

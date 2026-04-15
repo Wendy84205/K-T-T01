@@ -24,7 +24,7 @@ export default function CyberLogo({ size = 'md', showText = true, horizontal = f
         width: config.box,
         height: config.box,
         borderRadius: config.radius,
-        // Gradient indigo giống web: #6366f1 → #818cf8
+        // Gradient indigo giong web: #6366f1 → #818cf8
         backgroundColor: '#6366F1',
         alignItems: 'center',
         justifyContent: 'center',
@@ -36,7 +36,7 @@ export default function CyberLogo({ size = 'md', showText = true, horizontal = f
         elevation: 8,
       }}
     >
-      {/* Inner gradient bằng overlay View */}
+      {/* Inner gradient using overlay View */}
       <View
         style={{
           position: 'absolute',

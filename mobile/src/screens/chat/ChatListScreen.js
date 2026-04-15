@@ -118,7 +118,7 @@ export default function ChatListScreen({ navigation }) {
             contentContainerStyle={{ padding: 16, paddingBottom: 110, flexGrow: 1 }}
             ListEmptyComponent={renderEmpty}
             renderItem={({ item }) => {
-              // Ưu tiên: name (group) → otherUser firstName+lastName → otherUserName → participants
+              // Priority: name (group) -> otherUser name -> participants
               const otherName = item.otherUser
                 ? `${item.otherUser.firstName || ''} ${item.otherUser.lastName || ''}`.trim()
                 : null;

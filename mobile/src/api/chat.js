@@ -9,8 +9,8 @@ export const getConversationMessages = async (conversationId, page = 1, limit = 
   const response = await api.get(`/chat/conversations/${conversationId}/messages`, {
     params: { page, limit }
   });
-  // Kết quả API là { success: true, data: { data: [], total: 100 } }
-  // Nên ta cần lấy .data.data
+  // API response format is { success: true, data: { data: [], total: 100 } }
+  // Nen ta can lay .data.data
   return response.data.data.data || [];
 };
 

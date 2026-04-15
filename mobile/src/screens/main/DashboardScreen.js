@@ -22,7 +22,7 @@ import api from '../../api/index';
 
 const { width } = Dimensions.get('window');
 
-// Thống kê dạng Telegram: Đơn giản, icon to
+// Telegram-style stats: Simple, large icons
 const StatCard = ({ label, value, color, icon: Icon }) => (
   <View style={{ width: (width - 40) / 2 - 8 }} className="bg-tl-surface rounded-[16px] p-4 mb-3 border border-tl-border">
     <View className="flex-row items-center mb-2">

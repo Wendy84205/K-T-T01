@@ -11,11 +11,11 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  // Để refreshToken ở Backend ghi dạng HttpOnly Cookie vẫn cần credentials (với di động web)
+  // Credentials needed for HttpOnly refreshToken cookie from Backend (for mobile web)
   withCredentials: true 
 });
 
-// Gắn Token tự động vào Header nếu có
+// Automatically attach Token to Header if available
 api.interceptors.request.use(async (config) => {
   const token = await SecureStore.getItemAsync('accessToken');
   if (token) {
@@ -24,15 +24,15 @@ api.interceptors.request.use(async (config) => {
   return config;
 }, (error) => Promise.reject(error));
 
-// Bổ sung logic bắt lỗi 401 (Hết hạn Token / Lỗi xác thực)
+// Logic to handle 401 errors (Token expired / Authentication error)
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     if (error.response && error.response.status === 401) {
-      console.warn('❌ Mất phần quyền (401). Đang xóa Token nội bộ...');
+      console.warn('❌ Unauthorized (401). Removing local Token...');
       await SecureStore.deleteItemAsync('accessToken');
       await SecureStore.deleteItemAsync('userData');
-      // Người dùng chỉ cần F5 hoặc mở lại App sẽ văng ra màn Login mặc định
+      // User only needs to reload or reopen App to be kicked to default Login screen
     }
     return Promise.reject(error);
   }

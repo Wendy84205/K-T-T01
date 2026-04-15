@@ -9,7 +9,7 @@ export const AuthProvider = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Tự động load token từ hệ thống khi khởi động app
+    // Auto-load stored token from SecureStore on app startup
     const loadStoredAuth = async () => {
       try {
         const storedToken = await SecureStore.getItemAsync('accessToken');
@@ -20,7 +20,7 @@ export const AuthProvider = ({ children }) => {
           setUser(JSON.parse(storedUser));
         }
       } catch (error) {
-        console.error("Lỗi khi đọc SecureStore", error);
+        console.error("Error reading SecureStore", error);
       } finally {
         setIsLoading(false);
       }
@@ -29,13 +29,13 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const login = async (userData, accessToken) => {
-    // Backend trả về mảng 'roles', Mobile cần một 'role' duy nhất để định tuyến flow
+    // Backend returns 'roles' array, Mobile needs a single 'role' for navigation routing
     const normalizedUser = { ...userData };
     if (userData.roles && Array.isArray(userData.roles)) {
       if (userData.roles.includes('Admin')) normalizedUser.role = 'Admin';
       else if (userData.roles.includes('Manager')) normalizedUser.role = 'Manager';
       else if (userData.roles.includes('User')) normalizedUser.role = 'User';
-      else normalizedUser.role = userData.roles[0]; // Dự phòng
+      else normalizedUser.role = userData.roles[0]; // Fallback
     }
 
     setUser(normalizedUser);

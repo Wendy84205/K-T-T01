@@ -24,7 +24,7 @@ export default function AppNavigator() {
   const { user, isLoading } = useAuth();
   const { isLocked, isSkipped } = useE2EE();
 
-  // Hiển thị vòng xoay hệ thống khi chờ đọc token từ SecureStore
+  // Show loading spinner while reading token from SecureStore
   if (isLoading) {
     return (
       <View className="flex-1 bg-tl-bg justify-center items-center">
@@ -38,10 +38,10 @@ export default function AppNavigator() {
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {user ? (
           (isLocked && !isSkipped) ? (
-            // Nếu đã đăng nhập nhưng chưa nhập PIN E2EE
+            // If logged in but E2EE PIN not entered yet
             <Stack.Screen name="E2EEPin" component={E2EEPinScreen} />
           ) : (
-            // Khối màn hình đã xác thực và đã mở khóa E2EE
+            // Authenticated and E2EE unlocked screens
             <Stack.Group>
               {user.role === 'Admin' ? (
                 <Stack.Screen name="AdminBlock" component={AdminBlockScreen} />
@@ -51,7 +51,7 @@ export default function AppNavigator() {
                 <Stack.Screen name="UserApp" component={UserTab} />
               )}
 
-              {/* Các màn hình chung không dính vào bottom tab */}
+              {/* Shared screens outside bottom tab */}
               {user.role !== 'Admin' && 
                 <Stack.Screen
                   name="ChatRoom"
@@ -86,7 +86,7 @@ export default function AppNavigator() {
             </Stack.Group>
           )
         ) : (
-          // Chưa đăng nhập -> Auth Flow
+          // Not logged in -> Auth Flow
           <Stack.Group>
             <Stack.Screen name="Login" component={LoginScreen} />
             <Stack.Screen name="MFA" component={MFAScreen} />
