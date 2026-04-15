@@ -99,16 +99,20 @@ export async function setupE2EEWithPassword(userId, password) {
     // Store locally
     localStorage.setItem(`e2ee_bundle_${userId}`, JSON.stringify(bundle));
 
-    // Backup to server (encrypted bundle is safe to store server-side — PIN never leaves device)
+    // Backup to server
     try {
         const { default: api } = await import('./api');
         await api.saveE2EEBundle({
             encryptedPrivateKey: encrypted.encryptedPrivateKey,
             salt: encrypted.salt,
             iv: encrypted.iv,
+            publicKey: publicKey,
         });
+        console.log('[E2EE] Server backup successful.');
     } catch (err) {
-        console.warn('[E2EE] Server backup failed, local only:', err);
+        console.error('[E2EE] Server backup failed:', err);
+        alert('LỖI BẢO MẬT: Không thể sao lưu khóa lên máy chủ. Mobile sẽ không thể đồng bộ. Lỗi: ' + err.message);
+        throw err; // Ngăn chặn tiến trình nếu backup thất bại
     }
 
     return { publicKey, privateKey };

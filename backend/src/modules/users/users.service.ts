@@ -473,11 +473,12 @@ export class UsersService {
     await this.userSessionRepository.save(session);
   }
 
-  async saveE2EEBundle(userId: string, bundle: { encryptedPrivateKey: string; salt: string; iv: string }): Promise<void> {
+  async saveE2EEBundle(userId: string, bundle: { encryptedPrivateKey: string; salt: string; iv: string; publicKey: string }): Promise<void> {
     await this.userRepository.update(userId, {
       e2eeBundleEncryptedKey: bundle.encryptedPrivateKey,
       e2eeBundleSalt: bundle.salt,
       e2eeBundleIv: bundle.iv,
+      publicKey: bundle.publicKey,
     });
   }
 

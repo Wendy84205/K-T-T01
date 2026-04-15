@@ -5,11 +5,6 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
 import helmet from 'helmet';
 
-// ═══════════════════════════════════════════════════════════
-// FIX: In-Memory Rate Limiter (Chống DoS/DDoS & Brute Force API)
-// Sliding window: mỗi IP được phép gọi tối đa N request trong T giây
-// Không cần @nestjs/throttler - tự implement để không phụ thuộc package
-// ═══════════════════════════════════════════════════════════
 interface RateLimitEntry { count: number; resetAt: number; }
 const rateLimitStore = new Map<string, RateLimitEntry>();
 

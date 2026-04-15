@@ -6008,7 +6008,7 @@ function MyTasksView() {
 }
 
 function ProjectsTasksContent() {
-  const { isManager, isAdmin } = useAuth();
+  const { user, isManager, isAdmin } = useAuth();
   const [projects, setProjects] = useState([]);
   const [selectedProject, setSelectedProject] = useState(null);
   const [tasks, setTasks] = useState([]);

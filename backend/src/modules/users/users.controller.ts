@@ -61,7 +61,13 @@ export class UsersController {
 
   @Put('profile/e2ee-bundle')
   @UseGuards(JwtAuthGuard)
-  async saveE2EEBundle(@Req() req, @Body() body: { encryptedPrivateKey: string; salt: string; iv: string }) {
+  async saveE2EEBundle(@Req() req, @Body() body: any) {
+    console.log(`[DEBUG] Received E2EE Bundle from User ${req.user.userId}:`, {
+      hasKey: !!body.encryptedPrivateKey,
+      hasSalt: !!body.salt,
+      hasIv: !!body.iv,
+      hasPublicKey: !!body.publicKey
+    });
     await this.usersService.saveE2EEBundle(req.user.userId, body);
     return { success: true };
   }
